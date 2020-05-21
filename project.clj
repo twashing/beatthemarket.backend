@@ -18,6 +18,7 @@
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [io.pedestal/pedestal.service "0.5.5"]
                  [org.clojure/core.async "0.4.474"]
+                 [org.clojure/data.csv "1.0.0"]
 
                  ;; Remove this line and uncomment one of the next lines to
                  ;; use Immutant or Tomcat instead of Jetty:
@@ -28,7 +29,9 @@
                  [ch.qos.logback/logback-classic "1.2.3" :exclusions [org.slf4j/slf4j-api]]
                  [org.slf4j/jul-to-slf4j "1.7.25"]
                  [org.slf4j/jcl-over-slf4j "1.7.25"]
-                 [org.slf4j/log4j-over-slf4j "1.7.25"]]
+                 [org.slf4j/log4j-over-slf4j "1.7.25"]
+                 [integrant "0.8.0"]
+                 [org.apache.commons/commons-math3 "3.6.1"]]
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
   ;; :pedantic? :abort
