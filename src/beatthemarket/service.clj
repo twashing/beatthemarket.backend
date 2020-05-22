@@ -125,20 +125,24 @@
    ;;::http/host "localhost"
    ::http/port 8080})
 
-(defn stream-stock-data []
-  (let [coerce-to-client (fn [[time price]]
-                              (-> (vector (c/to-long time) price)
-                                  json/write-str))]
+(defn coerce-to-client [[time price]]
+  (-> (vector (c/to-long time) price)
+      json/write-str))
 
-    (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
-         (datasource/combined-data-sequence-with-datetime (t/now))
-         (map coerce-to-client)
-         (take 500)
-         (run! send-message-to-all!))))
+(defn stream-stock-data []
+  (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
+       (datasource/combined-data-sequence-with-datetime (t/now))
+       (map coerce-to-client)
+       (take 100)
+       (run! send-message-to-all!)))
 
 
 (comment
 
-  (stream-stock-data)
+  (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
+       (datasource/combined-data-sequence-with-datetime (t/now))
+       (map coerce-to-client)
+       (take 30)
+       pprint)
 
-  )
+  (stream-stock-data))
