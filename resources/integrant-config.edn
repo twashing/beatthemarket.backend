@@ -1,0 +1,7 @@
+{;; :handler/greet {:name "Alice"}
+ ;; :adapter/jetty {:port 8080, :handler #ig/ref :handler/greet}
+
+ :service/service {:env :dev
+                   :join? false}
+ :server/server {:service #ig/ref :service/service}}
+

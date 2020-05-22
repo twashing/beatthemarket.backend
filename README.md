@@ -5,7 +5,7 @@ This sample illustrates how to use WebSockets with Pedestal and Jetty.
 ## Getting started
 
 1. Start a REPL with `lein repl`
-2. Start the server within the REPL with `(def serv (run-dev))`
+2. For development, use Integrant's Component system (below). Or the old way: Start the server within the REPL with `(def serv (run-dev))`
 3. In your browser's JavaScript console
 
 ```javascript
@@ -18,6 +18,25 @@ w.send("Hello from the Client!");
 You'll notice the log message in Clojure REPL
 
 4. Send a message to the client and close with `(service/send-and-close!)`
+
+## Component
+
+[Integrant](https://github.com/weavejester/integrant) Component system is now installed
+
+Reloaded Workflow uses [weavejester/integrant-repl](https://github.com/weavejester/integrant-repl)
+
+```
+;; Start with
+(prep)
+(init)
+
+;; Or just
+(go)
+
+;; These functions are also available for control
+(halt)
+(reset)
+```
 
 ## Configuration
 

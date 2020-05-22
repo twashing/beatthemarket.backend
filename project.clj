@@ -36,6 +36,7 @@
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
   ;; :pedantic? :abort
-  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.server/run-dev"]}}
+  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.server/run-dev"]}
+                   :dependencies [[integrant/repl "0.3.1"]]}
              :uberjar {:aot [beatthemarket.server]}}
   :main ^{:skip-aot true} beatthemarket.server)

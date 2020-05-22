@@ -1,6 +1,8 @@
 (ns beatthemarket.server
   (:gen-class) ; for -main method in uberjar
-  (:require [io.pedestal.http :as server]
+  (:require [clojure.java.io :refer [resource]]
+            [io.pedestal.http :as server]
+            [integrant.core :as ig]
             [beatthemarket.service :as service]))
 
 ;; This is an adapted service map, that can be started and stopped
@@ -51,3 +53,13 @@
 ;;  (server/servlet-destroy @servlet)
 ;;  (reset! servlet nil))
 
+
+(defmethod ig/init-key :server/server [_ {:keys [service]}]
+  (-> service
+      server/default-interceptors
+      server/dev-interceptors
+      server/create-server
+      server/start))
+
+(defmethod ig/halt-key! :server/server [_ server]
+  (server/stop server))

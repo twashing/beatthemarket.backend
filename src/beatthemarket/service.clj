@@ -4,9 +4,11 @@
             [io.pedestal.http.route :as route]
             [io.pedestal.http.body-params :as body-params]
             [io.pedestal.http.route.definition :refer [defroutes]]
+            [io.pedestal.http :as server]
             [ring.util.response :as ring-resp]
             [clojure.core.async :as async]
-            [io.pedestal.http.jetty.websockets :as ws])
+            [io.pedestal.http.jetty.websockets :as ws]
+            [integrant.core :as ig])
   (:import [org.eclipse.jetty.websocket.api Session]))
 
 (defn about-page
@@ -88,3 +90,32 @@
               ;;::http/host "localhost"
               ::http/port 8080})
 
+
+
+(defmethod ig/init-key :service/service [_ {:keys [env join?] :as opts}]
+  {:env env
+   ::server/join? join?
+
+   ;; You can bring your own non-default interceptors. Make
+   ;; sure you include routing and set it up right for
+   ;; dev-mode. If you do, many other keys for configuring
+   ;; default interceptors will be ignored.
+   ;; ::http/interceptors []
+   ::http/routes routes
+
+   ;; Uncomment next line to enable CORS support, add
+   ;; string(s) specifying scheme, host and port for
+   ;; allowed source(s):
+   ;;
+   ;; "http://localhost:8080"
+   ;;
+   ;;::http/allowed-origins ["scheme://host:port"]
+
+   ;; Root for resource interceptor that is available by default.
+   ::http/resource-path "/public"
+
+   ;; Either :jetty, :immutant or :tomcat (see comments in project.clj)
+   ::http/type :jetty
+   ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
+   ;;::http/host "localhost"
+   ::http/port 8080})
