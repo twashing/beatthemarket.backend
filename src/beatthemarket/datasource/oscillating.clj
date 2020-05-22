@@ -91,11 +91,15 @@
 
 
 
-    (let [xaxis (range)
-          yaxis (reductions (fn [acc price-change-partial]
-                              (price-change-partial acc))
-                            initial-price
-                            price-change-partials)]
+    #_(let [xaxis (range)
+            yaxis (reductions (fn [acc price-change-partial]
+                                (price-change-partial acc))
+                              initial-price
+                              price-change-partials)]
 
-      (->> (interleave xaxis yaxis)
-           (partition 2)))))
+        (->> (interleave xaxis yaxis)
+             (partition 2)))
+    (reductions (fn [acc price-change-partial]
+                  (price-change-partial acc))
+                initial-price
+                price-change-partials)))

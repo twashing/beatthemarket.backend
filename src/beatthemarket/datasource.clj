@@ -1,7 +1,8 @@
 (ns beatthemarket.datasource
-  (:require [beatthemarket.datasource.sine :as [datasource.sine]]
-            [beatthemarket.datasource.polynomial :as [datasource.polynomial]]
-            [beatthemarket.datasource.oscillating :as [datasource.oscillating]]))
+  (:require [beatthemarket.datasource.core :as datasource.core]
+            [beatthemarket.datasource.sine :as datasource.sine]
+            [beatthemarket.datasource.polynomial :as datasource.polynomial]
+            [beatthemarket.datasource.oscillating :as datasource.oscillating]))
 
 
 
@@ -15,23 +16,101 @@
 ;;   (beta curve) Sine + Polynomial + Stochastic Oscillating, distributed under a Beta Curve
 ;; => beta distribution of a=2 b=4.1 x=0 (see: http://keisan.casio.com/exec/system/1180573226)
 
-#_(defn test-beta [beta-distribution]
-  (let [sample-val (.sample beta-distribution)]
-    (cond
-     (< sample-val 0.33) :a
-     (< sample-val 0.66) :b
-     :else :c)))
+
+(defn combine-data-sequences [& data-sequences]
+  (apply (partial map +) data-sequences))
+
+(defn generate-combined-data-sequence [beta-configurations]
+  (let [a (datasource.sine/generate-sine-sequence 1.5 2.7 0)
+        b (datasource.sine/generate-cosine-sequence)
+        d (datasource.oscillating/generate-oscillating-sequence beta-configurations)])
+  (combine-data-sequences a b d))
+
+(comment ;; LATEST
+
+  ;; TODO Remove Polynomial if I can't make it cycle cleanly
+  ;; (def c (datasource.polynomial/generate-polynomial-sequence))
+  ;; (def cc (datasource.polynomial/generate-polynomial-sequence))
+
+  ;; TODO Mechanism to control granularity of x-axis data point
+
+  ;; Generate
+  ;;   individually
+  ;;   combined (pass in specfication)
+
+  (do
+    (require '[clojure.data.csv :as csv]
+             '[clojure.java.io :as io])
+
+    ;; a - amplitude of the wave (0.5 - 2.7)
+    ;; b - horizontal dilation (0.3 - 2.7)
+    ;; d - quantifies vertical translation
 
 
-;; Generate
-;;   individually
-;;   combined (pass in specfication)
+    ;; 1, 2.7, 0
+    ;; 1.5, 2.7, 0
+    (def a (datasource.sine/generate-sine-sequence 1.5 2.7 0))
+    (def b (datasource.sine/generate-cosine-sequence))
 
-;; (datasource.sine/generate-sine-sequence)
-;; (datasource.sine/generate-cosine-sequence)
-;; (datasource.polynomial/generate-polynomial-sequence)
-;; (datasource.oscillating/generate-oscillating-sequence)
+    ;; (def c (datasource.sine/generate-sine+cosine-sequence))
+    (def c (combine-data-sequences a b))
 
+    (def d (datasource.oscillating/generate-oscillating-sequence datasource.core/beta-configurations))
+    (def combined (combine-data-sequences a b d)))
+
+
+  (let [length 128]
+
+    (with-open [sine-writer (io/writer "out.sine.csv")
+                cosine-writer (io/writer "out.cosine.csv")
+                sine+cosine-writer (io/writer "out.sine+cosine.csv")
+                oscillating-writer (io/writer "out.oscillating.csv")
+                combined-writer (io/writer "out.combined.csv")]
+
+      ;; Sine
+      (let [xaxis (range)
+            yaxis a]
+
+        (->> (interleave xaxis yaxis)
+             (partition 2)
+             (take length)
+             (csv/write-csv sine-writer)))
+
+      ;; Cosine
+      (let [xaxis (range)
+            yaxis b]
+
+        (->> (interleave xaxis yaxis)
+             (partition 2)
+             (take length)
+             (csv/write-csv cosine-writer)))
+
+      ;; Sine t + Cos (sqrt(3)t)
+      (let [xaxis (range)
+            yaxis c]
+
+        (->> (interleave xaxis yaxis)
+             (partition 2)
+             (take length)
+             (csv/write-csv sine+cosine-writer)))
+
+      ;; Oscillating
+      (let [xaxis (range)
+            yaxis d]
+
+        (->> (interleave xaxis yaxis)
+             (partition 2)
+             (take length)
+             (csv/write-csv oscillating-writer)))
+
+      ;; Combined
+      (let [xaxis (range)
+            yaxis combined]
+
+        (->> (interleave xaxis yaxis)
+             (partition 2)
+             (take 500)
+             (csv/write-csv combined-writer))))))
 
 ;; TODO Cleanup
 ;; put into fn
@@ -166,10 +245,6 @@
   ;; (def bdist2 (BetaDistribution. 2.0 4.0))
   ;; (def bdist3 (BetaDistribution. 2.0 3.0))
   ;; (def bdist-even (BetaDistribution. 2.0 2.0))
-
-  (def bdist (BetaDistribution. 2.0 4.1))
-  (def result (repeatedly #(test-beta bdist)))
-  (sort (take 100 result))
 
   (take 5 (generate-prices-orig bdist))
   (take 20 (generate-prices-iterate bdist))
@@ -343,8 +418,6 @@
       )))
 
 ;; >> ================================= >>
-
-;; BETADISTRIBUTIONS
 
 (comment ;; BetaDistribution Price SAMPLES
 
