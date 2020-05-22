@@ -19,6 +19,7 @@
                  [io.pedestal/pedestal.service "0.5.5"]
                  [org.clojure/core.async "0.4.474"]
                  [org.clojure/data.csv "1.0.0"]
+                 [org.clojure/data.json "1.0.0"]
 
                  ;; Remove this line and uncomment one of the next lines to
                  ;; use Immutant or Tomcat instead of Jetty:

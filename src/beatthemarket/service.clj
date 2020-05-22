@@ -7,9 +7,16 @@
             [io.pedestal.http :as server]
             [ring.util.response :as ring-resp]
             [clojure.core.async :as async]
+            [clojure.data.json :as json]
+            [clj-time.core :as t]
+            [clj-time.coerce :as c]
+
             [io.pedestal.http.jetty.websockets :as ws]
-            [integrant.core :as ig])
+            [integrant.core :as ig]
+            [beatthemarket.datasource :as datasource]
+            [beatthemarket.datasource.core :as datasource.core])
   (:import [org.eclipse.jetty.websocket.api Session]))
+
 
 (defn about-page
   [request]
@@ -90,8 +97,6 @@
               ;;::http/host "localhost"
               ::http/port 8080})
 
-
-
 (defmethod ig/init-key :service/service [_ {:keys [env join?] :as opts}]
   {:env env
    ::server/join? join?
@@ -119,3 +124,21 @@
    ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
    ;;::http/host "localhost"
    ::http/port 8080})
+
+(defn stream-stock-data []
+  (let [coerce-to-client (fn [[time price]]
+                              (-> (vector (c/to-long time) price)
+                                  json/write-str))]
+
+    (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
+         (datasource/combined-data-sequence-with-datetime (t/now))
+         (map coerce-to-client)
+         (take 500)
+         (run! send-message-to-all!))))
+
+
+(comment
+
+  (stream-stock-data)
+
+  )
