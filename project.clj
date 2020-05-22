@@ -30,8 +30,9 @@
                  [org.slf4j/jul-to-slf4j "1.7.25"]
                  [org.slf4j/jcl-over-slf4j "1.7.25"]
                  [org.slf4j/log4j-over-slf4j "1.7.25"]
+                 [org.apache.commons/commons-math3 "3.6.1"]
                  [integrant "0.8.0"]
-                 [org.apache.commons/commons-math3 "3.6.1"]]
+                 [clj-time "0.15.2"]]
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
   ;; :pedantic? :abort

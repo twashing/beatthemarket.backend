@@ -1,9 +1,10 @@
 (ns beatthemarket.datasource
-  (:require [beatthemarket.datasource.core :as datasource.core]
+  (:require [clj-time.core :as t]
+            [clj-time.coerce :as c]
+            [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.sine :as datasource.sine]
             [beatthemarket.datasource.polynomial :as datasource.polynomial]
             [beatthemarket.datasource.oscillating :as datasource.oscillating]))
-
 
 
 ;; granularity
@@ -16,17 +17,34 @@
 ;;   (beta curve) Sine + Polynomial + Stochastic Oscillating, distributed under a Beta Curve
 ;; => beta distribution of a=2 b=4.1 x=0 (see: http://keisan.casio.com/exec/system/1180573226)
 
-
 (defn combine-data-sequences [& data-sequences]
   (apply (partial map +) data-sequences))
 
-(defn generate-combined-data-sequence [beta-configurations]
+(defn ->combined-data-sequence [beta-configurations]
   (let [a (datasource.sine/generate-sine-sequence 1.5 2.7 0)
         b (datasource.sine/generate-cosine-sequence)
-        d (datasource.oscillating/generate-oscillating-sequence beta-configurations)])
-  (combine-data-sequences a b d))
+        d (datasource.oscillating/generate-oscillating-sequence beta-configurations)]
+    (combine-data-sequences a b d)))
+
+(defn combined-data-sequence-with-datetime
+  ([start-time combined-data-sequence]
+   (combined-data-sequence-with-datetime start-time 0 combined-data-sequence))
+  ([start-time y-offset combined-data-sequence]
+   (let [time-seq (iterate #(t/plus % (t/seconds 1)) start-time)]
+     (map (fn [t y] [t (+ y-offset y)])
+          time-seq
+          combined-data-sequence))))
+
+
 
 (comment ;; LATEST
+
+  (->> (->combined-data-sequence datasource.core/beta-configurations)
+       (combined-data-sequence-with-datetime (t/now))
+       (take 50)
+       pprint)
+
+
 
   ;; TODO Remove Polynomial if I can't make it cycle cleanly
   ;; (def c (datasource.polynomial/generate-polynomial-sequence))
@@ -57,7 +75,6 @@
 
     (def d (datasource.oscillating/generate-oscillating-sequence datasource.core/beta-configurations))
     (def combined (combine-data-sequences a b d)))
-
 
   (let [length 128]
 
@@ -111,6 +128,8 @@
              (partition 2)
              (take 500)
              (csv/write-csv combined-writer))))))
+
+
 
 ;; TODO Cleanup
 ;; put into fn
