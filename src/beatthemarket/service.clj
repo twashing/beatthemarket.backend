@@ -97,7 +97,7 @@
               ;;::http/host "localhost"
               ::http/port 8080})
 
-(defmethod ig/init-key :service/service [_ {:keys [env join?] :as opts}]
+(defmethod ig/init-key :service/service [_ {:keys [env join? port] :as opts}]
   {:env env
    ::server/join? join?
 
@@ -122,8 +122,9 @@
    ;; Either :jetty, :immutant or :tomcat (see comments in project.clj)
    ::http/type :jetty
    ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
+
    ;;::http/host "localhost"
-   ::http/port 8080})
+   ::http/port port})
 
 (defn coerce-to-client [[time price]]
   (-> (vector (c/to-long time) price)
@@ -135,7 +136,6 @@
        (map coerce-to-client)
        (take 100)
        (run! send-message-to-all!)))
-
 
 (comment
 

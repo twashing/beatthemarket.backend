@@ -20,6 +20,7 @@
                  [org.clojure/core.async "0.4.474"]
                  [org.clojure/data.csv "1.0.0"]
                  [org.clojure/data.json "1.0.0"]
+                 [org.clojure/tools.cli "1.0.194"]
 
                  ;; Remove this line and uncomment one of the next lines to
                  ;; use Immutant or Tomcat instead of Jetty:
@@ -33,11 +34,13 @@
                  [org.slf4j/log4j-over-slf4j "1.7.25"]
                  [org.apache.commons/commons-math3 "3.6.1"]
                  [integrant "0.8.0"]
-                 [clj-time "0.15.2"]]
+                 [aero "1.1.6"]
+                 [integrant/repl "0.3.1"]
+                 [clj-time "0.15.2"]
+                 [nrepl "0.7.0"]]
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
   ;; :pedantic? :abort
-  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.server/run-dev"]}
-                   :dependencies [[integrant/repl "0.3.1"]]}
+  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.server/run-dev"]}}
              :uberjar {:aot [beatthemarket.server]}}
   :main ^{:skip-aot true} beatthemarket.server)
