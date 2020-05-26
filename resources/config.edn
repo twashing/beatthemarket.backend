@@ -1,0 +1,13 @@
+{:integrant #profile
+ {:production  {:service/service {:env      :prod
+                                  :join?    false
+                                  :hostname "0.0.0.0"
+                                  :port 5000}
+                :server/server   {:service #ig/ref :service/service}
+                :nrepl/nrepl     {:port 7000}}
+  :development {:service/service {:env      :dev
+                                  :join?    false
+                                  :hostname "0.0.0.0"
+                                  :port     8080}
+                :server/server   {:service #ig/ref :service/service}
+                :nrepl/nrepl     {:port 7000}}}}

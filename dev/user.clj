@@ -1,10 +1,10 @@
- (ns user
-   (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
-             [integrant.core :as ig]
-             [clojure.java.io :refer [resource]]))
+(ns user
+  (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
+            [integrant.core :as ig]
+            [clojure.java.io :refer [resource]]))
 
 (integrant.repl/set-prep!
-  (constantly (-> "integrant-config.edn"
+  (constantly (-> "config.edn"
                   resource
-                  slurp
-                  ig/read-string)))
+                  (aero.core/read-config {:profile :development})
+                  :integrant)))
