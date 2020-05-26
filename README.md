@@ -52,18 +52,16 @@ To learn more about configuring Logback, read its [documentation](http://logback
 First make a bundle for ElasticBeanstalk.
 ```
 lein uberjar &&
+
 export BEATTHEMARKET_VERSION=$(date +%Y%m%d_%H%M%S)_$(git rev-parse --short HEAD) &&
 mkdir -p /tmp/workspace/{build,artifact}/beatthemarket &&
 cp target/beatthemarket-*-standalone.jar /tmp/workspace/build/beatthemarket/beatthemarket-standalone.jar &&
 cp Procfile /tmp/workspace/build/beatthemarket/ &&
-zip -j target/$BEATTHEMARKET_VERSION \
-/tmp/workspace/build/beatthemarket/Procfile \
-/tmp/workspace/build/beatthemarket/beatthemarket-standalone.jar
 
-# Or
-zip -j /tmp/workspace/artifact/beatthemarket/$BEATTHEMARKET_VERSION \
-/tmp/workspace/build/beatthemarket/Procfile \
-/tmp/workspace/build/beatthemarket/beatthemarket-standalone.jar
+zip -j target/$BEATTHEMARKET_VERSION /tmp/workspace/build/beatthemarket/beatthemarket-standalone.jar &&
+zip -g target/$BEATTHEMARKET_VERSION \
+.ebextensions/options.config \
+Procfile
 ```
 
 
