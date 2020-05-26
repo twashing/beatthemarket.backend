@@ -97,7 +97,7 @@
               ;;::http/host "localhost"
               ::http/port 8080})
 
-(defmethod ig/init-key :service/service [_ {:keys [env join? port] :as opts}]
+(defmethod ig/init-key :service/service [_ {:keys [env join? hostname port] :as opts}]
   {:env env
    ::server/join? join?
 
@@ -123,7 +123,7 @@
    ::http/type :jetty
    ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
 
-   ;;::http/host "localhost"
+   ::http/host hostname
    ::http/port port})
 
 (defn coerce-to-client [[time price]]
