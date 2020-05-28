@@ -37,7 +37,12 @@
                  [aero "1.1.6"]
                  [integrant/repl "0.3.1"]
                  [clj-time "0.15.2"]
-                 [nrepl "0.7.0"]]
+                 [nrepl "0.7.0"]
+
+                 [org.eclipse.ecf/org.apache.commons.codec "1.9.0.v20170208-1614"]
+                 [buddy/buddy-sign "3.1.0"]
+                 [clj-jwt "0.1.1"]]
+
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
   ;; :pedantic? :abort

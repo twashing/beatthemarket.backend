@@ -1,4 +1,5 @@
-# Using WebSockets in Jetty
+# BeataTheMarket.Backend
+
 
 This sample illustrates how to use WebSockets with Pedestal and Jetty.
 

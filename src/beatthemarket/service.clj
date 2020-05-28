@@ -128,7 +128,7 @@
 
 (defn coerce-to-client [[time price]]
   (-> (vector (c/to-long time) price)
-      json/write-str))
+      ajson/write-str))
 
 (defn stream-stock-data []
   (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
