@@ -7,6 +7,7 @@
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [beatthemarket.service :as service]
             [beatthemarket.nrepl]
+            [beatthemarket.iam.authentication]
             [aero.core :as aero]))
 
 

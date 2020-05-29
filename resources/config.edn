@@ -1,13 +1,17 @@
 {:integrant #profile
- {:production  {:service/service {:env      :prod
-                                  :join?    false
-                                  :hostname "0.0.0.0"
-                                  :port 5000}
-                :server/server   {:service #ig/ref :service/service}
-                :nrepl/nrepl     {:port 7000}}
-  :development {:service/service {:env      :dev
-                                  :join?    false
-                                  :hostname "0.0.0.0"
-                                  :port     8080}
-                :server/server   {:service #ig/ref :service/service}
-                :nrepl/nrepl     {:port 7000}}}}
+ {:production  {:service/service   {:env      :prod
+                                    :join?    false
+                                    :hostname "0.0.0.0"
+                                    :port     5000}
+                :server/server     {:service #ig/ref :service/service}
+                :nrepl/nrepl       {:port 7000}
+                :firebase/firebase {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
+                                    :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"}}
+  :development {:service/service   {:env      :dev
+                                    :join?    false
+                                    :hostname "0.0.0.0"
+                                    :port     8080}
+                :server/server     {:service #ig/ref :service/service}
+                :nrepl/nrepl       {:port 7000}
+                :firebase/firebase {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
+                                    :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"}}}}

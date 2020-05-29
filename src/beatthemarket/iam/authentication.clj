@@ -1,6 +1,7 @@
 (ns beatthemarket.iam.authentication
   (:require [clojure.data.json :as json]
-            [clojure.java.io :refer [resource input-stream]])
+            [clojure.java.io :refer [resource input-stream]]
+            [integrant.core :as ig])
   (:import [com.google.firebase FirebaseApp FirebaseOptions]
            [com.google.firebase.auth FirebaseAuth FirebaseAuthException FirebaseToken]
            [com.google.auth.oauth2 GoogleCredentials]
@@ -166,3 +167,6 @@
     (println [email name uid]))
 
   )
+
+(defmethod ig/init-key :firebase/firebase [_ {:keys [firebase-database-url service-account-file-name] :as opts}]
+  (initialize-firebase firebase-database-url service-account-file-name))
