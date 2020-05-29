@@ -39,6 +39,7 @@
                  [clj-time "0.15.2"]
                  [nrepl "0.7.0"]
 
+                 [com.google.firebase/firebase-admin "6.13.0"]
                  [org.eclipse.ecf/org.apache.commons.codec "1.9.0.v20170208-1614"]
                  [buddy/buddy-sign "3.1.0"]
                  [clj-jwt "0.1.1"]]

@@ -73,12 +73,52 @@
   )
 
 
-(comment ;;
+(comment ;; https://github.com/liquidz/clj-jwt
 
   (require 'clj-jwt.core)
 
   (-> example-jwt
       clj-jwt.core/str->jwt
-      clj-jwt.core/verify)
+      clj-jwt.core/verify))
+
+
+(comment
+
+  ;; https://github.com/funcool/buddy-sign
+  ;; https://www.bradcypert.com/using-json-web-tokens-with-clojure/
+
+  (import '[com.google.firebase FirebaseApp FirebaseOptions]
+          '[com.google.firebase.auth FirebaseAuth FirebaseAuthException FirebaseToken]
+          '[com.google.auth.oauth2 GoogleCredentials]
+          '[java.io FileInputStream])
+
+
+  ;; A
+  (def ^FileInputStream serviceAccount
+    (FileInputStream. "./beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"));
+
+  (def ^FirebaseOptions options
+    (.. (com.google.firebase.FirebaseOptions$Builder.)
+      (setCredentials (GoogleCredentials/fromStream serviceAccount) )
+      (setDatabaseUrl "https://beatthemarket-c13f8.firebaseio.com")
+      (build)))
+
+  (FirebaseApp/initializeApp options)
+
+  ;; B
+  (try
+
+    (def ^FirebaseToken decodedToken
+      (.. (FirebaseAuth/getInstance)
+          (verifyIdToken example-jwt)))
+
+    (catch FirebaseAuthException e
+
+      (println (.getErrorCode e))
+      (println (.getMessage e))))
+
+  (def ^String uid (.getUid decodedToken))
+  (println uid)
+
 
   )
