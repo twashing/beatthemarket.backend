@@ -71,3 +71,4 @@ References
 * https://firebase.google.com/docs/auth/admin/verify-id-tokens#web
 * https://firebase.google.com/docs/auth/admin/verify-id-tokens#java
 * https://firebase.google.com/docs/reference/admin (Admin SDK Reference)
+* https://developers.google.com/android/reference/packages (Google APIs for Android)
