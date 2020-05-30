@@ -3,6 +3,7 @@
   (:require [clojure.java.io :refer [resource]]
             [clojure.tools.cli :as tools.cli]
             [io.pedestal.http :as server]
+            [unilog.config  :refer [start-logging!]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [beatthemarket.service :as service]
@@ -11,7 +12,23 @@
             [aero.core :as aero]))
 
 
+(def logging-config
+  {:level   :info
+   :console true
+   :appenders [{:appender :rolling-file
+                :rolling-policy {:type :fixed-window
+                                 :max-index 5}
+                :triggering-policy {:type :size-based
+                                    :max-size 5120}
+                :pattern  "%p [%d] %t - %c %m%n"
+                :file     "logs/beatthemarket.log"}]
+   :overrides  {"org.apache.http"      :debug
+                "org.apache.http.wire" :error}})
+
+
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
+
+  (start-logging! logging-config)
   (-> service
       server/default-interceptors
       server/dev-interceptors

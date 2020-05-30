@@ -6,7 +6,8 @@
                 :server/server     {:service #ig/ref :service/service}
                 :nrepl/nrepl       {:port 7000}
                 :firebase/firebase {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
-                                    :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"}}
+                                    :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
+                                    :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}}
   :development {:service/service   {:env      :dev
                                     :join?    false
                                     :hostname "0.0.0.0"
@@ -14,4 +15,5 @@
                 :server/server     {:service #ig/ref :service/service}
                 :nrepl/nrepl       {:port 7000}
                 :firebase/firebase {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
-                                    :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"}}}}
+                                    :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
+                                    :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}}}}

@@ -1,6 +1,7 @@
 (ns beatthemarket.iam.authentication-test
-  (:require [beatthemarket.iam.authentication :as sut]
-            [clojure.test :refer :all]))
+  (:require [clojure.test :refer :all]
+            [integrant.repl.state :as state]
+            [beatthemarket.iam.authentication :as sut]))
 
 
 (deftest check-authentication-test
@@ -19,28 +20,29 @@
 
   (testing "Return value for valid JWT"
 
-    (let [jwt "foobar"
+    (let [jwt             "foobar"
+          admin-user-id   (-> state/config :firebase/firebase :admin-user-id)
           verification-fn (constantly
                             {:claims
                              {"aud" "beatthemarket-c13f8" "auth_time" 1590854213 "exp" 1590857813 "iat" 1590854213 "iss" "https://securetoken.google.com/beatthemarket-c13f8" "sub" "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2" "name" "Timothy Washington" "picture" "https://lh3.googleusercontent.com/a-/AOh14GgMZElcpf5y_GK9yFGoMboO-E0nx5fs4Q9kwKMP" "user_id" "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2" "email" "twashing@gmail.com" "email_verified" true "firebase" {"identities" {"google.com" ["101912311227696954238"] "email" ["twashing@gmail.com"]} "sign_in_provider" "google.com"}}
-                             :class com.google.firebase.auth.FirebaseToken
-                             :email "twashing@gmail.com"
+                             :class         com.google.firebase.auth.FirebaseToken
+                             :email         "twashing@gmail.com"
                              :emailVerified true
-                             :issuer "https://securetoken.google.com/beatthemarket-c13f8"
-                             :name "Timothy Washington"
+                             :issuer        "https://securetoken.google.com/beatthemarket-c13f8"
+                             :name          "Timothy Washington"
                              :picture
                              "https://lh3.googleusercontent.com/a-/AOh14GgMZElcpf5y_GK9yFGoMboO-E0nx5fs4Q9kwKMP"
-                             :uid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"})
+                             :uid           admin-user-id})
 
           {:keys [email name uid]} (sut/check-authentication jwt verification-fn)
-          expectedEmail "twashing@gmail.com"
-          expectedName "Timothy Washington"
-          expectedUid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"]
+          expectedEmail            "twashing@gmail.com"
+          expectedName             "Timothy Washington"
+          expectedUid              admin-user-id]
 
       (are [x y] (= x y)
         email expectedEmail
-        name expectedName
-        uid expectedUid)
+        name  expectedName
+        uid   expectedUid)
 
       (testing "authneticated? function"
         (is (sut/authenticated? jwt verification-fn))))))

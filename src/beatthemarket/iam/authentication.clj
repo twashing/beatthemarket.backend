@@ -1,6 +1,7 @@
 (ns beatthemarket.iam.authentication
   (:require [clojure.data.json :as json]
             [clojure.java.io :refer [resource input-stream]]
+            [clojure.tools.logging :refer [debug info warn error]]
             [integrant.core :as ig]
             [beatthemarket.util :as util])
   (:import [com.google.firebase FirebaseApp FirebaseOptions]
@@ -21,7 +22,11 @@
                                      (setDatabaseUrl firebase-database-url)
                                      (build))]
 
-    (FirebaseApp/initializeApp options)))
+    (try
+      (FirebaseApp/initializeApp options)
+      (catch IllegalStateException e
+        (let [{:keys [message data]} (bean e)]
+          (info (format "Exception initializing firebase / Message: %s / Data: %s" message data)))))))
 
 (defn verify-id-token [token]
   (.. (FirebaseAuth/getInstance)
@@ -52,8 +57,11 @@
     (map #(String. %) jwt) ;; byte array to string
     (map json/read-str jwt)))
 
-(defmethod ig/init-key :firebase/firebase [_ {:keys [firebase-database-url service-account-file-name] :as opts}]
-  (initialize-firebase firebase-database-url service-account-file-name))
+(defmethod ig/init-key :firebase/firebase [_ {:keys [firebase-database-url
+                                                     service-account-file-name
+                                                     admin-user-id] :as opts}]
+  (initialize-firebase firebase-database-url service-account-file-name)
+  opts)
 
 
 
@@ -84,7 +92,9 @@
 
 
   ;; ================
-  (def uid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2")
+  (require '[integrant.repl.state :as state])
+
+  (def uid (-> state/config :firebase/firebase :admin-user-id))
 
   (def ^String customToken
     (.. (FirebaseAuth/getInstance)
@@ -94,6 +104,4 @@
       pprint)
 
   (-> (verify-id-token customToken)
-      pprint)
-
-  )
+      pprint))
