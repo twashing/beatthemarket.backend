@@ -1,4 +1,5 @@
-# Using WebSockets in Jetty
+# BeataTheMarket.Backend
+
 
 This sample illustrates how to use WebSockets with Pedestal and Jetty.
 
@@ -15,13 +16,13 @@ w.onclose = function(e) {  console.log("The connection to the server has closed.
 w.send("Hello from the Client!");
 ```
 
-You'll notice the log message in Clojure REPL
+You'll notice a corresponding log message in the Clojure REPL.
 
 4. Send a message to the client and close with `(service/send-and-close!)`
 
 ## Component
 
-[Integrant](https://github.com/weavejester/integrant) Component system is now installed
+Beatthemarket uses the [Integrant](https://github.com/weavejester/integrant) Component system.
 
 Reloaded Workflow uses [weavejester/integrant-repl](https://github.com/weavejester/integrant-repl)
 

@@ -12,9 +12,14 @@
             [clj-time.coerce :as c]
 
             [io.pedestal.http.jetty.websockets :as ws]
+            [io.pedestal.interceptor.error :as error-int]
             [integrant.core :as ig]
             [beatthemarket.datasource :as datasource]
-            [beatthemarket.datasource.core :as datasource.core])
+            [beatthemarket.datasource.core :as datasource.core]
+
+            [io.pedestal.interceptor :as interceptor]
+            [io.pedestal.interceptor.chain :as chain])
+
   (:import [org.eclipse.jetty.websocket.api Session]))
 
 
@@ -28,12 +33,47 @@
   [request]
   (ring-resp/response "Hello World!"))
 
+(def service-error-handler
+  "References:
+   http://pedestal.io/reference/error-handling
+   https://stuarth.github.io/clojure/error-dispatch/
+   http://pedestal.io/cookbook/index#_how_to_handle_errors"
+
+  (error-int/error-dispatch
+    [context ex]
+
+    [{:exception-type :clojure.lang.ExceptionInfo
+      :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
+    (let [response (-> (ring.util.response/response (.getMessage ex)) :status 401)]
+      (println "Sanity check")
+      (assoc context :response response))
+
+    :else
+    (assoc context :io.pedestal.interceptor.chain/error ex)))
+
+(def throwing-interceptor
+  (interceptor/interceptor {:name ::throwing-interceptor
+                            :enter (fn [ctx]
+                                     ;; Simulated processing error
+                                     (/ 1 0))
+                            :error (fn [ctx ex]
+                                     ;; Here's where you'd handle the exception
+                                     ;; Remember to base your handling decision
+                                     ;; on the ex-data of the exception.
+
+                                     (let [{:keys [exception-type exception]} (ex-data ex)]
+                                       ;; If you cannot handle the exception, re-attach it to the ctx
+                                       ;; using the `:io.pedestal.interceptor.chain/error` key
+                                       (assoc ctx ::chain/error ex)))}))
+
 (defroutes routes
   ;; Defines "/" and "/about" routes with their associated :get handlers.
   ;; The interceptors defined after the verb map (e.g., {:get home-page}
   ;; apply to / and its children (/about).
-  [[["/" {:get home-page}
-     ^:interceptors [(body-params/body-params) http/html-body]
+  [[["/" {:get home-page} ^:interceptors [(body-params/body-params) http/html-body]
+     ["/about" {:get about-page}]]]]
+
+  #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
      ["/about" {:get about-page}]]]])
 
 (def ws-clients (atom {}))
@@ -72,7 +112,7 @@
 
 ;; Consumed by beatthemarket.server/create-server
 ;; See http/default-interceptors for additional options you can configure
-(def service {:env :prod
+(def service {:env :production
               ;; You can bring your own non-default interceptors. Make
               ;; sure you include routing and set it up right for
               ;; dev-mode. If you do, many other keys for configuring

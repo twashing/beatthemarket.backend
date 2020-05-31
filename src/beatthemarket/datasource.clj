@@ -130,7 +130,6 @@
              (csv/write-csv combined-writer))))))
 
 
-
 ;; TODO Cleanup
 ;; put into fn
 ;; make configurable, which algorithms to combine
