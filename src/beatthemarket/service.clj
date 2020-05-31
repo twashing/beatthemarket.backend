@@ -12,6 +12,7 @@
             [clj-time.coerce :as c]
 
             [io.pedestal.http.jetty.websockets :as ws]
+            [io.pedestal.interceptor.error :as error-int]
             [integrant.core :as ig]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core])
@@ -28,12 +29,24 @@
   [request]
   (ring-resp/response "Hello World!"))
 
+(def service-error-handler
+  (error-int/error-dispatch
+    [context ex]
+
+    [{:exception-type :clojure.lang.ExceptionInfo
+      :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
+    (let [response (-> (ring.util.response/response (.getMessage ex)) :status 401)]
+      (println "Sanity check")
+      (assoc context :response response))
+
+    :else
+    (assoc context :io.pedestal.interceptor.chain/error ex)))
+
 (defroutes routes
   ;; Defines "/" and "/about" routes with their associated :get handlers.
   ;; The interceptors defined after the verb map (e.g., {:get home-page}
   ;; apply to / and its children (/about).
-  [[["/" {:get home-page}
-     ^:interceptors [(body-params/body-params) http/html-body]
+  [[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
      ["/about" {:get about-page}]]]])
 
 (def ws-clients (atom {}))
@@ -70,9 +83,10 @@
           :on-close (fn [num-code reason-text]
                       (log/info :msg "WS Closed:" :reason reason-text))}})
 
+
 ;; Consumed by beatthemarket.server/create-server
 ;; See http/default-interceptors for additional options you can configure
-(def service {:env :prod
+(def service {:env :production
               ;; You can bring your own non-default interceptors. Make
               ;; sure you include routing and set it up right for
               ;; dev-mode. If you do, many other keys for configuring

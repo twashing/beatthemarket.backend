@@ -1,7 +1,9 @@
 (ns beatthemarket.iam.authentication
   (:require [clojure.data.json :as json]
             [clojure.java.io :refer [resource input-stream]]
-            [clojure.tools.logging :refer [debug info warn error]]
+            [clojure.tools.logging :as log]
+            [io.pedestal.interceptor :as pedestal.interceptor]
+            [io.pedestal.interceptor.helpers :as interceptor]
             [integrant.core :as ig]
             [beatthemarket.util :as util])
   (:import [com.google.firebase FirebaseApp FirebaseOptions]
@@ -26,7 +28,7 @@
       (FirebaseApp/initializeApp options)
       (catch IllegalStateException e
         (let [{:keys [message data]} (bean e)]
-          (info (format "Exception initializing firebase / Message: %s / Data: %s" message data)))))))
+          (log/info (format "Exception initializing firebase / Message: %s / Data: %s" message data)))))))
 
 (defn verify-id-token [token]
   (.. (FirebaseAuth/getInstance)

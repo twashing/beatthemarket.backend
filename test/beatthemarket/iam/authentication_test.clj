@@ -1,5 +1,6 @@
 (ns beatthemarket.iam.authentication-test
   (:require [clojure.test :refer :all]
+            [io.pedestal.test :refer [response-for]]
             [integrant.repl.state :as state]
             [beatthemarket.iam.authentication :as sut]))
 
@@ -44,5 +45,15 @@
         name  expectedName
         uid   expectedUid)
 
-      (testing "authneticated? function"
+      (testing "authenticated? function"
         (is (sut/authenticated? jwt verification-fn))))))
+
+(deftest authentication-interceptor-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)]
+    (response-for service
+                  :get "/"
+                  :headers {"Authorization"
+                            (str "Bearer sample-JWT_String")}))
+
+  )

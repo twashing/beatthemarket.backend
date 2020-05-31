@@ -7,6 +7,7 @@
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [beatthemarket.service :as service]
+            [beatthemarket.handler.authentication :as auth]
             [beatthemarket.nrepl]
             [beatthemarket.iam.authentication]
             [aero.core :as aero]))
@@ -25,15 +26,23 @@
    :overrides  {"org.apache.http"      :debug
                 "org.apache.http.wire" :error}})
 
+(start-logging! logging-config)
+
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
-  (start-logging! logging-config)
-  (-> service
-      server/default-interceptors
-      server/dev-interceptors
-      server/create-server
-      server/start))
+  (let [conditionally-apply-dev-interceptor
+        (fn [service-map]
+          (if (-> service :env (= :development))
+            (server/dev-interceptors service-map)
+            service-map))]
+
+    (-> service
+        server/default-interceptors
+        conditionally-apply-dev-interceptor
+        auth/auth-interceptor
+        server/create-server
+        server/start)))
 
 (defmethod ig/halt-key! :server/server [_ server]
   (server/stop server))
@@ -88,18 +97,15 @@
 
 (comment
 
-  ;; (println args)
-  ;; '("-p" "development")
 
-  ;; (-main "-p" "production")
+  (-main "-p" "production")
 
 
   (-> "integrant-config.edn"
       resource
       (aero.core/read-config {:profile :dev})
-      :integrant
-      ;; pprint
-      )
+      :integrant)
+
 
   (binding [*data-readers* {'ig/ref ig/ref}]
     (-> "integrant-config.edn"
