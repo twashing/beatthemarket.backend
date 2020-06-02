@@ -40,7 +40,8 @@
                  [nrepl "0.7.0"]
                  [com.google.firebase/firebase-admin "6.13.0"]
                  [spootnik/unilog "0.7.25"]
-                 [org.clojure/tools.logging "1.1.0"]]
+                 [org.clojure/tools.logging "1.1.0"]
+                 [com.walmartlabs/lacinia-pedestal "0.14.0-alpha-1"]]
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]

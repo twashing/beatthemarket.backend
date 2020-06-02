@@ -41,6 +41,16 @@
         server/default-interceptors
         conditionally-apply-dev-interceptor
         auth/auth-interceptor
+
+        ;; TODO
+
+        ;; A
+        ;; https://lacinia-pedestal.readthedocs.io/en/stable/overview.html
+        ;; com.walmartlabs.lacinia.pedestal/service-map (deprecated. use default-service)
+        ;; com.walmartlabs.lacinia.pedestal2/default-service
+
+        ;; B
+        ;; integrate other interceptors
         server/create-server
         server/start)))
 
@@ -94,7 +104,7 @@
 
     (integrant.repl/go)))
 
-(comment
+(comment ;; Main
 
 
   (-main "-p" "production")
@@ -110,3 +120,43 @@
     (-> "integrant-config.edn"
         resource
         (aero.core/read-config {:profile :dev}))))
+
+(defn ^:private resolve-hello
+  [context args value]
+  "Hello, Clojurians!")
+
+(defn ^:private hello-schema []
+
+  (-> "schema.lacinia.edn"
+      resource
+      slurp
+      edn/read-string
+      (util/attach-resolvers {:resolve-hello resolve-hello})
+      schema/compile))
+
+(comment ;; Lacinia
+
+  (require '[clojure.edn :as edn]
+           '[com.walmartlabs.lacinia.pedestal2 :as pedestal :refer [default-service]]
+           '[com.walmartlabs.lacinia.schema :as schema]
+           '[com.walmartlabs.lacinia.util :as util]
+           '[io.pedestal.http :as http]
+           '[io.pedestal.http.jetty.websockets :as ws])
+
+  ;; Legacy
+  (let [service {:env :production
+                 ::http/routes service/routes
+                 ::http/resource-path "/public"
+                 ::http/type :jetty
+                 ::http/container-options {:context-configurator #(ws/add-ws-endpoints % service/ws-paths)}
+                 ::http/port 8080}]
+    (-> service
+        io.pedestal.http/default-interceptors
+        auth/auth-interceptor
+        pprint))
+
+  ;; Lacinia
+  (-> (hello-schema)
+      (pedestal/default-service {:graphiql true})
+      pprint)
+  )

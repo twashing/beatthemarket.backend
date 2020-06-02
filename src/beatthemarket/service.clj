@@ -4,7 +4,7 @@
             [io.pedestal.http.route :as route]
             [io.pedestal.http.body-params :as body-params]
             [io.pedestal.http.route.definition :refer [defroutes]]
-            [io.pedestal.http :as server]
+            ;; [io.pedestal.http :as server]
             [ring.util.response :as ring-resp]
             [clojure.core.async :as async]
             [clojure.data.json :as json]
@@ -139,7 +139,7 @@
 
 (defmethod ig/init-key :service/service [_ {:keys [env join? hostname port] :as opts}]
   {:env env
-   ::server/join? join?
+   ::http/join? join?
 
    ;; You can bring your own non-default interceptors. Make
    ;; sure you include routing and set it up right for
