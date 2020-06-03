@@ -2,7 +2,10 @@
   (:gen-class)
   (:require [clojure.java.io :refer [resource]]
             [clojure.tools.cli :as tools.cli]
+            [clojure.tools.logging :as log]
             [io.pedestal.http :as server]
+            [io.pedestal.http.route :refer [expand-routes]]
+            [io.pedestal.interceptor :as interceptor]
             [unilog.config  :refer [start-logging!]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
@@ -29,6 +32,72 @@
 (start-logging! logging-config)
 
 
+(defn ^:private resolve-hello
+  [context args value]
+  "Hello, Clojurians!")
+
+(defn ^:private lacinia-schema []
+
+  (-> "schema.lacinia.edn"
+      resource
+      slurp
+      edn/read-string
+      (util/attach-resolvers {:resolve-hello resolve-hello})
+      schema/compile))
+
+(defn log-handler [request]
+  (log/info :log request)
+  request)
+
+(def log-request
+  (interceptor/interceptor
+    {:name ::log
+
+     :enter (fn [context]
+              (assoc context :request (log-handler (:request context))))}))
+
+(defn pprint+identity [e]
+  (clojure.pprint/pprint e)
+  e)
+
+(defn inject-lacinia-configuration [context]
+
+  ;; Legacy keys
+  ;; (:env
+  ;;  :io.pedestal.http/routes
+  ;;  :io.pedestal.http/port
+  ;;  :io.pedestal.http/type
+  ;;  :io.pedestal.http/container-options
+  ;;
+  ;;  :io.pedestal.http/resource-path
+  ;;  :io.pedestal.http/interceptors)
+
+  ;; Lacinia keys
+  ;; (:env
+  ;;  :io.pedestal.http/routes
+  ;;  :io.pedestal.http/port
+  ;;  :io.pedestal.http/type
+  ;;  :io.pedestal.http/container-options
+  ;;
+  ;;  :io.pedestal.http/join?
+  ;;  :io.pedestal.http/secure-headers)
+
+  ;; Common keys
+  ;; :io.pedestal.http/routes ;; [ok] concat these
+  ;; :io.pedestal.http/port ;; [ok] pick 8080
+  ;; :io.pedestal.http/type ;; [ok] same
+  ;; :io.pedestal.http/container-options ;; [ok] WS connection + messages are handled by lacinia
+
+  (let [lacinia-routes
+        (-> (lacinia-schema)
+            (pedestal/default-service {:graphiql true
+                                       :subscription-interceptors [log-request]})
+            (select-keys [:io.pedestal.http/routes])
+            :io.pedestal.http/routes
+            expand-routes)]
+
+    (update context :io.pedestal.http/routes concat lacinia-routes)))
+
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
   (let [conditionally-apply-dev-interceptor
@@ -41,6 +110,7 @@
         server/default-interceptors
         conditionally-apply-dev-interceptor
         auth/auth-interceptor
+        inject-lacinia-configuration
 
         ;; TODO
 
@@ -121,19 +191,6 @@
         resource
         (aero.core/read-config {:profile :dev}))))
 
-(defn ^:private resolve-hello
-  [context args value]
-  "Hello, Clojurians!")
-
-(defn ^:private hello-schema []
-
-  (-> "schema.lacinia.edn"
-      resource
-      slurp
-      edn/read-string
-      (util/attach-resolvers {:resolve-hello resolve-hello})
-      schema/compile))
-
 (comment ;; Lacinia
 
   (require '[clojure.edn :as edn]
@@ -141,7 +198,8 @@
            '[com.walmartlabs.lacinia.schema :as schema]
            '[com.walmartlabs.lacinia.util :as util]
            '[io.pedestal.http :as http]
-           '[io.pedestal.http.jetty.websockets :as ws])
+           '[io.pedestal.http.jetty.websockets :as ws]
+           '[io.pedestal.http.route :refer [expand-routes]])
 
   ;; Legacy
   (let [service {:env :production
@@ -153,10 +211,18 @@
     (-> service
         io.pedestal.http/default-interceptors
         auth/auth-interceptor
-        pprint))
+        pprint
+        ;; keys
+        ))
+
 
   ;; Lacinia
-  (-> (hello-schema)
-      (pedestal/default-service {:graphiql true})
-      pprint)
-  )
+  (-> (lacinia-schema)
+      (pedestal/default-service {:graphiql true
+                                 :subscription-interceptors [log-request]})
+      (select-keys [:io.pedestal.http/routes])
+      :io.pedestal.http/routes
+      expand-routes
+      pprint
+      ;; keys
+      ))
