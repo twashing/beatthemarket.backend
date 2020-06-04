@@ -54,10 +54,10 @@
 (deftest authentication-interceptor-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        {code :status} (response-for service
-                                     :get "/"
-                                     :headers {"Authorization"
-                                               (str "Bearer sample-JWT_String")})
-        expected-error-code 401]
+        {status :status} (response-for service
+                                       :get "/"
+                                       :headers {"Authorization"
+                                                 (str "Bearer sample-JWT_String")})
+        expected-error-status 401]
 
-    (is (= expected-error-code code))))
+    (is (= expected-error-status status))))

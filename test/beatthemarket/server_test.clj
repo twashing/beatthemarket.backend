@@ -14,41 +14,7 @@
 
 (use-fixtures :each component-fixture)
 
-
-#_(deftest inject-lacinia-configuration-test
-
-  (let [profile :development
-        config (-> "config.edn"
-                   resource
-                   (aero.core/read-config {:profile profile})
-                   :integrant)
-
-        {service :service/service} (ig/init config [:service/service])
-
-        expected-paths
-        '([""]
-          ["api"]
-          ["ide"]
-          ["" "about"]
-          ["assets" "graphiql" :path]
-          ["assets" "graphiql" :path])]
-
-
-    (->> service
-         io.pedestal.http/default-interceptors
-         auth/auth-interceptor
-         sut/inject-lacinia-configuration
-         :io.pedestal.http/routes
-         (map :path-parts)
-         sort
-         (= expected-paths)
-         is)))
-
-;; subscription-handler-test
 (deftest basic-handler-test
-
-  ;; (-> state/system :server/server pprint)
-  ;; (-> state/system :server/server :io.pedestal.http/routes pprint)
 
   (with-redefs [auth/auth-request-handler identity]
 
@@ -80,3 +46,16 @@
           expected-status status
           expected-body body
           expected-headers headers)))))
+
+(deftest subscription-handler-test
+
+  (testing "Auth interceptor rejects GQL call"
+    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+
+          expected-error-status 401
+          {status :status} (response-for service
+                                         :post "/api"
+                                         :body "{\"query\": \"{ hello }\"}"
+                                         :headers {"Content-Type" "application/json"})]
+
+      (is (= expected-error-status status)))))
