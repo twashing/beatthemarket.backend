@@ -18,7 +18,9 @@
             [beatthemarket.datasource.core :as datasource.core]
 
             [io.pedestal.interceptor :as interceptor]
-            [io.pedestal.interceptor.chain :as chain])
+            [io.pedestal.interceptor.chain :as chain]
+
+            [com.walmartlabs.lacinia.pedestal2])
 
   (:import [org.eclipse.jetty.websocket.api Session]))
 
@@ -112,7 +114,7 @@
 
 ;; Consumed by beatthemarket.server/create-server
 ;; See http/default-interceptors for additional options you can configure
-(def service {:env :production
+#_(def service {:env :production
               ;; You can bring your own non-default interceptors. Make
               ;; sure you include routing and set it up right for
               ;; dev-mode. If you do, many other keys for configuring
@@ -136,6 +138,61 @@
               ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
               ;;::http/host "localhost"
               ::http/port 8080})
+
+(def ^:private default-api-path "/api")
+(def ^:private default-asset-path "/assets/graphiql")
+(def ^:private default-subscriptions-path "/ws")
+
+(defn default-service
+  "Taken from com.walmartlabs.lacinia.pedestal2/default-service
+
+  Returns a default Pedestal service map, with subscriptions and GraphiQL enabled.
+
+  The defaults put the GraphQL API at `/api` and the GraphiQL IDE at `/ide` (and subscriptions endpoint
+  at `/ws`).
+
+  Unlike earlier versions of lacinia-pedestal, only POST is supported, and the content type must
+  be `application/json`.
+
+  compiled-schema is either the schema or a function returning the schema.
+
+  options is a map combining options needed by [[graphiql-ide-route]] and [[listener-fn-factory]].
+
+  It may also contain keys :app-context and :port (which defaults to 8888).
+
+  This is useful for initial development and exploration, but applications with any more needs should construct
+  their service map directly."
+  [compiled-schema options]
+  (let [{:keys [api-path ide-path asset-path app-context port]
+         :or {api-path default-api-path
+              ide-path "/ide"
+              asset-path default-asset-path
+              port 8888}} options
+        interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
+
+        lacinia-routes
+
+        #_(into #{[api-path :post interceptors :route-name ::graphql-api]
+                [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+              (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))
+
+        (concat routes
+                (route/expand-routes
+                  (into #{[api-path :post interceptors :route-name ::graphql-api]
+                          [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+                        (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
+
+    ;; (clojure.pprint/pprint lacinia-routes)
+    ;; (clojure.pprint/pprint (route/expand-routes routes))
+    ;; (clojure.pprint/pprint routes)
+
+    (-> {:env :dev
+         ::http/routes lacinia-routes
+         ::http/port port
+         ::http/type :jetty
+         ::http/join? false}
+        com.walmartlabs.lacinia.pedestal2/enable-graphiql
+        (com.walmartlabs.lacinia.pedestal2/enable-subscriptions compiled-schema options))))
 
 (defmethod ig/init-key :service/service [_ {:keys [env join? hostname port] :as opts}]
   {:env env

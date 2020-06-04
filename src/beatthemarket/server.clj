@@ -139,11 +139,39 @@
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
   (-> (lacinia-schema)
-      (pedestal/default-service {:graphiql true
-                                 :subscription-interceptors [log-request]})
+      #_(pedestal/default-service {:graphiql true
+                                   :subscription-interceptors [log-request]})
+      (service/default-service {:graphiql true
+                                :subscription-interceptors [log-request]})
       server/create-server
       server/start))
 
+
+#_(defmethod ig/init-key :server/server [_ {:keys [service]}]
+
+  (let [conditionally-apply-dev-interceptor
+        (fn [service-map]
+          (if (-> service :env (= :development))
+            (server/dev-interceptors service-map)
+            service-map))]
+
+    (-> service
+        server/default-interceptors
+        conditionally-apply-dev-interceptor
+        auth/auth-interceptor
+        inject-lacinia-configuration
+
+        ;; TODO
+
+        ;; A
+        ;; https://lacinia-pedestal.readthedocs.io/en/stable/overview.html
+        ;; com.walmartlabs.lacinia.pedestal/service-map (deprecated. use default-service)
+        ;; com.walmartlabs.lacinia.pedestal2/default-service
+
+        ;; B
+        ;; integrate other interceptors
+        server/create-server
+        server/start)))
 
 (defmethod ig/halt-key! :server/server [_ server]
   (server/stop server))

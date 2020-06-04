@@ -34,7 +34,7 @@
 (use-fixtures :each server-fixture)
 
 
-(deftest inject-lacinia-configuration-test
+#_(deftest inject-lacinia-configuration-test
 
   (let [profile :development
         config (-> "config.edn"
@@ -85,7 +85,7 @@
 
         (is true))
 
-    #_(let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
             {code :status} (trace (response-for service
                                                 :get "/"))]
 
