@@ -1,11 +1,15 @@
 (ns beatthemarket.server
   (:gen-class)
   (:require [clojure.java.io :refer [resource]]
+            [clojure.edn :as edn]
             [clojure.tools.cli :as tools.cli]
             [clojure.tools.logging :as log]
             [io.pedestal.http :as server]
             [io.pedestal.http.route :refer [expand-routes]]
             [io.pedestal.interceptor :as interceptor]
+            [com.walmartlabs.lacinia.pedestal2 :as pedestal :refer [default-service]]
+            [com.walmartlabs.lacinia.schema :as schema]
+            [com.walmartlabs.lacinia.util :as util]
             [unilog.config  :refer [start-logging!]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
@@ -46,13 +50,14 @@
       schema/compile))
 
 (defn log-handler [request]
-  (log/info :log request)
+
+  (println "Sanity check")
+  ;; (log/info :log request)
   request)
 
 (def log-request
   (interceptor/interceptor
     {:name ::log
-
      :enter (fn [context]
               (assoc context :request (log-handler (:request context))))}))
 
@@ -60,15 +65,14 @@
   (clojure.pprint/pprint e)
   e)
 
-(defn inject-lacinia-configuration [context]
+#_(defn inject-lacinia-configuration [context]
 
   ;; Legacy keys
   ;; (:env
-  ;;  :io.pedestal.http/routes
+  ;;  :io.pedestal.http/route
   ;;  :io.pedestal.http/port
   ;;  :io.pedestal.http/type
-  ;;  :io.pedestal.http/container-options
-  ;;
+  ;;  :io.pedestal.http/container-options  ;;
   ;;  :io.pedestal.http/resource-path
   ;;  :io.pedestal.http/interceptors)
 
@@ -78,7 +82,6 @@
   ;;  :io.pedestal.http/port
   ;;  :io.pedestal.http/type
   ;;  :io.pedestal.http/container-options
-  ;;
   ;;  :io.pedestal.http/join?
   ;;  :io.pedestal.http/secure-headers)
 
@@ -88,41 +91,59 @@
   ;; :io.pedestal.http/type ;; [ok] same
   ;; :io.pedestal.http/container-options ;; [ok] WS connection + messages are handled by lacinia
 
-  (let [lacinia-routes
+  (let [{routes :io.pedestal.http/routes
+         container-options :io.pedestal.http/container-options}
         (-> (lacinia-schema)
             (pedestal/default-service {:graphiql true
-                                       :subscription-interceptors [log-request]})
-            (select-keys [:io.pedestal.http/routes])
-            :io.pedestal.http/routes
-            expand-routes)]
+                                       :subscription-interceptors [log-request]
+                                       })
+            (select-keys [:io.pedestal.http/routes :io.pedestal.http/container-options]))
 
-    (update context :io.pedestal.http/routes concat lacinia-routes)))
+        lacinia-routes (->> (expand-routes routes)
+                            (map (fn [e]
+                                   (update e :path-parts #(into [] (cons "" %)))))
+
+                            ;; (map trace)
+                            ;; pprint+identity
+                            )]
+
+    (-> (update context :io.pedestal.http/routes concat lacinia-routes)
+        (assoc :io.pedestal.http/container-options container-options))))
+
+#_(defmethod ig/init-key :server/server [_ {:keys [service]}]
+
+    (let [conditionally-apply-dev-interceptor
+          (fn [service-map]
+            (if (-> service :env (= :development))
+              (server/dev-interceptors service-map)
+              service-map))]
+
+      (-> service
+          server/default-interceptors
+          conditionally-apply-dev-interceptor
+          auth/auth-interceptor
+          inject-lacinia-configuration
+
+          ;; TODO
+
+          ;; A
+          ;; https://lacinia-pedestal.readthedocs.io/en/stable/overview.html
+          ;; com.walmartlabs.lacinia.pedestal/service-map (deprecated. use default-service)
+          ;; com.walmartlabs.lacinia.pedestal2/default-service
+
+          ;; B
+          ;; integrate other interceptors
+          server/create-server
+          server/start)))
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
-  (let [conditionally-apply-dev-interceptor
-        (fn [service-map]
-          (if (-> service :env (= :development))
-            (server/dev-interceptors service-map)
-            service-map))]
+  (-> (lacinia-schema)
+      (pedestal/default-service {:graphiql true
+                                 :subscription-interceptors [log-request]})
+      server/create-server
+      server/start))
 
-    (-> service
-        server/default-interceptors
-        conditionally-apply-dev-interceptor
-        auth/auth-interceptor
-        inject-lacinia-configuration
-
-        ;; TODO
-
-        ;; A
-        ;; https://lacinia-pedestal.readthedocs.io/en/stable/overview.html
-        ;; com.walmartlabs.lacinia.pedestal/service-map (deprecated. use default-service)
-        ;; com.walmartlabs.lacinia.pedestal2/default-service
-
-        ;; B
-        ;; integrate other interceptors
-        server/create-server
-        server/start)))
 
 (defmethod ig/halt-key! :server/server [_ server]
   (server/stop server))
@@ -190,39 +211,3 @@
     (-> "integrant-config.edn"
         resource
         (aero.core/read-config {:profile :dev}))))
-
-(comment ;; Lacinia
-
-  (require '[clojure.edn :as edn]
-           '[com.walmartlabs.lacinia.pedestal2 :as pedestal :refer [default-service]]
-           '[com.walmartlabs.lacinia.schema :as schema]
-           '[com.walmartlabs.lacinia.util :as util]
-           '[io.pedestal.http :as http]
-           '[io.pedestal.http.jetty.websockets :as ws]
-           '[io.pedestal.http.route :refer [expand-routes]])
-
-  ;; Legacy
-  (let [service {:env :production
-                 ::http/routes service/routes
-                 ::http/resource-path "/public"
-                 ::http/type :jetty
-                 ::http/container-options {:context-configurator #(ws/add-ws-endpoints % service/ws-paths)}
-                 ::http/port 8080}]
-    (-> service
-        io.pedestal.http/default-interceptors
-        auth/auth-interceptor
-        pprint
-        ;; keys
-        ))
-
-
-  ;; Lacinia
-  (-> (lacinia-schema)
-      (pedestal/default-service {:graphiql true
-                                 :subscription-interceptors [log-request]})
-      (select-keys [:io.pedestal.http/routes])
-      :io.pedestal.http/routes
-      expand-routes
-      pprint
-      ;; keys
-      ))
