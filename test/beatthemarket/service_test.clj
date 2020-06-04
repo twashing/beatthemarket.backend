@@ -2,32 +2,31 @@
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer :all]
             [io.pedestal.http :as http]
-            [beatthemarket.service :as service]))
+            [integrant.repl.state :as state]
+            [beatthemarket.service :as service]
+            [beatthemarket.test-util :refer [component-fixture]]))
 
-(def service
-  (::http/service-fn (http/create-servlet service/service)))
+
+(use-fixtures :once component-fixture)
+
+
+(def service (-> state/system :server/server :io.pedestal.http/service-fn))
 
 (deftest home-page-test
-  (is (=
-       (:body (response-for service :get "/"))
-       "Hello World!"))
-  (is (=
-       (:headers (response-for service :get "/"))
-       {"Content-Type" "text/html;charset=UTF-8"
-        "Strict-Transport-Security" "max-age=31536000; includeSubdomains"
-        "X-Frame-Options" "DENY"
-        "X-Content-Type-Options" "nosniff"
-        "X-XSS-Protection" "1; mode=block"})))
+  (let [expected-body "Hello World!"
+        expected-headers {"Content-Type" "text/html;charset=UTF-8"}
+        {:keys [body headers]} (response-for service :get "/")]
 
+    (are [x y] (= x y)
+      expected-body body
+      expected-headers headers)))
 
 (deftest about-page-test
-  (is (.contains
-       (:body (response-for service :get "/about"))
-       "Clojure 1.7"))
-  (is (=
-       (:headers (response-for service :get "/about"))
-       {"Content-Type" "text/html;charset=UTF-8"
-        "Strict-Transport-Security" "max-age=31536000; includeSubdomains"
-        "X-Frame-Options" "DENY"
-        "X-Content-Type-Options" "nosniff"
-        "X-XSS-Protection" "1; mode=block"})))
+
+  (let [expected-body "Clojure 1.10.0 - served from /about"
+        expected-headers {"Content-Type" "text/html;charset=UTF-8"}
+        {:keys [body headers]} (response-for service :get "/about")]
+
+    (are [x y] (= x y)
+      expected-body body
+      expected-headers headers)))

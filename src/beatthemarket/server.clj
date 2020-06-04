@@ -143,6 +143,11 @@
                                    :subscription-interceptors [log-request]})
       (service/default-service {:graphiql true
                                 :subscription-interceptors [log-request]})
+
+      server/default-interceptors
+      ;; conditionally-apply-dev-interceptor
+      auth/auth-interceptor
+
       server/create-server
       server/start))
 

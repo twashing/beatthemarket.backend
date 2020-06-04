@@ -2,8 +2,11 @@
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer [response-for]]
             [integrant.repl.state :as state]
+            [beatthemarket.test-util :refer [component-fixture]]
             [beatthemarket.iam.authentication :as sut]))
 
+
+(use-fixtures :each component-fixture)
 
 (deftest check-authentication-test
 
