@@ -59,7 +59,12 @@
   (interceptor/interceptor
     {:name ::log
      :enter (fn [context]
+              (println "Sanity 1 / " context)
               (assoc context :request (log-handler (:request context))))}))
+
+(defn log-interceptor
+  [service-map]
+  (update service-map :io.pedestal.http/interceptors conj log-request))
 
 #_(defmethod ig/init-key :server/server [_ {:keys [service]}]
 
@@ -90,10 +95,9 @@
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
   (-> (lacinia-schema)
-      #_(pedestal/default-service {:graphiql true
-                                   :subscription-interceptors [log-request]})
       (service/default-service {:graphiql true
-                                :subscription-interceptors [log-request]})
+                                ;; :subscription-interceptors [log-interceptor]
+                                })
 
       server/default-interceptors
       ;; conditionally-apply-dev-interceptor

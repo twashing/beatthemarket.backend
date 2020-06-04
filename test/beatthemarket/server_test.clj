@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
             [aero.core :as aero]
+            [clojure.data.json :as json]
             [io.pedestal.http :as server]
             [beatthemarket.test-util :as test-util]
             [integrant.core :as ig]
@@ -26,9 +27,9 @@
             expected-body "{\"data\":{\"hello\":\"Hello, Clojurians!\"}}"
             expected-headers {"Content-Type" "application/json"}
             {:keys [status body headers]} (response-for service
-                                                :post "/api"
-                                                :body "{\"query\": \"{ hello }\"}"
-                                                :headers {"Content-Type" "application/json"})]
+                                                        :post "/api"
+                                                        :body "{\"query\": \"{ hello }\"}"
+                                                        :headers {"Content-Type" "application/json"})]
 
         (are [x y] (= x y)
           expected-status status
@@ -50,17 +51,45 @@
 
 (deftest subscription-handler-test
 
-  (testing "Auth interceptor rejects GQL call"
-    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)]
 
-          expected-error-status 401
-          {status :status} (response-for service
-                                         :post "/api"
-                                         :body "{\"query\": \"{ hello }\"}"
-                                         :headers {"Content-Type" "application/json"})]
+    (testing "Auth interceptor rejects GQL call"
+      (let [expected-error-status 401
+            {status :status} (response-for service
+                                           :post "/api"
+                                           :body "{\"query\": \"{ hello }\"}"
+                                           :headers {"Content-Type" "application/json"})]
 
-      (is (= expected-error-status status)))))
+        (is (= expected-error-status status))))
+
+    (testing "Exception handler format"
+
+      (with-redefs [auth/auth-request-handler identity]
+
+        (let [expected-status 400
+              expected-body {:errors
+                             [{:message "Cannot query field `foobar' on type `QueryRoot'."
+                               :locations [{:line 1 :column 3}]
+                               :extensions {:type "QueryRoot" :field "foobar"}}]}
+              expected-headers {"Content-Type" "application/json"}
+
+              {status :status
+               body :body
+               headers :headers}
+              (response-for service
+                            :post "/api"
+                            :body "{\"query\": \"{ foobar }\"}"
+                            :headers {"Content-Type" "application/json"})
+
+              body-parsed (json/read-str body :key-fn keyword)]
+
+          (are [x y] (= x y)
+            expected-status status
+            expected-body body-parsed
+            expected-headers headers))))))
 
 (deftest subscriptions-ws-request
-  (test-util/send-init)
-  (test-util/expect-message {:type "connection_ack"}))
+
+  (testing "Basic WS connection"
+    (test-util/send-init)
+    (test-util/expect-message {:type "connection_ack"})))
