@@ -3,7 +3,7 @@
             [clojure.java.io :refer [resource]]
             [aero.core :as aero]
             [io.pedestal.http :as server]
-            [beatthemarket.test-util :refer [component-fixture]]
+            [beatthemarket.test-util :as test-util]
             [integrant.core :as ig]
             [integrant.repl.state :as state]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
@@ -12,7 +12,8 @@
             [beatthemarket.server :as sut]))
 
 
-(use-fixtures :each component-fixture)
+(use-fixtures :once test-util/component-fixture)
+(use-fixtures :each (test-util/subscriptions-fixture "ws://localhost:8888/ws"))
 
 (deftest basic-handler-test
 
@@ -59,3 +60,7 @@
                                          :headers {"Content-Type" "application/json"})]
 
       (is (= expected-error-status status)))))
+
+(deftest subscriptions-ws-request
+  (test-util/send-init)
+  (test-util/expect-message {:type "connection_ack"}))
