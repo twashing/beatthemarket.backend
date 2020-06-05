@@ -1,4 +1,4 @@
-s; Copyright 2013 Relevance, Inc.
+; Copyright 2013 Relevance, Inc.
 ; Copyright 2014-2019 Cognitect, Inc.
 
 ; The use and distribution terms for this software are covered by the
@@ -47,7 +47,7 @@ s; Copyright 2013 Relevance, Inc.
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
-  ;; :pedantic? :abort
-  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.server/run-dev"]}}
-             :uberjar {:aot [beatthemarket.server]}}
-  :main ^{:skip-aot true} beatthemarket.server)
+
+  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]}}
+             :uberjar {:aot [beatthemarket.handler.http.server]}}
+  :main ^{:skip-aot true} beatthemarket.handler.http.server)

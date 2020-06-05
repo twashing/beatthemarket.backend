@@ -1,4 +1,4 @@
-(ns beatthemarket.server
+(ns beatthemarket.handler.http.server
   (:gen-class)
   (:require [clojure.java.io :refer [resource]]
             [clojure.edn :as edn]
@@ -13,7 +13,7 @@
             [unilog.config  :refer [start-logging!]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
-            [beatthemarket.service :as service]
+            [beatthemarket.handler.http.service :as service]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.nrepl]
             [beatthemarket.iam.authentication]
@@ -51,8 +51,8 @@
 
   "login CALLED")
 
-#_(defn ^:private resolve-new-game
-  [context args value]
+(defn ^:private stream-new-game
+  [context args source-stream]
 
   ;; TODO play
   ;;   creates a new game
@@ -64,14 +64,6 @@
   ;;   pushes Portfolio positions + value to client
   ;;   streams the default stock to client
   [:game :level :user :book :stock :subscription]
-
-  ;; TODO
-  ;; ? streamer
-
-  "new-game CALLED")
-
-(defn ^:private stream-new-game
-  [context args source-stream]
 
   (let [{:keys [message]} args
 

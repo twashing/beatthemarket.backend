@@ -1,4 +1,4 @@
-(ns beatthemarket.service
+(ns beatthemarket.handler.http.service
   (:require [io.pedestal.http :as http]
             [io.pedestal.log :as log]
             [io.pedestal.http.route :as route]

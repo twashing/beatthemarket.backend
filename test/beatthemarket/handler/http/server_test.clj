@@ -1,16 +1,15 @@
-(ns beatthemarket.server-test
+(ns beatthemarket.handler.http.server-test
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
             [aero.core :as aero]
             [clojure.data.json :as json]
             [io.pedestal.http :as server]
             [beatthemarket.test-util :as test-util]
-            [integrant.core :as ig]
             [integrant.repl.state :as state]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [io.pedestal.test :refer [response-for]]
             [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.server :as sut]))
+            [beatthemarket.handler.http.server :as sut]))
 
 
 (use-fixtures :once test-util/component-fixture)
