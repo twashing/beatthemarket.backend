@@ -93,3 +93,16 @@
   (testing "Basic WS connection"
     (test-util/send-init)
     (test-util/expect-message {:type "connection_ack"})))
+
+(deftest context-is-created-by-init-context
+  (test-util/send-init)
+  (test-util/expect-message {:type "connection_ack"})
+
+  (test-util/send-data {:id 987
+              :type :start
+              :payload
+              {:query "subscription { ping(message: \"short\", count: 2 ) { message }}"}})
+
+  (test-util/expect-message {:id 987
+                   :payload {:data {:ping {:message "short #1"}}}
+                   :type "data"}))

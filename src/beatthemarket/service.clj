@@ -20,7 +20,9 @@
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.interceptor.chain :as chain]
 
-            [com.walmartlabs.lacinia.pedestal2])
+            [com.walmartlabs.lacinia.pedestal2]
+            [com.walmartlabs.lacinia.pedestal :refer [inject]]
+            [com.walmartlabs.lacinia.pedestal.subscriptions :as s])
 
   (:import [org.eclipse.jetty.websocket.api Session]))
 
@@ -116,6 +118,30 @@
 (def ^:private default-asset-path "/assets/graphiql")
 (def ^:private default-subscriptions-path "/ws")
 
+;; NOTE subscription interceptor
+(def ^:private invoke-count-interceptor
+  "Used to demonstrate that subscription interceptor customization works."
+  (interceptor/interceptor
+    {:name ::invoke-count
+     :enter (fn [context]
+              ;; (println "invoke-count-interceptor CALLED / " context)
+              context)}))
+
+
+(defn options-builder
+  [compiled-schema]
+  {:subscription-interceptors
+   ;; Add ::invoke-count, and ensure it executes before ::execute-operation.
+   (-> (s/default-subscription-interceptors compiled-schema nil)
+       (inject invoke-count-interceptor :before ::s/execute-operation))
+
+   ;; :init-context
+   ;; (fn [ctx ^ServletUpgradeRequest req resp]
+   ;;   (reset! *invoke-count 0)
+   ;;   (reset! *user-agent nil)
+   ;;   (assoc-in ctx [:request :user-agent] (.getHeader (.getHttpServletRequest req) "User-Agent")))
+   })
+
 (defn default-service
   "Taken from com.walmartlabs.lacinia.pedestal2/default-service
 
@@ -144,20 +170,11 @@
         interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
 
         lacinia-routes
-
-        #_(into #{[api-path :post interceptors :route-name ::graphql-api]
-                [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
-              (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))
-
         (concat routes
                 (route/expand-routes
                   (into #{[api-path :post interceptors :route-name ::graphql-api]
                           [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
                         (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
-
-    ;; (clojure.pprint/pprint lacinia-routes)
-    ;; (clojure.pprint/pprint (route/expand-routes routes))
-    ;; (clojure.pprint/pprint routes)
 
     (-> {:env :dev
          ::http/routes lacinia-routes

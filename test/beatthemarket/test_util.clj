@@ -1,11 +1,18 @@
 (ns beatthemarket.test-util
   (:require [clojure.test :refer [is]]
+            [clojure.java.io :refer [resource]]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [clojure.tools.logging :as log]
             [clojure.core.async :refer [timeout alt!! chan put!]]
             [clojure.data.json :as json]
             [gniazdo.core :as g]))
 
+
+(integrant.repl/set-prep!
+  (constantly (-> "config.edn"
+                  resource
+                  (aero.core/read-config {:profile :development})
+                  :integrant)))
 
 (defn component-fixture [f]
   (halt)

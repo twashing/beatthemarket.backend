@@ -40,13 +40,69 @@
   [context args value]
   "Hello, Clojurians!")
 
+(defn ^:private resolve-login
+  [context args value]
+
+  ;; TODO conditionally saves new user
+  :user
+
+  ;; TODO
+  {:status 200}
+
+  "login CALLED")
+
+(defn ^:private resolve-new-game
+  [context args value]
+
+  ;; TODO play
+  ;;   creates a new game
+
+  ;;   creates a list of market stocks
+  ;;   picks a default stock
+
+  ;;   subscribes user to default stock
+  ;;   pushes Portfolio positions + value to client
+  ;;   streams the default stock to client
+  [:game :level :user :book :stock :subscription]
+
+  ;; TODO
+  ;; ? streamer
+
+  "new-game CALLED")
+
+
+;; NOTE subscription resolver
+(def *ping-subscribes (atom 0))
+(def *ping-cleanups (atom 0))
+(def *ping-context (atom nil))
+(defn ^:private stream-ping
+  [context args source-stream]
+  (swap! *ping-subscribes inc)
+  (reset! *ping-context context)
+  (let [{:keys [message count]} args
+        runnable ^Runnable (fn []
+                             (dotimes [i count]
+
+                               ;; (println "Sanity check / " [i count])
+                               (source-stream {:message (str message " #" (inc i))
+                                               :timestamp (System/currentTimeMillis)})
+                               (Thread/sleep 50))
+
+                             (source-stream nil))]
+    (.start (Thread. runnable "stream-ping-thread")))
+  ;; Return a cleanup fn:
+  #(swap! *ping-cleanups inc))
+
 (defn ^:private lacinia-schema []
 
   (-> "schema.lacinia.edn"
       resource
       slurp
       edn/read-string
-      (util/attach-resolvers {:resolve-hello resolve-hello})
+      (util/attach-resolvers {:resolve-hello resolve-hello
+                              :resolve-login resolve-login})
+      (util/attach-streamers {:stream-ping stream-ping})
+      ;; trace
       schema/compile))
 
 (defn log-handler [request]
@@ -94,17 +150,18 @@
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
-  (-> (lacinia-schema)
-      (service/default-service {:graphiql true
-                                ;; :subscription-interceptors [log-interceptor]
-                                })
+  (let [compiled-schema (lacinia-schema)
+        options (merge {:graphiql true}
+                       (service/options-builder compiled-schema))]
 
-      server/default-interceptors
-      ;; conditionally-apply-dev-interceptor
-      auth/auth-interceptor
+    (-> (service/default-service compiled-schema options)
 
-      server/create-server
-      server/start))
+        server/default-interceptors
+        ;; conditionally-apply-dev-interceptor
+        auth/auth-interceptor
+
+        server/create-server
+        server/start)))
 
 (defmethod ig/halt-key! :server/server [_ server]
   (server/stop server))
