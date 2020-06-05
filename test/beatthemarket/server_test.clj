@@ -94,15 +94,28 @@
     (test-util/send-init)
     (test-util/expect-message {:type "connection_ack"})))
 
-(deftest context-is-created-by-init-context
+(deftest subscription-resolver-test
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 
   (test-util/send-data {:id 987
-              :type :start
-              :payload
-              {:query "subscription { ping(message: \"short\", count: 2 ) { message }}"}})
+                        :type :start
+                        :payload
+                        {:query "subscription { ping(message: \"short\", count: 2 ) { message }}"}})
 
   (test-util/expect-message {:id 987
-                   :payload {:data {:ping {:message "short #1"}}}
-                   :type "data"}))
+                             :payload {:data {:ping {:message "short #1"}}}
+                             :type "data"}))
+
+(deftest new-game-subscription-test
+  (test-util/send-init)
+  (test-util/expect-message {:type "connection_ack"})
+
+  (test-util/send-data {:id 987
+                        :type :start
+                        :payload
+                        {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
+
+  (test-util/expect-message {:id 987
+                             :payload {:data {:newGame {:message "Foobar"}}}
+                             :type "data"}))

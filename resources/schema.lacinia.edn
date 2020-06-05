@@ -1,10 +1,14 @@
 {:objects
  {:Ping
-  {:description "Captures a message and a timestamp. This is used when testing
-Subscriptions."
+  {:description "Captures a message and a timestamp. This is used when testing Subscriptions."
    :fields
    {:message {:type (non-null String)}
-    :timestamp {:type (non-null Int)}}}}
+    :timestamp {:type (non-null Int)}}}
+
+  :Game
+  {:description "Container for game events."
+   :fields
+   {:message {:type (non-null String)}}}}
 
  :queries
  {:hello
@@ -23,4 +27,11 @@ Subscriptions."
    :args
    {:count {:type Int
             :default 5}
-    :message {:type (non-null String)}}}}}
+    :message {:type (non-null String)}}}
+
+  :newGame
+  {:type :Game
+   :description "Creates a new game and sends updates to the client"
+   :stream :stream-new-game
+   :args
+   {:message {:type (non-null String)}}}}}

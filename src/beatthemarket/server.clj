@@ -51,7 +51,7 @@
 
   "login CALLED")
 
-(defn ^:private resolve-new-game
+#_(defn ^:private resolve-new-game
   [context args value]
 
   ;; TODO play
@@ -69,6 +69,20 @@
   ;; ? streamer
 
   "new-game CALLED")
+
+(defn ^:private stream-new-game
+  [context args source-stream]
+
+  (let [{:keys [message]} args
+
+        runnable ^Runnable (fn []
+                             (source-stream {:message message})
+                             (Thread/sleep 50)
+                             (source-stream nil))]
+
+    (.start (Thread. runnable "stream-ping-thread"))
+    ;; Return a cleanup fn:
+    (constantly nil)))
 
 
 ;; NOTE subscription resolver
@@ -101,52 +115,27 @@
       edn/read-string
       (util/attach-resolvers {:resolve-hello resolve-hello
                               :resolve-login resolve-login})
-      (util/attach-streamers {:stream-ping stream-ping})
+      (util/attach-streamers {:stream-ping stream-ping
+                              :stream-new-game stream-new-game})
       ;; trace
       schema/compile))
 
-(defn log-handler [request]
+#_(defn log-handler [request]
 
   (println "Sanity check")
   ;; (log/info :log request)
   request)
 
-(def log-request
+#_(def log-request
   (interceptor/interceptor
     {:name ::log
      :enter (fn [context]
               (println "Sanity 1 / " context)
               (assoc context :request (log-handler (:request context))))}))
 
-(defn log-interceptor
+#_(defn log-interceptor
   [service-map]
   (update service-map :io.pedestal.http/interceptors conj log-request))
-
-#_(defmethod ig/init-key :server/server [_ {:keys [service]}]
-
-    (let [conditionally-apply-dev-interceptor
-          (fn [service-map]
-            (if (-> service :env (= :development))
-              (server/dev-interceptors service-map)
-              service-map))]
-
-      (-> service
-          server/default-interceptors
-          conditionally-apply-dev-interceptor
-          auth/auth-interceptor
-          inject-lacinia-configuration
-
-          ;; TODO
-
-          ;; A
-          ;; https://lacinia-pedestal.readthedocs.io/en/stable/overview.html
-          ;; com.walmartlabs.lacinia.pedestal/service-map (deprecated. use default-service)
-          ;; com.walmartlabs.lacinia.pedestal2/default-service
-
-          ;; B
-          ;; integrate other interceptors
-          server/create-server
-          server/start)))
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
@@ -159,7 +148,6 @@
         server/default-interceptors
         ;; conditionally-apply-dev-interceptor
         auth/auth-interceptor
-
         server/create-server
         server/start)))
 

@@ -49,7 +49,7 @@
     [{:exception-type :clojure.lang.ExceptionInfo
       :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
     (let [response (-> (ring.util.response/response (.getMessage ex)) :status 401)]
-      (println "Sanity check")
+
       (assoc context :response response))
 
     :else
@@ -127,7 +127,6 @@
               ;; (println "invoke-count-interceptor CALLED / " context)
               context)}))
 
-
 (defn options-builder
   [compiled-schema]
   {:subscription-interceptors
@@ -143,24 +142,24 @@
    })
 
 (defn default-service
-  "Taken from com.walmartlabs.lacinia.pedestal2/default-service
+  "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
 
-  Returns a default Pedestal service map, with subscriptions and GraphiQL enabled.
+   Returns a default Pedestal service map, with subscriptions and GraphiQL enabled.
 
-  The defaults put the GraphQL API at `/api` and the GraphiQL IDE at `/ide` (and subscriptions endpoint
-  at `/ws`).
+   The defaults put the GraphQL API at `/api` and the GraphiQL IDE at `/ide` (and subscriptions endpoint
+   at `/ws`).
 
-  Unlike earlier versions of lacinia-pedestal, only POST is supported, and the content type must
-  be `application/json`.
+   Unlike earlier versions of lacinia-pedestal, only POST is supported, and the content type must
+   be `application/json`.
 
-  compiled-schema is either the schema or a function returning the schema.
+   compiled-schema is either the schema or a function returning the schema.
 
-  options is a map combining options needed by [[graphiql-ide-route]] and [[listener-fn-factory]].
+   options is a map combining options needed by [[graphiql-ide-route]] and [[listener-fn-factory]].
 
-  It may also contain keys :app-context and :port (which defaults to 8888).
+   It may also contain keys :app-context and :port (which defaults to 8888).
 
-  This is useful for initial development and exploration, but applications with any more needs should construct
-  their service map directly."
+   This is useful for initial development and exploration, but applications with any more needs should construct
+   their service map directly."
   [compiled-schema options]
   (let [{:keys [api-path ide-path asset-path app-context port]
          :or {api-path default-api-path
