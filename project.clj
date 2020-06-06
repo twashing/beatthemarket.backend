@@ -40,11 +40,14 @@
                  [nrepl "0.7.0"]
                  [com.google.firebase/firebase-admin "6.13.0"]
                  [spootnik/unilog "0.7.25"]
-                 [org.clojure/tools.logging "1.1.0"]]
+                 [org.clojure/tools.logging "1.1.0"]
+                 [com.walmartlabs/lacinia-pedestal "0.14.0-alpha-1"]
+                 [stylefruits/gniazdo "1.1.3"
+                  :exclusions [org.eclipse.jetty.websocket/websocket-client]]]
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
-  ;; :pedantic? :abort
-  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.server/run-dev"]}}
-             :uberjar {:aot [beatthemarket.server]}}
-  :main ^{:skip-aot true} beatthemarket.server)
+
+  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]}}
+             :uberjar {:aot [beatthemarket.handler.http.server]}}
+  :main ^{:skip-aot true} beatthemarket.handler.http.server)

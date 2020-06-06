@@ -1,10 +1,12 @@
-(ns beatthemarket.service
-  (:require [io.pedestal.http :as http]
+(ns beatthemarket.handler.http.service
+  (:require [clojure.java.io :refer [resource]]
+            [clojure.edn :as edn]
+            [io.pedestal.http :as http]
             [io.pedestal.log :as log]
             [io.pedestal.http.route :as route]
             [io.pedestal.http.body-params :as body-params]
             [io.pedestal.http.route.definition :refer [defroutes]]
-            [io.pedestal.http :as server]
+
             [ring.util.response :as ring-resp]
             [clojure.core.async :as async]
             [clojure.data.json :as json]
@@ -14,11 +16,19 @@
             [io.pedestal.http.jetty.websockets :as ws]
             [io.pedestal.interceptor.error :as error-int]
             [integrant.core :as ig]
+            [beatthemarket.handler.http.graphql :as graphql]
+
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
 
             [io.pedestal.interceptor :as interceptor]
-            [io.pedestal.interceptor.chain :as chain])
+            [io.pedestal.interceptor.chain :as chain]
+
+            [com.walmartlabs.lacinia.schema :as schema]
+            [com.walmartlabs.lacinia.util :as util]
+            [com.walmartlabs.lacinia.pedestal2]
+            [com.walmartlabs.lacinia.pedestal :refer [inject]]
+            [com.walmartlabs.lacinia.pedestal.subscriptions :as s])
 
   (:import [org.eclipse.jetty.websocket.api Session]))
 
@@ -45,7 +55,7 @@
     [{:exception-type :clojure.lang.ExceptionInfo
       :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
     (let [response (-> (ring.util.response/response (.getMessage ex)) :status 401)]
-      (println "Sanity check")
+
       (assoc context :response response))
 
     :else
@@ -66,7 +76,7 @@
                                        ;; using the `:io.pedestal.interceptor.chain/error` key
                                        (assoc ctx ::chain/error ex)))}))
 
-(defroutes routes
+(defroutes legacy-routes
   ;; Defines "/" and "/about" routes with their associated :get handlers.
   ;; The interceptors defined after the verb map (e.g., {:get home-page}
   ;; apply to / and its children (/about).
@@ -74,7 +84,7 @@
      ["/about" {:get about-page}]]]]
 
   #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
-     ["/about" {:get about-page}]]]])
+       ["/about" {:get about-page}]]]])
 
 (def ws-clients (atom {}))
 
@@ -110,61 +120,94 @@
           :on-close (fn [num-code reason-text]
                       (log/info :msg "WS Closed:" :reason reason-text))}})
 
-;; Consumed by beatthemarket.server/create-server
-;; See http/default-interceptors for additional options you can configure
-(def service {:env :production
-              ;; You can bring your own non-default interceptors. Make
-              ;; sure you include routing and set it up right for
-              ;; dev-mode. If you do, many other keys for configuring
-              ;; default interceptors will be ignored.
-              ;; ::http/interceptors []
-              ::http/routes routes
+(def ^:private default-api-path "/api")
+(def ^:private default-asset-path "/assets/graphiql")
+(def ^:private default-subscriptions-path "/ws")
 
-              ;; Uncomment next line to enable CORS support, add
-              ;; string(s) specifying scheme, host and port for
-              ;; allowed source(s):
-              ;;
-              ;; "http://localhost:8080"
-              ;;
-              ;;::http/allowed-origins ["scheme://host:port"]
+;; NOTE subscription interceptor
+(def ^:private invoke-count-interceptor
+  "Used to demonstrate that subscription interceptor customization works."
+  (interceptor/interceptor
+    {:name ::invoke-count
+     :enter (fn [context]
+              ;; (println "invoke-count-interceptor CALLED / " context)
+              context)}))
 
-              ;; Root for resource interceptor that is available by default.
-              ::http/resource-path "/public"
+(defn options-builder
+  [compiled-schema]
+  {:subscription-interceptors
+   ;; Add ::invoke-count, and ensure it executes before ::execute-operation.
+   (-> (s/default-subscription-interceptors compiled-schema nil)
+       (inject invoke-count-interceptor :before ::s/execute-operation))
 
-              ;; Either :jetty, :immutant or :tomcat (see comments in project.clj)
-              ::http/type :jetty
-              ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
-              ;;::http/host "localhost"
-              ::http/port 8080})
+   ;; :init-context
+   ;; (fn [ctx ^ServletUpgradeRequest req resp]
+   ;;   (reset! *invoke-count 0)
+   ;;   (reset! *user-agent nil)
+   ;;   (assoc-in ctx [:request :user-agent] (.getHeader (.getHttpServletRequest req) "User-Agent")))
+   })
+
+(defn default-service
+  "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
+  See docs there."
+  [compiled-schema options]
+  (let [{:keys [api-path ide-path asset-path app-context port]
+         :or {api-path default-api-path
+              ide-path "/ide"
+              asset-path default-asset-path
+              port 8080}} options
+
+        interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
+
+        full-routes
+        (concat legacy-routes
+                (route/expand-routes
+                  (into #{[api-path :post interceptors :route-name ::graphql-api]
+                          [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+                        (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
+
+    (-> (merge options {::http/routes full-routes})
+        com.walmartlabs.lacinia.pedestal2/enable-graphiql
+        (com.walmartlabs.lacinia.pedestal2/enable-subscriptions compiled-schema options))))
+
+(defn ^:private lacinia-schema []
+
+  (-> "schema.lacinia.edn"
+      resource slurp edn/read-string
+      (util/attach-resolvers {:resolve-hello graphql/resolve-hello
+                              :resolve-login graphql/resolve-login})
+      (util/attach-streamers {:stream-ping graphql/stream-ping
+                              :stream-new-game graphql/stream-new-game})
+      schema/compile))
 
 (defmethod ig/init-key :service/service [_ {:keys [env join? hostname port] :as opts}]
-  {:env env
-   ::server/join? join?
 
-   ;; You can bring your own non-default interceptors. Make
-   ;; sure you include routing and set it up right for
-   ;; dev-mode. If you do, many other keys for configuring
-   ;; default interceptors will be ignored.
-   ;; ::http/interceptors []
-   ::http/routes routes
+  (let [options {:env         env
+                 ::http/join? join?
+                 ;; ::http/routes legacy-routes
 
-   ;; Uncomment next line to enable CORS support, add
-   ;; string(s) specifying scheme, host and port for
-   ;; allowed source(s):
-   ;;
-   ;; "http://localhost:8080"
-   ;;
-   ;;::http/allowed-origins ["scheme://host:port"]
+                 ;; Uncomment next line to enable CORS support, add
+                 ;; string(s) specifying scheme, host and port for
+                 ;; allowed source(s):
+                 ;;
+                 ;; "http://localhost:8080"
+                 ;;
+                 ;;::http/allowed-origins ["scheme://host:port"]
 
-   ;; Root for resource interceptor that is available by default.
-   ::http/resource-path "/public"
+                 ;; Root for resource interceptor that is available by default.
+                 ::http/resource-path     "/public"
+                 ::http/type              :jetty
+                 ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
 
-   ;; Either :jetty, :immutant or :tomcat (see comments in project.clj)
-   ::http/type :jetty
-   ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
+                 ::http/host hostname
+                 ::http/port port}
 
-   ::http/host hostname
-   ::http/port port})
+        compiled-schema (lacinia-schema)
+        options' (merge options
+                        {:graphiql true}
+                        (options-builder compiled-schema))]
+
+    (default-service compiled-schema options')))
 
 (defn coerce-to-client [[time price]]
   (-> (vector (c/to-long time) price)

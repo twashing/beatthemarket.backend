@@ -12,3 +12,7 @@
    http://blog.jayfields.com/2011/02/clojure-truthy-and-falsey.html"
   (if (or (nil? a) (false? a))
     false true))
+
+(defn pprint+identity [e]
+  (clojure.pprint/pprint e)
+  e)
