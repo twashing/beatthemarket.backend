@@ -7,45 +7,16 @@
             [io.pedestal.http.route :refer [expand-routes]]
             [io.pedestal.interceptor :as interceptor]
             [com.walmartlabs.lacinia.pedestal2 :as pedestal :refer [default-service]]
-            [unilog.config  :refer [start-logging!]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [beatthemarket.handler.http.service :as service]
             [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.nrepl]
-            [beatthemarket.iam.authentication]
+            ;; [beatthemarket.state.nrepl]
+            ;; [beatthemarket.iam.authentication]
             [aero.core :as aero]))
 
 
-(def logging-config
-  {:level   :info
-   :console true
-   :appenders [{:appender :rolling-file
-                :rolling-policy {:type :fixed-window
-                                 :max-index 5}
-                :triggering-policy {:type :size-based
-                                    :max-size 5120}
-                :pattern  "%p [%d] %t - %c %m%n"
-                :file     "logs/beatthemarket.log"}]
-   :overrides  {"org.apache.http"      :debug
-                "org.apache.http.wire" :error}})
-
-(start-logging! logging-config)
-
-
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
-
-  #_(let [compiled-schema (lacinia-schema)
-          options (merge {:graphiql true}
-                         (service/options-builder compiled-schema))]
-
-      (-> (service/default-service compiled-schema options)
-
-          server/default-interceptors
-          ;; conditionally-apply-dev-interceptor
-          auth/auth-interceptor
-          server/create-server
-          server/start))
 
   (-> service
       server/default-interceptors
