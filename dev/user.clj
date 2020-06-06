@@ -27,6 +27,9 @@
   (pprint integrant.repl.state/config)
   (pprint integrant.repl.state/system)
 
+  (prep)
+  (ig/init integrant.repl.state/config [:service/service])
+
 
   (require '[beatthemarket.dir]
            '[clojure.tools.namespace.dir]

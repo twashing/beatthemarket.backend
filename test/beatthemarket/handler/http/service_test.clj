@@ -10,13 +10,11 @@
 
 (use-fixtures :once component-fixture)
 
-
-(def service (-> state/system :server/server :io.pedestal.http/service-fn))
-
 (deftest home-page-test
 
   (with-redefs [auth/auth-request-handler identity]
-    (let [expected-body "Hello World!"
+    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+          expected-body "Hello World!"
           expected-headers {"Content-Type" "text/html;charset=UTF-8"}
           {:keys [body headers]} (response-for service :get "/")]
 
@@ -27,7 +25,8 @@
 (deftest about-page-test
 
   (with-redefs [auth/auth-request-handler identity]
-    (let [expected-body "Clojure 1.10.0 - served from /about"
+    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+          expected-body "Clojure 1.10.0 - served from /about"
           expected-headers {"Content-Type" "text/html;charset=UTF-8"}
           {:keys [body headers]} (response-for service :get "/about")]
 

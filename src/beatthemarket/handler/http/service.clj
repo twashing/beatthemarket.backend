@@ -1,10 +1,12 @@
 (ns beatthemarket.handler.http.service
-  (:require [io.pedestal.http :as http]
+  (:require [clojure.java.io :refer [resource]]
+            [clojure.edn :as edn]
+            [io.pedestal.http :as http]
             [io.pedestal.log :as log]
             [io.pedestal.http.route :as route]
             [io.pedestal.http.body-params :as body-params]
             [io.pedestal.http.route.definition :refer [defroutes]]
-            ;; [io.pedestal.http :as server]
+
             [ring.util.response :as ring-resp]
             [clojure.core.async :as async]
             [clojure.data.json :as json]
@@ -14,12 +16,16 @@
             [io.pedestal.http.jetty.websockets :as ws]
             [io.pedestal.interceptor.error :as error-int]
             [integrant.core :as ig]
+            [beatthemarket.handler.http.graphql :as graphql]
+
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
 
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.interceptor.chain :as chain]
 
+            [com.walmartlabs.lacinia.schema :as schema]
+            [com.walmartlabs.lacinia.util :as util]
             [com.walmartlabs.lacinia.pedestal2]
             [com.walmartlabs.lacinia.pedestal :refer [inject]]
             [com.walmartlabs.lacinia.pedestal.subscriptions :as s])
@@ -70,7 +76,7 @@
                                        ;; using the `:io.pedestal.interceptor.chain/error` key
                                        (assoc ctx ::chain/error ex)))}))
 
-(defroutes routes
+(defroutes legacy-routes
   ;; Defines "/" and "/about" routes with their associated :get handlers.
   ;; The interceptors defined after the verb map (e.g., {:get home-page}
   ;; apply to / and its children (/about).
@@ -78,7 +84,7 @@
      ["/about" {:get about-page}]]]]
 
   #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
-     ["/about" {:get about-page}]]]])
+       ["/about" {:get about-page}]]]])
 
 (def ws-clients (atom {}))
 
@@ -143,74 +149,65 @@
 
 (defn default-service
   "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
-
-   Returns a default Pedestal service map, with subscriptions and GraphiQL enabled.
-
-   The defaults put the GraphQL API at `/api` and the GraphiQL IDE at `/ide` (and subscriptions endpoint
-   at `/ws`).
-
-   Unlike earlier versions of lacinia-pedestal, only POST is supported, and the content type must
-   be `application/json`.
-
-   compiled-schema is either the schema or a function returning the schema.
-
-   options is a map combining options needed by [[graphiql-ide-route]] and [[listener-fn-factory]].
-
-   It may also contain keys :app-context and :port (which defaults to 8888).
-
-   This is useful for initial development and exploration, but applications with any more needs should construct
-   their service map directly."
+  See docs there."
   [compiled-schema options]
   (let [{:keys [api-path ide-path asset-path app-context port]
          :or {api-path default-api-path
               ide-path "/ide"
               asset-path default-asset-path
-              port 8888}} options
+              port 8080}} options
+
         interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
 
-        lacinia-routes
-        (concat routes
+        full-routes
+        (concat legacy-routes
                 (route/expand-routes
                   (into #{[api-path :post interceptors :route-name ::graphql-api]
                           [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
                         (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
 
-    (-> {:env :dev
-         ::http/routes lacinia-routes
-         ::http/port port
-         ::http/type :jetty
-         ::http/join? false}
+    (-> (merge options {::http/routes full-routes})
         com.walmartlabs.lacinia.pedestal2/enable-graphiql
         (com.walmartlabs.lacinia.pedestal2/enable-subscriptions compiled-schema options))))
 
+(defn ^:private lacinia-schema []
+
+  (-> "schema.lacinia.edn"
+      resource slurp edn/read-string
+      (util/attach-resolvers {:resolve-hello graphql/resolve-hello
+                              :resolve-login graphql/resolve-login})
+      (util/attach-streamers {:stream-ping graphql/stream-ping
+                              :stream-new-game graphql/stream-new-game})
+      schema/compile))
+
 (defmethod ig/init-key :service/service [_ {:keys [env join? hostname port] :as opts}]
-  {:env env
-   ::http/join? join?
 
-   ;; You can bring your own non-default interceptors. Make
-   ;; sure you include routing and set it up right for
-   ;; dev-mode. If you do, many other keys for configuring
-   ;; default interceptors will be ignored.
-   ;; ::http/interceptors []
-   ::http/routes routes
+  (let [options {:env         env
+                 ::http/join? join?
+                 ;; ::http/routes legacy-routes
 
-   ;; Uncomment next line to enable CORS support, add
-   ;; string(s) specifying scheme, host and port for
-   ;; allowed source(s):
-   ;;
-   ;; "http://localhost:8080"
-   ;;
-   ;;::http/allowed-origins ["scheme://host:port"]
+                 ;; Uncomment next line to enable CORS support, add
+                 ;; string(s) specifying scheme, host and port for
+                 ;; allowed source(s):
+                 ;;
+                 ;; "http://localhost:8080"
+                 ;;
+                 ;;::http/allowed-origins ["scheme://host:port"]
 
-   ;; Root for resource interceptor that is available by default.
-   ::http/resource-path "/public"
+                 ;; Root for resource interceptor that is available by default.
+                 ::http/resource-path     "/public"
+                 ::http/type              :jetty
+                 ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
 
-   ;; Either :jetty, :immutant or :tomcat (see comments in project.clj)
-   ::http/type :jetty
-   ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
+                 ::http/host hostname
+                 ::http/port port}
 
-   ::http/host hostname
-   ::http/port port})
+        compiled-schema (lacinia-schema)
+        options' (merge options
+                        {:graphiql true}
+                        (options-builder compiled-schema))]
+
+    (default-service compiled-schema options')))
 
 (defn coerce-to-client [[time price]]
   (-> (vector (c/to-long time) price)

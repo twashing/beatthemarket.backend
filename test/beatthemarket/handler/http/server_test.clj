@@ -13,7 +13,7 @@
 
 
 (use-fixtures :once test-util/component-fixture)
-(use-fixtures :each (test-util/subscriptions-fixture "ws://localhost:8888/ws"))
+(use-fixtures :each (test-util/subscriptions-fixture "ws://localhost:8080/ws"))
 
 (deftest basic-handler-test
 

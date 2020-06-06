@@ -1,15 +1,12 @@
 (ns beatthemarket.handler.http.server
   (:gen-class)
   (:require [clojure.java.io :refer [resource]]
-            [clojure.edn :as edn]
             [clojure.tools.cli :as tools.cli]
             [clojure.tools.logging :as log]
             [io.pedestal.http :as server]
             [io.pedestal.http.route :refer [expand-routes]]
             [io.pedestal.interceptor :as interceptor]
             [com.walmartlabs.lacinia.pedestal2 :as pedestal :refer [default-service]]
-            [com.walmartlabs.lacinia.schema :as schema]
-            [com.walmartlabs.lacinia.util :as util]
             [unilog.config  :refer [start-logging!]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
@@ -36,112 +33,26 @@
 (start-logging! logging-config)
 
 
-(defn ^:private resolve-hello
-  [context args value]
-  "Hello, Clojurians!")
-
-(defn ^:private resolve-login
-  [context args value]
-
-  ;; TODO conditionally saves new user
-  :user
-
-  ;; TODO
-  {:status 200}
-
-  "login CALLED")
-
-(defn ^:private stream-new-game
-  [context args source-stream]
-
-  ;; TODO play
-  ;;   creates a new game
-
-  ;;   creates a list of market stocks
-  ;;   picks a default stock
-
-  ;;   subscribes user to default stock
-  ;;   pushes Portfolio positions + value to client
-  ;;   streams the default stock to client
-  [:game :level :user :book :stock :subscription]
-
-  (let [{:keys [message]} args
-
-        runnable ^Runnable (fn []
-                             (source-stream {:message message})
-                             (Thread/sleep 50)
-                             (source-stream nil))]
-
-    (.start (Thread. runnable "stream-ping-thread"))
-    ;; Return a cleanup fn:
-    (constantly nil)))
-
-
-;; NOTE subscription resolver
-(def *ping-subscribes (atom 0))
-(def *ping-cleanups (atom 0))
-(def *ping-context (atom nil))
-(defn ^:private stream-ping
-  [context args source-stream]
-  (swap! *ping-subscribes inc)
-  (reset! *ping-context context)
-  (let [{:keys [message count]} args
-        runnable ^Runnable (fn []
-                             (dotimes [i count]
-
-                               ;; (println "Sanity check / " [i count])
-                               (source-stream {:message (str message " #" (inc i))
-                                               :timestamp (System/currentTimeMillis)})
-                               (Thread/sleep 50))
-
-                             (source-stream nil))]
-    (.start (Thread. runnable "stream-ping-thread")))
-  ;; Return a cleanup fn:
-  #(swap! *ping-cleanups inc))
-
-(defn ^:private lacinia-schema []
-
-  (-> "schema.lacinia.edn"
-      resource
-      slurp
-      edn/read-string
-      (util/attach-resolvers {:resolve-hello resolve-hello
-                              :resolve-login resolve-login})
-      (util/attach-streamers {:stream-ping stream-ping
-                              :stream-new-game stream-new-game})
-      ;; trace
-      schema/compile))
-
-#_(defn log-handler [request]
-
-  (println "Sanity check")
-  ;; (log/info :log request)
-  request)
-
-#_(def log-request
-  (interceptor/interceptor
-    {:name ::log
-     :enter (fn [context]
-              (println "Sanity 1 / " context)
-              (assoc context :request (log-handler (:request context))))}))
-
-#_(defn log-interceptor
-  [service-map]
-  (update service-map :io.pedestal.http/interceptors conj log-request))
-
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
-  (let [compiled-schema (lacinia-schema)
-        options (merge {:graphiql true}
-                       (service/options-builder compiled-schema))]
+  #_(let [compiled-schema (lacinia-schema)
+          options (merge {:graphiql true}
+                         (service/options-builder compiled-schema))]
 
-    (-> (service/default-service compiled-schema options)
+      (-> (service/default-service compiled-schema options)
 
-        server/default-interceptors
-        ;; conditionally-apply-dev-interceptor
-        auth/auth-interceptor
-        server/create-server
-        server/start)))
+          server/default-interceptors
+          ;; conditionally-apply-dev-interceptor
+          auth/auth-interceptor
+          server/create-server
+          server/start))
+
+  (-> service
+      server/default-interceptors
+      ;; conditionally-apply-dev-interceptor
+      auth/auth-interceptor
+      server/create-server
+      server/start))
 
 (defmethod ig/halt-key! :server/server [_ server]
   (server/stop server))

@@ -22,7 +22,7 @@
 
   (f))
 
-(def ws-uri "ws://localhost:8888/graphql-ws")
+(def ws-uri "ws://localhost:8080/graphql-ws")
 (def ^:dynamic *messages-ch* nil)
 (def ^:dynamic *session* nil)
 (def *subscriber-id (atom 0))
