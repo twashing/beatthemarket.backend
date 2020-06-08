@@ -29,6 +29,7 @@
 
   (prep)
   (ig/init integrant.repl.state/config [:service/service])
+  (def datomic-client (ig/init integrant.repl.state/config [:persistence/datomic]))
 
 
   (require '[beatthemarket.dir]

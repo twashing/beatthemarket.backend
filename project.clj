@@ -41,14 +41,17 @@
                  [com.google.firebase/firebase-admin "6.13.0"]
                  [spootnik/unilog "0.7.25"]
                  [org.clojure/tools.logging "1.1.0"]
-                 [com.walmartlabs/laciania-pedestal "0.14.0-alpha-1"]
-                 [com.datomic/client-pro "0.9.57"]]
+                 [com.walmartlabs/lacinia-pedestal "0.14.0-alpha-1"]
+                 [com.datomic/client-pro "0.9.57"]
+                 ;; [com.datomic/datomic-free "0.9.5697"]
+                 ]
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
 
   :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]}
-                   :dependencies [[stylefruits/gniazdo "1.1.3"
+                   :dependencies [[datomic-client-memdb "1.1.1"]
+                                  [stylefruits/gniazdo "1.1.3"
                                    :exclusions [org.eclipse.jetty.websocket/websocket-client]]]}
              :uberjar {:aot [beatthemarket.handler.http.server]}}
   :main ^{:skip-aot true} beatthemarket.handler.http.server)

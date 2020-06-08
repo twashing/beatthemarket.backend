@@ -7,6 +7,12 @@
                 :firebase/firebase {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
                                     :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
                                     :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
+                :persistence/datomic {:db-name "beaththemarket"
+                                      :config {:server-type :peer-server
+                                               :access-key "myaccesskey"
+                                               :secret "mysecret"
+                                               :endpoint "localhost:8998"
+                                               :validate-hostnames false}}
                 :nrepl/nrepl       {:port 7000}
                 :logging/logging   {:config {:level   :info
                                              :console true
@@ -27,6 +33,12 @@
                 :firebase/firebase {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
                                     :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
                                     :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
+                :persistence/datomic {:db-name "beaththemarket"
+                                      :config {:server-type :peer-server
+                                               :access-key "myaccesskey"
+                                               :secret "mysecret"
+                                               :endpoint "localhost:8998"
+                                               :validate-hostnames false}}
                 :nrepl/nrepl       {:port 7000}
                 :logging/logging   {:config {:level   :info
                                              :console true

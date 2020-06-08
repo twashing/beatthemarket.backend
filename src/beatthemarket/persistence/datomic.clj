@@ -1,13 +1,17 @@
 (ns beatthemarket.persistence.datomic
   (:require [datomic.client.api :as d]
+            [datomic.api]
             [clojure.java.io :refer [resource]]
-            [clojure.edn :refer [read-string]]))
+            [clojure.edn :refer [read-string]]
+            [integrant.core :as ig]))
 
-(def cfg {:server-type :peer-server
-          :access-key "myaccesskey"
-          :secret "mysecret"
-          :endpoint "localhost:8998"
-          :validate-hostnames false})
+
+
+(defmethod ig/init-key :persistence/datomic [_ {:keys [db-name config]}]
+
+  #_(-> (d/client config)
+        (d/connect {:db-name db-name}))
+  (d/client config))
 
 (defn load-schema
 
@@ -23,20 +27,21 @@
 ;;   client connect
 ;;
 ;; TODO add unique constraints to schema: email, name, and identity-provider-uid
-;; TODO how to drop schema + data (testing)
-;;   d/create-database
-;;   d/delete-database
-;;
-;; TODO get full attributes from Firebase token
 
 ;; TODO ensure these keys are in the result (schema)
 ;; {:db-before :db-after :tx-data :tempids}
 
 ;; TODO implement user login functionality
+;;   get full attributes from Firebase token
 
 ;; TODO Dockerize datomic
+;;   bin/run -m datomic.peer-server -h localhost -p 8998 -a myaccesskey,mysecret -d beatthemarket,datomic:mem://beatthemarket
+
 (defn transact! [conn data]
   (d/transact conn {:tx-data data}))
+
+(defn transact-mem! [conn data]
+  (datomic.api/transact conn data))
 
 (comment
 
@@ -88,5 +93,51 @@
                          [?e :user/email "swashing@gmail.com"]])
 
   (d/q name-from-email db)
+
+  ;; D get client
+  :ok
+
+
+  ;; E create database
+
+  ;; A quick way to start experimenting with Datomic (using [com.datomic/datomic-free "0.9.5697"])
+  ;; https://clojureverse.org/t/a-quick-way-to-start-experimenting-with-datomic/5004
+
+  ;; Using [datomic-client-memdb "1.1.1"] from here
+  ;; https://forum.datomic.com/t/datomic-free-being-out-phased/1211
+
+  (def db-uri-mem "datomic:mem://beatthemarket")
+  ;; (def db-uri-mem "datomic:dev://localhost:8998/hello")
+
+
+  ;; ====
+  (require '[compute.datomic-client-memdb.core :as memdb])
+  (def c (memdb/client {}))
+
+  (d/create-database c {:db-name db-uri-mem})
+  (def conn (d/connect c {:db-name db-uri-mem}))
+
+
+  (d/delete-database c {:db-name db-uri-mem})
+
+
+  ;; ====
+  (datomic.api/create-database db-uri-mem)
+  (def conn (datomic.api/connect db-uri-mem))
+
+  (->> (load-schema)
+       (transact-mem! conn))
+
+  (def result-a (transact-mem! conn users))
+
+  ;; ====
+  ;; (datomic.api/create-database (:persistence/datomic user/datomic-client) db-uri-mem)
+  ;; (d/create-database (:persistence/datomic user/datomic-client) {:db-name "beatthemarket"})
+
+
+  ;; F get connetion
+
+  ;; (require '[integrant.repl.state])
+
 
   )
