@@ -7,14 +7,15 @@
             [clojure.tools.logging :as log]
             [clojure.core.async :refer [timeout alt!! chan put!]]
             [clojure.data.json :as json]
-            [gniazdo.core :as g]))
+            [gniazdo.core :as g]
+            [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]))
 
 
-(integrant.repl/set-prep!
-  (constantly (-> "config.edn"
-                  resource
-                  (aero.core/read-config {:profile :development})
-                  :integrant)))
+(defn component-prep-fixture [f]
+
+  (set-prep+load-namespaces :test)
+  
+  (f))
 
 (defn component-fixture [f]
   (halt)
@@ -77,4 +78,3 @@
            (finally
              (log/debug :reason ::test-end)
              (g/close session))))))))
-

@@ -1,17 +1,23 @@
 (ns beatthemarket.persistence.datomic
   (:require [datomic.client.api :as d]
-            [datomic.api]
             [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
             [integrant.core :as ig]))
 
 
-
-(defmethod ig/init-key :persistence/datomic [_ {:keys [db-name config]}]
-
-  #_(-> (d/client config)
-        (d/connect {:db-name db-name}))
+(defn config->client [{config :config}]
   (d/client config))
+
+(defmulti ->datomic-client :env)
+
+(defmethod ->datomic-client :development [opts]
+  (config->client opts))
+
+(defmethod ->datomic-client :production [opts]
+  (config->client opts))
+
+(defmethod ig/init-key :persistence/datomic [_ datomic-opts]
+  (->datomic-client datomic-opts))
 
 (defn load-schema
 
@@ -23,9 +29,6 @@
        read-string)))
 
 
-;; TODO Peer component
-;;   client connect
-;;
 ;; TODO add unique constraints to schema: email, name, and identity-provider-uid
 
 ;; TODO ensure these keys are in the result (schema)

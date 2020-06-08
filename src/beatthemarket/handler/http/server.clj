@@ -16,6 +16,21 @@
             [aero.core :as aero]))
 
 
+(defn set-prep+load-namespaces [profile]
+
+  (integrant.repl/set-prep!
+    (constantly (-> "config.edn"
+                    resource
+                    (aero.core/read-config {:profile profile})
+                    :integrant)))
+
+  (ig/load-namespaces {:beatthemarket.handler.http/service :service/service
+                       :beatthemarket.handler.http/server :server/server
+                       :beatthemarket.iam/authentication :firebase/firebase
+                       :beatthemarket.persistence/datomic :persistence/datomic
+                       :beatthemarket.state/nrepl :nrepl/nrepl
+                       :beatthemarket.state/logging :logging/logging}))
+
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 
   (-> service
@@ -67,12 +82,7 @@
 
     (println "\nCreating your server...")
 
-    (integrant.repl/set-prep!
-      (constantly (-> "config.edn"
-                      resource
-                      (aero.core/read-config {:profile profile})
-                      :integrant)))
-
+    (set-prep+load-namespaces profile)
     (integrant.repl/go)))
 
 (comment ;; Main
@@ -83,11 +93,11 @@
 
   (-> "integrant-config.edn"
       resource
-      (aero.core/read-config {:profile :dev})
+      (aero.core/read-config {:profile :development})
       :integrant)
 
 
   (binding [*data-readers* {'ig/ref ig/ref}]
     (-> "integrant-config.edn"
         resource
-        (aero.core/read-config {:profile :dev}))))
+        (aero.core/read-config {:profile :development}))))
