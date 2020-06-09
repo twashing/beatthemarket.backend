@@ -8,8 +8,10 @@
 (use-fixtures :once (partial component-prep-fixture :test))
 (use-fixtures :each component-fixture)
 
-(defmethod persistence.datomic/->datomic-client :test [{config :config}]
-  (memdb/client config))
+(defmethod persistence.datomic/->datomic-client :test [{:keys [db-name config]}]
+  (hash-map
+    :client (memdb/client config)
+    :url    (format "datomic:mem://%s" db-name)))
 
 
 (deftest foobar-test
