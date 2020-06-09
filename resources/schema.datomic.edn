@@ -1,11 +1,4 @@
-[#_{:db/ident       :movie/title
-    :db/valueType   :db.type/string
-    :db/cardinality :db.cardinality/one
-    :db/doc         "The title of the movie"}
-
- 
-
- ;; Users are bound to a Firebase user, tied to an external Identity Provider
+[;; Users are bound to a Firebase user, tied to an external Identity Provider
  {:db/ident       :user/email
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
@@ -18,13 +11,24 @@
   :db/unique      :db.unique/value
   :db/doc         "Name of the user"}
 
- {:db/ident       :user/identity-provider-uid
+ {:db/ident       :user/external-uid
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
-  :db/unique      :db.unique/value
-  :db/doc         "Identity Provider UID of the user"}
+  :db/doc         "User's ID in the external Authentication system (Firebase)"}
 
- {:db/ident       :user/identity-provider
-  :db/valueType   :db.type/string
-  :db/cardinality :db.cardinality/one
-  :db/doc         "Identity Provider of the user"}]
+ ;; TODO Do I even care about this?
+
+ ;; An Identity Provider (IP) should be an entity
+ ;; For Firebase, a User can have many IPs
+ ;; {:db/ident       :user/identity-provider-uid
+ ;;  :db/valueType   :db.type/string
+ ;;  :db/cardinality :db.cardinality/one
+ ;;  :db/unique      :db.unique/value
+ ;;  :db/doc         "Identity Provider UID of the user"}
+ ;;
+ ;; {:db/ident       :user/identity-provider
+ ;;  :db/valueType   :db.type/string
+ ;;  :db/cardinality :db.cardinality/one
+ ;;  :db/doc         "Identity Provider of the user"}
+
+ ]

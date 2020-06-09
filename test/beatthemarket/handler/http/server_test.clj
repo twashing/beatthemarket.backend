@@ -4,7 +4,8 @@
             [aero.core :as aero]
             [clojure.data.json :as json]
             [io.pedestal.http :as server]
-            [beatthemarket.test-util :as test-util]
+            [beatthemarket.test-util
+             :refer [component-prep-fixture component-fixture subscriptions-fixture]]
             [integrant.repl.state :as state]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [io.pedestal.test :refer [response-for]]
@@ -12,8 +13,9 @@
             [beatthemarket.handler.http.server :as sut]))
 
 
-(use-fixtures :once test-util/component-fixture)
-(use-fixtures :each (test-util/subscriptions-fixture "ws://localhost:8080/ws"))
+(use-fixtures :once (partial component-prep-fixture :test))
+(use-fixtures :each component-fixture)
+(use-fixtures :each (subscriptions-fixture "ws://localhost:8080/graphql-ws"))
 
 (deftest basic-handler-test
 
@@ -110,11 +112,13 @@
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 
-  (test-util/send-data {:id 987
-                        :type :start
-                        :payload
-                        {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
+  (with-redefs [auth/auth-request-handler identity]
 
-  (test-util/expect-message {:id 987
-                             :payload {:data {:newGame {:message "Foobar"}}}
-                             :type "data"}))
+    (test-util/send-data {:id 987
+                          :type :start
+                          :payload
+                          {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
+
+    (test-util/expect-message {:id 987
+                               :payload {:data {:newGame {:message "Foobar"}}}
+                               :type "data"})))

@@ -7,20 +7,37 @@
 
 
 (defn config->client [{:keys [db-name config]}]
-  (hash-map :client (d/client config)))
+
+  (let [client (d/client config)]
+    (hash-map
+      :client client
+      :conn (d/connect client {:db-name "hello"}))))
+
+(defn ->datomic-client-local [{:keys [db-name config]}]
+
+  (let [url (format "datomic:mem://%s" db-name)
+        client (memdb/client config)]
+
+    (d/create-database client {:db-name url})
+
+    (hash-map
+      :url url
+      :client client
+      :conn (d/connect client {:db-name url}))))
 
 (defmulti ->datomic-client :env)
 
-(defmethod ->datomic-client :development [{:keys [db-name config]}]
-  (hash-map
-    :client (memdb/client config)
-    :url    (format "datomic:mem://%s" db-name)))
+(defmethod ->datomic-client :development [opts]
+  (->datomic-client-local opts))
 
 (defmethod ->datomic-client :production [opts]
   (config->client opts))
 
 (defmethod ig/init-key :persistence/datomic [a datomic-opts]
   (->datomic-client datomic-opts))
+
+(defn transact! [conn data]
+  (d/transact conn {:tx-data data}))
 
 (defn load-schema
 
@@ -41,11 +58,9 @@
 ;; TODO Dockerize datomic
 ;;   bin/run -m datomic.peer-server -h localhost -p 8998 -a myaccesskey,mysecret -d beatthemarket,datomic:mem://beatthemarket
 
-(defn transact! [conn data]
-  (d/transact conn {:tx-data data}))
-
-(defn transact-mem! [conn data]
-  (datomic.api/transact conn data))
+(defn transact-schema! [conn]
+  (->> (load-schema)
+       (transact! conn)))
 
 (comment
 
@@ -79,8 +94,7 @@
 
 
   ;; A create schema
-  (->> (load-schema)
-       (transact! conn))
+  (transact-schema! conn)
 
 
   ;; B add data

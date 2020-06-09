@@ -122,7 +122,8 @@
   :resource-paths ["config", "resources"]
 
   :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]}
-                   :dependencies [[datomic-client-memdb "1.1.1"
+                   :dependencies [[clj-http "3.10.1"]
+                                  [datomic-client-memdb "1.1.1"
                                    :exclusions
                                    [org.slf4j/slf4j-nop
                                     com.cognitect/transit-clj
@@ -139,6 +140,7 @@
                                     org.eclipse.jetty/jetty-io
                                     org.eclipse.jetty/jetty-util]]
                                   [stylefruits/gniazdo "1.1.3"
-                                   :exclusions [org.eclipse.jetty.websocket/websocket-client]]]}
+                                   :exclusions [org.eclipse.jetty.websocket/websocket-client]]
+                                  [expound "0.8.4"]]}
              :uberjar {:aot [beatthemarket.handler.http.server]}}
   :main ^{:skip-aot true} beatthemarket.handler.http.server)

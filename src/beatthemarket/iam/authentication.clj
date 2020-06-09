@@ -43,13 +43,16 @@
      (catch FirebaseAuthException e
        (bean e)))))
 
+(defn authentication?-raw [{:keys [email name uid]}]
+  (-> (and email name uid)
+      util/truthy?))
+
 (defn authenticated?
   ([token]
    (authenticated? token (comp bean verify-id-token)))
   ([token verification-fn]
-   (let [{:keys [email name uid]} (check-authentication token verification-fn)]
-     (-> (and email name uid)
-         util/truthy?))))
+   (-> (check-authentication token verification-fn)
+       authentication?-raw)))
 
 (defn decode-token [token]
   (as-> token jwt ;; returned-jwt is your full jwt string
@@ -104,4 +107,40 @@
       pprint)
 
   (-> (verify-id-token customToken)
-      pprint))
+      pprint)
+
+
+  (require '[clj-http.client :as http]
+           '[clojure.data.json :as json])
+
+
+  (defn token->body-payload [customToken]
+    (json/write-str {:token customToken
+                     :returnSecureToken true}))
+
+  (def api-key (-> state/config :firebase/firebase :api-key))
+
+  (http/post (format "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken?key=%s" api-key)
+             {:content-type :json
+              :body (token->body-payload customToken)})
+
+  (def result *1)
+
+  (-> result
+      :body
+      (json/read-str :key-fn keyword)
+      :idToken
+      check-authentication ;; verify-id-token
+      pprint)
+
+  ;; {
+  ;;                      url: ``
+  ;;                      method: 'POST'
+  ;;                      body: {
+  ;;                             token: customToken
+  ;;                             returnSecureToken: true
+  ;;                             }
+  ;;                      json: true
+  ;;                      }
+
+  )

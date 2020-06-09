@@ -18,10 +18,10 @@
 
   (log/debug :auth-request request)
 
-  (let [{:keys [errorCode message] :as error} (iam.auth/check-authentication (request->token request))]
+  (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication (request->token request))]
     (if (every? exists? [errorCode message])
-      (throw (ex-info message error))
-      request)))
+      (throw (ex-info message checked-authentication))
+      (assoc request :checked-authentication checked-authentication))))
 
 (def auth-request
   "Authenticate the request"
