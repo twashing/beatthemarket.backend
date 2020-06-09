@@ -2,7 +2,8 @@
   (:require [datomic.client.api :as d]
             [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
-            [integrant.core :as ig]))
+            [integrant.core :as ig]
+            [compute.datomic-client-memdb.core :as memdb]))
 
 
 (defn config->client [{config :config}]
@@ -10,13 +11,14 @@
 
 (defmulti ->datomic-client :env)
 
-(defmethod ->datomic-client :development [opts]
-  (config->client opts))
+(defmethod ->datomic-client :development [{config :config}]
+  ;; (config->client opts)
+  (memdb/client config))
 
 (defmethod ->datomic-client :production [opts]
   (config->client opts))
 
-(defmethod ig/init-key :persistence/datomic [_ datomic-opts]
+(defmethod ig/init-key :persistence/datomic [a datomic-opts]
   (->datomic-client datomic-opts))
 
 (defn load-schema

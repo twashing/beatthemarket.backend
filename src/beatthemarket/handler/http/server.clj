@@ -7,22 +7,29 @@
             [io.pedestal.http.route :refer [expand-routes]]
             [io.pedestal.interceptor :as interceptor]
             [com.walmartlabs.lacinia.pedestal2 :as pedestal :refer [default-service]]
+            [com.rpl.specter :refer [select transform MAP-VALS]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
+            [aero.core :as aero]
             [beatthemarket.handler.http.service :as service]
             [beatthemarket.handler.authentication :as auth]
-            ;; [beatthemarket.state.nrepl]
-            ;; [beatthemarket.iam.authentication]
-            [aero.core :as aero]))
+            [beatthemarket.util :refer [pprint+identity]]))
 
+
+(defn read-config [profile resource]
+  (aero.core/read-config resource {:profile profile}))
+
+(defn inject-environment [profile config]
+  (transform [MAP-VALS] #(assoc % :env profile) config))
 
 (defn set-prep+load-namespaces [profile]
 
   (integrant.repl/set-prep!
-    (constantly (-> "config.edn"
-                    resource
-                    (aero.core/read-config {:profile profile})
-                    :integrant)))
+    (constantly (->> "config.edn"
+                     resource
+                     (read-config profile)
+                     :integrant
+                     (inject-environment profile))))
 
   (ig/load-namespaces {:beatthemarket.handler.http/service :service/service
                        :beatthemarket.handler.http/server :server/server
@@ -30,6 +37,31 @@
                        :beatthemarket.persistence/datomic :persistence/datomic
                        :beatthemarket.state/nrepl :nrepl/nrepl
                        :beatthemarket.state/logging :logging/logging}))
+
+(def a {:service/service
+        {:env :testing :join? false :hostname "0.0.0.0" :port 8080}
+        :server/server {:service {:key :service/service}}
+
+        :firebase/firebase
+        {:firebase-database-url "https://beatthemarket-c13f8.firebaseio.com"
+         :service-account-file-name
+         "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
+         :admin-user-id "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
+        :persistence/datomic
+        {:env :testing :db-name "beaththemarket" :config {}}
+        :nrepl/nrepl {:port 7000}
+        :logging/logging
+        {:config
+         {:level :info
+          :console true
+          :appenders
+          [{:appender :rolling-file
+            :rolling-policy {:type :fixed-window :max-index 5}
+            :triggering-policy {:type :size-based :max-size 5120}
+            :pattern "%p [%d] %t - %c %m%n"
+            :file "logs/beatthemarket.log"}]
+          :overrides
+          {"org.apache.http" :debug "org.apache.http.wire" :error}}}})
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
 

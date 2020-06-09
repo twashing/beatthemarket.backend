@@ -1,80 +1,52 @@
-{:integrant #profile
- {:production {:service/service     {:env      :production
-                                     :join?    false
+{:service {:join?    false
+           :hostname "0.0.0.0"
+           :port     8080}
+
+ :firebase {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
+            :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
+            :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
+
+ :nrepl {:port 7000}
+
+ :logging {:config {:level     :info
+                    :console   true
+                    :appenders [{:appender          :rolling-file
+                                 :rolling-policy    {:type      :fixed-window
+                                                     :max-index 5}
+                                 :triggering-policy {:type     :size-based
+                                                     :max-size 5120}
+                                 :pattern           "%p [%d] %t - %c %m%n"
+                                 :file              "logs/beatthemarket.log"}]
+                    :overrides {"org.apache.http"      :debug
+                                "org.apache.http.wire" :error}}}
+
+ :integrant #profile
+ {:production {:service/service     {:join?    false
                                      :hostname "0.0.0.0"
                                      :port     5000}
                :server/server       {:service #ig/ref :service/service}
-               :firebase/firebase   {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
-                                     :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
-                                     :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
-               :persistence/datomic {:env     :production
-                                     :db-name "beaththemarket"
+               :firebase/firebase   #ref [:firebase]
+               :persistence/datomic {:db-name "beaththemarket"
                                      :config  {:server-type        :peer-server
                                                :access-key         "myaccesskey"
                                                :secret             "mysecret"
                                                :endpoint           "localhost:8998"
                                                :validate-hostnames false}}
-               :nrepl/nrepl         {:port 7000}
-               :logging/logging     {:config {:level     :info
-                                              :console   true
-                                              :appenders [{:appender          :rolling-file
-                                                           :rolling-policy    {:type      :fixed-window
-                                                                               :max-index 5}
-                                                           :triggering-policy {:type     :size-based
-                                                                               :max-size 5120}
-                                                           :pattern           "%p [%d] %t - %c %m%n"
-                                                           :file              "logs/beatthemarket.log"}]
-                                              :overrides {"org.apache.http"      :debug
-                                                          "org.apache.http.wire" :error}}}}
+               :nrepl/nrepl         #ref [:nrepl]
+               :logging/logging     #ref [:logging]}
 
-  :development {:service/service     {:env      :development
-                                      :join?    false
-                                      :hostname "0.0.0.0"
-                                      :port     8080}
+  :development {:service/service     #ref [:service]
                 :server/server       {:service #ig/ref :service/service}
-                :firebase/firebase   {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
-                                      :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
-                                      :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
-                :persistence/datomic {:env     :development
-                                      :db-name "beaththemarket"
-                                      :config  {:server-type        :peer-server
-                                                :access-key         "myaccesskey"
-                                                :secret             "mysecret"
-                                                :endpoint           "localhost:8998"
-                                                :validate-hostnames false}}
-                :nrepl/nrepl         {:port 7000}
-                :logging/logging     {:config {:level     :info
-                                               :console   true
-                                               :appenders [{:appender          :rolling-file
-                                                            :rolling-policy    {:type      :fixed-window
-                                                                                :max-index 5}
-                                                            :triggering-policy {:type     :size-based
-                                                                                :max-size 5120}
-                                                            :pattern           "%p [%d] %t - %c %m%n"
-                                                            :file              "logs/beatthemarket.log"}]
-                                               :overrides {"org.apache.http"      :debug
-                                                           "org.apache.http.wire" :error}}}}
+                :firebase/firebase   #ref [:firebase]
+                :persistence/datomic {:db-name "beaththemarket"
+                                      :config  {}}
+                :nrepl/nrepl         #ref [:nrepl]
+                :logging/logging     #ref [:logging]}
 
-  :test {:service/service     {:env      :testing
-                               :join?    false
-                               :hostname "0.0.0.0"
-                               :port     8080}
+  :test {:service/service     #ref [:service]
          :server/server       {:service #ig/ref :service/service}
-         :firebase/firebase   {:firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
-                               :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
-                               :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
-         :persistence/datomic {:env     :testing
-                               :db-name "beaththemarket"
+         :firebase/firebase   #ref [:firebase]
+         :persistence/datomic {:db-name "beaththemarket"
                                :config  {}}
-         :nrepl/nrepl         {:port 7000}
-         :logging/logging     {:config {:level     :info
-                                        :console   true
-                                        :appenders [{:appender          :rolling-file
-                                                     :rolling-policy    {:type      :fixed-window
-                                                                         :max-index 5}
-                                                     :triggering-policy {:type     :size-based
-                                                                         :max-size 5120}
-                                                     :pattern           "%p [%d] %t - %c %m%n"
-                                                     :file              "logs/beatthemarket.log"}]
-                                        :overrides {"org.apache.http"      :debug
-                                                    "org.apache.http.wire" :error}}}}}}
+         :nrepl/nrepl         #ref [:nrepl]
+         :logging/logging     #ref [:logging]}}}

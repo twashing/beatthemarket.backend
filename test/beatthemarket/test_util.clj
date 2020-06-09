@@ -11,11 +11,14 @@
             [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]))
 
 
-(defn component-prep-fixture [f]
+(defn component-prep-fixture
 
-  (set-prep+load-namespaces :test)
-  
-  (f))
+  ([f] (component-prep-fixture :production f))
+
+  ([profile f]
+
+   (set-prep+load-namespaces profile)
+   (f)))
 
 (defn component-fixture [f]
   (halt)

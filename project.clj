@@ -115,7 +115,8 @@
                    org.eclipse.jetty/jetty-http
                    org.eclipse.jetty/jetty-io
                    org.eclipse.jetty/jetty-client
-                   org.eclipse.jetty/jetty-util]]]
+                   org.eclipse.jetty/jetty-util]]
+                 [com.rpl/specter "1.1.3"]]
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]

@@ -5,10 +5,10 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]))
 
 
-(use-fixtures :once component-prep-fixture)
+(use-fixtures :once (partial component-prep-fixture :test))
 (use-fixtures :each component-fixture)
 
-(defmethod persistence.datomic/->datomic-client :testing [{config :config}]
+(defmethod persistence.datomic/->datomic-client :test [{config :config}]
   (memdb/client config))
 
 
