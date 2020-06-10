@@ -131,16 +131,4 @@
       (json/read-str :key-fn keyword)
       :idToken
       check-authentication ;; verify-id-token
-      pprint)
-
-  ;; {
-  ;;                      url: ``
-  ;;                      method: 'POST'
-  ;;                      body: {
-  ;;                             token: customToken
-  ;;                             returnSecureToken: true
-  ;;                             }
-  ;;                      json: true
-  ;;                      }
-
-  )
+      pprint))

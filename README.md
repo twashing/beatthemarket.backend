@@ -68,7 +68,12 @@ Procfile
 
 ## TODOs 
 
+* Tests on command line
+* Automated test runner
+* Code linter
 * Add a migration to create the DB schema
+
+* Howto ensure the type of a db reference
 * Dockerize datomic
   > bin/run -m datomic.peer-server -h localhost -p 8998 -a myaccesskey,mysecret -d beatthemarket,datomic:mem://beatthemarket
 * Do I care about these Datomic schema entities

@@ -26,14 +26,21 @@
   [context args source-stream]
 
   ;; TODO play
-  ;;   creates a new game
 
-  ;;   creates a list of market stocks
-  ;;   picks a default stock
+  ;;   A.i creates a new game (:game :level :user)
+  ;;     :game
+  ;;     :level(s), :current-level
+  ;;     bind to :user
 
-  ;;   subscribes user to default stock
-  ;;   pushes Portfolio positions + value to client
-  ;;   streams the default stock to client
+  ;;     A.ii create a bookkeeping book + set of accounts (:book)
+
+  ;;     A.iii creates a list of market stocks (:stock :subscription)
+  ;;           picks a default stock
+
+  ;;     A.iv subscribes user to default stock
+
+  ;;   B.i pushes Portfolio positions + value to client
+  ;;   B.ii streams the default stock to client
   [:game :level :user :book :stock :subscription]
 
   (let [{:keys [message]} args
