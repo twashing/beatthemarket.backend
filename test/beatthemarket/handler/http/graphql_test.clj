@@ -23,11 +23,8 @@
 
     (testing "Basic login with a new user"
 
-      (let [expected-status 400
-            expected-body {:errors
-                           [{:message "Cannot query field `foobar' on type `QueryRoot'."
-                             :locations [{:line 1 :column 3}]
-                             :extensions {:type "QueryRoot" :field "foobar"}}]}
+      (let [expected-status 200
+            expected-body {:data {:login "user-added"}}
             expected-headers {"Content-Type" "application/json"}
 
             id-token (util/->id-token)
@@ -35,20 +32,38 @@
             {status :status
              body :body
              headers :headers}
-            (trace (response-for service
-                                 :post "/api"
-                                 :body "{\"query\": \"{ login }\"}"
-                                 :headers {"Content-Type" "application/json"
-                                           "Authorization" (format "Bearer %s" id-token)}))
+            (response-for service
+                          :post "/api"
+                          :body "{\"query\": \"{ login }\"}"
+                          :headers {"Content-Type" "application/json"
+                                    "Authorization" (format "Bearer %s" id-token)})
 
             body-parsed (json/read-str body :key-fn keyword)]
 
-        (is true)
-
-        #_(are [x y] (= x y)
+        (are [x y] (= x y)
             expected-status status
             expected-body body-parsed
-            expected-headers headers)))))
+            expected-headers headers)
+
+        (testing "Subsequent logins find an existing user"
+
+          (let [expected-body {:data {:login "user-exists"}}
+
+                {status :status
+                 body :body
+                 headers :headers}
+                (response-for service
+                              :post "/api"
+                              :body "{\"query\": \"{ login }\"}"
+                              :headers {"Content-Type" "application/json"
+                                        "Authorization" (format "Bearer %s" id-token)})
+
+                body-parsed (json/read-str body :key-fn keyword)]
+
+            (are [x y] (= x y)
+              expected-status status
+              expected-body body-parsed
+              expected-headers headers)))))))
 
 
 (comment
@@ -68,6 +83,4 @@
                          [?e :user/name ?name]
                          [?e :user/identity-provider ?identity-provider]
                          [?e :user/email "swashing@gmail.com"]])
-  (d/q name-from-email db)
-
-  )
+  (d/q name-from-email db))

@@ -17,7 +17,8 @@
 
 
 (defn read-config [profile resource]
-  (aero.core/read-config resource {:profile profile}))
+  (aero/read-config resource {:profile profile
+                              :resolver aero/resource-resolver}))
 
 (defn inject-environment [profile config]
   (transform [MAP-VALS] #(assoc % :env profile) config))

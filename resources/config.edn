@@ -1,12 +1,11 @@
-{;; COMPONENTS
+{;; SECRETS
+ :secrets #include "secrets.edn"
+
+
+ ;; COMPONENTS
  :service {:join?    false
            :hostname "0.0.0.0"
            :port     8080}
-
- :firebase {:api-key                   "AIzaSyDe_UVKBE3N1MCwWDJvZnPGudm-5vgMTmw"
-            :firebase-database-url     "https://beatthemarket-c13f8.firebaseio.com"
-            :service-account-file-name "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json"
-            :admin-user-id             "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
 
  :nrepl {:port 7000}
 
@@ -28,19 +27,14 @@
                                      :hostname "0.0.0.0"
                                      :port     5000}
                :server/server       {:service #ig/ref :service/service}
-               :firebase/firebase   #ref [:firebase]
-               :persistence/datomic {:db-name "beaththemarket"
-                                     :config  {:server-type        :peer-server
-                                               :access-key         "myaccesskey"
-                                               :secret             "mysecret"
-                                               :endpoint           "localhost:8998"
-                                               :validate-hostnames false}}
+               :firebase/firebase   #ref [:secrets :firebase]
+               :persistence/datomic #ref [:secrets :production :persistence/datomic]
                :nrepl/nrepl         #ref [:nrepl]
                :logging/logging     #ref [:logging]}
 
   :development {:service/service     #ref [:service]
                 :server/server       {:service #ig/ref :service/service}
-                :firebase/firebase   #ref [:firebase]
+                :firebase/firebase   #ref [:secrets :firebase]
                 :persistence/datomic {:db-name "beaththemarket"
                                       :config  {}}
                 :nrepl/nrepl         #ref [:nrepl]
@@ -48,7 +42,7 @@
 
   :test {:service/service     #ref [:service]
          :server/server       {:service #ig/ref :service/service}
-         :firebase/firebase   #ref [:firebase]
+         :firebase/firebase   #ref [:secrets :firebase]
          :persistence/datomic {:db-name "beaththemarket"
                                :config  {}}
          :nrepl/nrepl         #ref [:nrepl]

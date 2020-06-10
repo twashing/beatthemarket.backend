@@ -132,3 +132,6 @@
 ;; Datomic
 (defmethod persistence.datomic/->datomic-client :test [opts]
   (persistence.datomic/->datomic-client-local opts))
+
+(defmethod persistence.datomic/close-db-connection! :test [{client :client}]
+  (persistence.datomic/close-db-connection-local! client))

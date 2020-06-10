@@ -1,10 +1,8 @@
 (ns beatthemarket.handler.http.graphql
-  (:require [beatthemarket.iam.authentication :as iam.auth]
+  (:require [beatthemarket.util :as util]
+            [beatthemarket.iam.authentication :as iam.auth]
+            [beatthemarket.iam.user :as iam.user]
             [beatthemarket.persistence.datomic :as persistence.datomic]))
-
-
-
-;; TODO Add a migration to create the DB schema
 
 
 (defn resolve-hello
@@ -14,21 +12,15 @@
 (defn resolve-login
   [context _ _]
 
-  (let [;; {:keys [email name uid] :as checked-authentication} (-> context :request :checked-authentication)
-        {{{:keys [email name uid] :as checked-authentication} :checked-authentication} :request} context
+  (let [{{checked-authentication :checked-authentication} :request} context
         conn (-> integrant.repl.state/system :persistence/datomic :conn)]
 
-    (pprint checked-authentication)
+    (let [{:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
 
-    ;; TODO conditionally saves new user :user
-
-    (->> [{:user/email email
-           :user/name name
-           :user/external-uid uid}]
-         (persistence.datomic/transact! conn))
-
-    "login CALLED"
-    ))
+      (if (-> (and db-before db-after tx-data tempids)
+              util/truthy?)
+        "user-added"
+        "user-exists"))))
 
 (defn stream-new-game
   [context args source-stream]

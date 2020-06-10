@@ -6,14 +6,16 @@
             [compute.datomic-client-memdb.core :as memdb]))
 
 
-(defn config->client [{:keys [db-name config]}]
+;; COMPONENT
+(defn config->client [{:keys [db-name config env]}]
 
   (let [client (d/client config)]
     (hash-map
+      :env env
       :client client
       :conn (d/connect client {:db-name "hello"}))))
 
-(defn ->datomic-client-local [{:keys [db-name config]}]
+(defn ->datomic-client-local [{:keys [db-name config env]}]
 
   (let [url (format "datomic:mem://%s" db-name)
         client (memdb/client config)]
@@ -21,21 +23,39 @@
     (d/create-database client {:db-name url})
 
     (hash-map
+      :env env
       :url url
       :client client
       :conn (d/connect client {:db-name url}))))
 
-(defmulti ->datomic-client :env)
+(defn close-db-connection-local! [client]
+  (memdb/close client))
 
-(defmethod ->datomic-client :development [opts]
-  (->datomic-client-local opts))
+(defmulti close-db-connection! :env)
+
+(defmethod close-db-connection! :production [opts])   ;; a no-op
+
+(defmethod close-db-connection! :development [{client :client}]
+  (close-db-connection-local! client))
+
+
+(defmulti ->datomic-client :env)
 
 (defmethod ->datomic-client :production [opts]
   (config->client opts))
 
-(defmethod ig/init-key :persistence/datomic [a datomic-opts]
+(defmethod ->datomic-client :development [opts]
+  (->datomic-client-local opts))
+
+
+(defmethod ig/init-key :persistence/datomic [_ datomic-opts]
   (->datomic-client datomic-opts))
 
+(defmethod ig/halt-key! :persistence/datomic [_ datomic-component-map]
+  (close-db-connection! datomic-component-map))
+
+
+;; DATABASE
 (defn transact! [conn data]
   (d/transact conn {:tx-data data}))
 
@@ -47,16 +67,6 @@
    (-> schema
        resource slurp
        read-string)))
-
-
-;; TODO ensure these keys are in the result (schema)
-;; {:db-before :db-after :tx-data :tempids}
-
-;; TODO implement user login functionality
-;;   get full attributes from Firebase token
-
-;; TODO Dockerize datomic
-;;   bin/run -m datomic.peer-server -h localhost -p 8998 -a myaccesskey,mysecret -d beatthemarket,datomic:mem://beatthemarket
 
 (defn transact-schema! [conn]
   (->> (load-schema)

@@ -66,6 +66,29 @@ Procfile
 ```
 
 
+## TODOs 
+
+* Add a migration to create the DB schema
+* Dockerize datomic
+  > bin/run -m datomic.peer-server -h localhost -p 8998 -a myaccesskey,mysecret -d beatthemarket,datomic:mem://beatthemarket
+* Do I care about these Datomic schema entities
+```
+;; An Identity Provider (IP) should be an entity
+;; For Firebase, a User can have many IPs
+
+{:db/ident       :user/identity-provider-uid
+ :db/valueType   :db.type/string
+ :db/cardinality :db.cardinality/one
+ :db/unique      :db.unique/value
+ :db/doc         "Identity Provider UID of the user"}
+
+{:db/ident       :user/identity-provider
+ :db/valueType   :db.type/string
+ :db/cardinality :db.cardinality/one
+ :db/doc         "Identity Provider of the user"}
+```
+
+
 License
 -------
 Copyright 2014-2019 Cognitect, Inc.
@@ -78,3 +101,4 @@ By using this software in any fashion, you are agreeing to be bound by
 the terms of this license.
 
 You must not remove this notice, or any other, from this software.
+
