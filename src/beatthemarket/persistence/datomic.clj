@@ -3,7 +3,8 @@
             [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
             [integrant.core :as ig]
-            [compute.datomic-client-memdb.core :as memdb]))
+            [compute.datomic-client-memdb.core :as memdb]
+            [beatthemarket.util :as util]))
 
 
 ;; COMPONENT
@@ -198,3 +199,16 @@
 
 
   )
+
+
+
+;; HELPERs
+(defn conditionially-wrap-in-sequence [entity]
+  (if (and (sequential? entity) ((comp not empty?) entity))
+    entity
+    (list entity)))
+
+(defn add-entity! [conn entity]
+  (->> (conditionially-wrap-in-sequence entity)
+       util/pprint+identity
+       (transact! conn)))

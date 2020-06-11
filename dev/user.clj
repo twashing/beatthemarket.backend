@@ -2,10 +2,21 @@
   (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.core :as ig]
             [clojure.java.io :refer [resource]]
-            [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]))
+            [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]
+            [beatthemarket.persistence.datomic :as persistence.datomic]))
 
 
 (set-prep+load-namespaces :development)
+
+
+(defn dev-fixture []
+  (halt)
+  (go)
+
+  ;; Create schema
+  (-> integrant.repl.state/system
+      :persistence/datomic :conn
+      persistence.datomic/transact-schema!))
 
 
 (comment ;; Convenience fns
@@ -22,9 +33,15 @@
   (reset-all)
 
 
+  ;; Catach all
+  (dev-fixture)
+
+
   (pprint integrant.repl.state/config)
   (pprint integrant.repl.state/system)
 
+
+  ;; Individual
   (prep)
   (ig/init integrant.repl.state/config [:service/service])
   (def datomic-client (ig/init integrant.repl.state/config [:persistence/datomic]))

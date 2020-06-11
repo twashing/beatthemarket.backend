@@ -21,6 +21,8 @@
   (clojure.pprint/pprint e)
   e)
 
+(defn split-namespaced-keyword [kw]
+  ((juxt namespace name) kw))
 
 ;; Firebase Token Helper
 ;;

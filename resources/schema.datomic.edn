@@ -3,6 +3,11 @@
  ;; USERS
 
  ;; NOTE This entity is a Firebase user, tied to an external Identity Provider
+ {:db/ident       :user/id
+  :db/valueType   :db.type/uuid ;; :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value
+  :db/doc ""}
  {:db/ident       :user/email
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
@@ -20,6 +25,12 @@
  {:db/ident       :user/game
   :db/valueType   :db.type/ref ;; :game
   :db/cardinality :db.cardinality/many
+  :db/isComponent true
+  :db/doc         ""}
+ {:db/ident       :user/accounts
+  :db/valueType   :db.type/ref ;; List of default :account
+  :db/cardinality :db.cardinality/many
+  :db/isComponent true
   :db/doc         ""}
 
 
@@ -39,12 +50,16 @@
  ;; GAME PROPER
 
  ;; NOTE :earnings is a calculated attribute
+ {:db/ident       :game/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
  {:db/ident       :game/start-time
-  :db/valueType   :db.type/string
+  :db/valueType   :db.type/instant
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
  {:db/ident       :game/end-time
-  :db/valueType   :db.type/string
+  :db/valueType   :db.type/instant
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
  {:db/ident       :game/level
@@ -54,50 +69,60 @@
  {:db/ident       :game/subscriptions
   :db/valueType   :db.type/ref ;; List of :stock
   :db/cardinality :db.cardinality/many
+  :db/isComponent true
   :db/doc         ""}
  {:db/ident       :game/stocks
   :db/valueType   :db.type/ref ;; List of :stock
   :db/cardinality :db.cardinality/many
+  :db/isComponent true
   :db/doc         ""}
  {:db/ident       :game/portfolio
   :db/valueType   :db.type/ref ;; :bookkeeping.portfolio
   :db/cardinality :db.cardinality/one
+  :db/isComponent true
   :db/doc         ""}
 
 
- ;; STOCKS
+ ;; GAME STOCKS
 
- {:db/ident       :stock/name
+ {:db/ident       :game.stock/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
+ {:db/ident       :game.stock/name
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
- {:db/ident       :stock/symbol
+ {:db/ident       :game.stock/symbol
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
- #_{:db/ident     :stock/total-shares
-    :db/valueType   :db.type/long
-    :db/cardinality :db.cardinality/one
-    :db/doc         ""}
- {:db/ident       :stock/trade-history
+ {:db/ident       :game.stock/price-history
   :db/valueType   :db.type/ref ;; List of :tick
   :db/cardinality :db.cardinality/many
+  :db/isComponent true
   :db/doc         ""}
 
 
- {:db/ident       :tick/trade-time
+ ;; GAME STOCK TICKS
+
+ {:db/ident       :game.stock.tick/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
+ {:db/ident       :game.stock.tick/trade-time
   :db/valueType   :db.type/instant
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
- {:db/ident       :tick/close
+ {:db/ident       :game.stock.tick/close
   :db/valueType   :db.type/float
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
- {:db/ident       :tick/ask
+ {:db/ident       :game.stock.tick/ask
   :db/valueType   :db.type/float
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
- {:db/ident       :tick/bid
+ {:db/ident       :game.stock.tick/bid
   :db/valueType   :db.type/float
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
@@ -118,18 +143,32 @@
  {:db/ident :bookkeeping.account.orientation/credit}
 
 
+ {:db/ident       :bookkeeping.portfolio/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
  {:db/ident       :bookkeeping.portfolio/journals
   :db/valueType   :db.type/ref ;; List of :bookkeeping.journal
   :db/cardinality :db.cardinality/many
+  :db/isComponent true
   :db/doc         ""}
 
 
+ {:db/ident       :bookkeeping.journal/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
  {:db/ident       :bookkeeping.journal/entries
   :db/valueType   :db.type/ref ;; List of :bookkeeping.tentry
   :db/cardinality :db.cardinality/many
+  :db/isComponent true
   :db/doc         ""}
 
 
+ {:db/ident       :bookkeeping.account/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
  {:db/ident       :bookkeeping.account/name
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
@@ -144,34 +183,57 @@
   :db/doc         ""}
 
 
+ {:db/ident       :bookkeeping.tentry/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/many
+  :db/doc         ""}
  {:db/ident       :bookkeeping.tentry/debits
   :db/valueType   :db.type/ref ;; List of :bookkeeping.debit
   :db/cardinality :db.cardinality/many
+  :db/isComponent true
   :db/doc         ""}
  {:db/ident       :bookkeeping.tentry/credits
   :db/valueType   :db.type/ref ;; List of :bookkeeping.credit
   :db/cardinality :db.cardinality/many
+  :db/isComponent true
   :db/doc         ""}
 
 
+ {:db/ident       :bookkeeping.debit/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
  {:db/ident       :bookkeeping.debit/account
   :db/valueType   :db.type/ref ;; :bookkeeping.account
   :db/cardinality :db.cardinality/one
+  :db/isComponent true
   :db/doc         ""}
  {:db/ident       :bookkeeping.debit/amount
+  :db/valueType   :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
+ {:db/ident       :bookkeeping.debit/value
   :db/valueType   :db.type/float
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
 
 
+ {:db/ident       :bookkeeping.credit/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
  {:db/ident       :bookkeeping.credit/account
   :db/valueType   :db.type/ref ;; :bookkeeping.account
   :db/cardinality :db.cardinality/one
+  :db/isComponent true
   :db/doc         ""}
  {:db/ident       :bookkeeping.credit/amount
+  :db/valueType   :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
+ {:db/ident       :bookkeeping.credit/value
   :db/valueType   :db.type/float
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
 
- 
  ]

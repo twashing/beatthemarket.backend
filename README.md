@@ -71,8 +71,10 @@ Procfile
 * Tests on command line
 * Automated test runner
 * Code linter
-* Add a migration to create the DB schema
+* Add a migration to create the DB schema 
 
+* Add a stock name generator
+* Howto db pull composite references
 * Howto ensure the type of a db reference
 * Dockerize datomic
   > bin/run -m datomic.peer-server -h localhost -p 8998 -a myaccesskey,mysecret -d beatthemarket,datomic:mem://beatthemarket

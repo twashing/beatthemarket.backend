@@ -1,0 +1,192 @@
+(ns beatthemarket.game
+  (:require [clj-time.core :as t]
+            [clj-time.coerce :as c]
+            [beatthemarket.util :refer [exists?]]
+            [beatthemarket.bookkeeping :as bookkeeping]
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.persistence.bookkeeping :as persistence.bookkeeping]
+            [beatthemarket.util :as util]
+            [datomic.client.api :as d])
+  (:import [java.util UUID]))
+
+
+;;   A.i creates a new game (:game :level :user)
+;;     :game
+;;     :level(s), :current-level
+;;     bind to :user
+
+;;     A.ii create a bookkeeping book + set of accounts (:book)
+
+;;     A.iii creates a list of market stocks (:stock :subscription)
+;;           picks a default stock
+
+;;     A.iv subscribes user to default stock
+
+;;   B.i pushes Portfolio positions + value to client
+;;   B.ii streams the default stock to client
+
+
+(defn bind-temporary-id [entity]
+  (assoc entity :db/id (str (UUID/randomUUID))))
+
+(defn ->game
+
+  ([game-level]
+
+   (let [portfolio (bookkeeping/->portfolio)]
+     (->game game-level portfolio nil nil)))
+
+  ([game-level portfolio subscriptions stocks]
+
+   (cond-> (hash-map
+             :game/id (UUID/randomUUID)
+             :game/start-time (c/to-date (t/now))
+             :game/level game-level)
+     (exists? portfolio) (assoc :game/portfolio portfolio)
+     (exists? subscriptions) (assoc :game/subscriptions subscriptions)
+     (exists? stocks) (assoc :game/stocks stocks))))
+
+(defn ->stock
+
+  ([name symbol] (->stock name symbol nil))
+  ([name symbol price-history]
+   (cond-> (hash-map
+             :game.stock/id (UUID/randomUUID)
+             :game.stock/name name
+             :game.stock/symbol symbol)
+     (exists? price-history) (assoc :game.stock/price-history price-history))))
+
+(defn initialize-game [conn user]
+
+  (let [;; Create a bookkeeping book
+        portfolio+journal (->> (beatthemarket.bookkeeping/->journal)
+                               beatthemarket.bookkeeping/->portfolio)
+
+        ;; Generate stocks + first subscription
+        stocks (->> [["Sun Ra Inc" "SUN"]
+                     ["Miles Davis Inc" "MILD"]
+                     ["John Coltrane Inc" "JONC"]]
+                    (map #(apply ->stock %))
+                    (map bind-temporary-id))
+        subscriptions (take 1 stocks)
+
+        game-level :game-level/one]
+
+
+    (->> (->game game-level portfolio+journal subscriptions stocks)
+         (persistence.datomic/add-entity! conn))))
+
+(comment ;; Portfolio
+
+
+  (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
+
+
+  (def journal
+    (->> (beatthemarket.bookkeeping/->journal)
+         (beatthemarket.persistence.bookkeeping/add-journal! conn)))
+
+
+  (def portfolio
+    (->> (beatthemarket.bookkeeping/->portfolio)
+         (beatthemarket.persistence.bookkeeping/add-portfolio! conn)))
+
+
+  (def composite-portfolio
+    (->> (beatthemarket.bookkeeping/->journal)
+         beatthemarket.bookkeeping/->portfolio
+         (beatthemarket.persistence.bookkeeping/add-portfolio! conn)))
+
+
+  (def result-portfolio (d/q '[:find ?e ?id
+                               :in $ ?id
+                               :where [?e :bookkeeping.journal/id ?id]]
+                             (d/db conn)
+                             (UUID/fromString "3cf2f83f-1954-4693-ab61-781024979519")))
+
+  (d/pull (d/db conn) '[*] (ffirst result-portfolio))
+
+
+
+
+  (require '[datomic.client.api :as d])
+
+  (def db (d/db conn))
+  (d/q '[:find ?e
+         :where [?e :bookkeeping.journal/id]] db))
+
+(comment ;; Accounts
+
+  ;; Insert
+  (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)]
+
+    (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit]
+          ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit]]
+         (map #(apply bookkeeping/->account %))
+         (persistence.bookkeeping/add-account! conn)))
+
+  ;; Query
+  (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
+  (def result-accounts (d/q '[:find ?e
+                               :where [?e :bookkeeping.account/id]]
+                             (d/db conn)))
+
+
+  (d/pull (d/db conn) '[*] (ffirst result-accounts))
+
+  (->> result-accounts
+       (map #(d/pull (d/db conn) '[*] (first %)))))
+
+(comment ;; Stocks + Subscriptions
+
+  (let [stocks (->> [["Sun Ra Inc" "SUN"]
+                     ["Miles Davis Inc" "MILD"]
+                     ["John Coltrane Inc" "JONC"]]
+                    (map #(apply ->stock %))
+                    (map bind-temporary-id))
+
+        subscriptions (take 1 stocks)]))
+
+(comment ;; Game
+
+  ;; A. TODO Set of accounts (:book) belongs to a :user
+  (let [accounts (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit]
+                       ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit]]
+                      (map #(apply bookkeeping/->account %)))])
+
+  ;; B
+  (let [;; Create a bookkeeping book
+        portfolio+journal (->> (beatthemarket.bookkeeping/->journal)
+                               beatthemarket.bookkeeping/->portfolio)
+
+        ;; Generate stocks + first subscription
+        stocks (->> [["Sun Ra Inc" "SUN"]
+                     ["Miles Davis Inc" "MILD"]
+                     ["John Coltrane Inc" "JONC"]]
+                    (map #(apply ->stock %))
+                    (map bind-temporary-id))
+        subscriptions (take 1 stocks)
+
+        game-level :game-level/one]
+
+    ;; Save stocks
+    (def result-game (->game game-level portfolio+journal subscriptions stocks))
+    result-game))
+
+(comment ;; Initialize
+
+  ;; Insert
+  (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
+        user nil]
+
+    (initialize-game conn user))
+
+  (def result *1)
+
+  ;; Query
+  (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
+  (def result-game (d/q '[:find ?e
+                          :where [?e :game/id]]
+                        (d/db conn)))
+
+  (d/pull (d/db conn) '[*] (ffirst result-game)))
