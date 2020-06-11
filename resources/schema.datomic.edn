@@ -22,7 +22,7 @@
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         "User's ID in the external Authentication system (Firebase)"}
- {:db/ident       :user/game
+ {:db/ident       :user/games
   :db/valueType   :db.type/ref ;; :game
   :db/cardinality :db.cardinality/many
   :db/isComponent true

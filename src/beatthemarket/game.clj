@@ -25,7 +25,6 @@
 ;;   B.i pushes Portfolio positions + value to client
 ;;   B.ii streams the default stock to client
 
-
 (defn bind-temporary-id [entity]
   (assoc entity :db/id (str (UUID/randomUUID))))
 
@@ -56,7 +55,7 @@
              :game.stock/symbol symbol)
      (exists? price-history) (assoc :game.stock/price-history price-history))))
 
-(defn initialize-game [conn user]
+(defn initialize-game [conn user-entity]
 
   (let [;; Create a bookkeeping book
         portfolio+journal (->> (beatthemarket.bookkeeping/->journal)
@@ -69,16 +68,14 @@
                     (map #(apply ->stock %))
                     (map bind-temporary-id))
         subscriptions (take 1 stocks)
+        game-level :game-level/one
 
-        game-level :game-level/one]
+        game (->game game-level portfolio+journal subscriptions stocks)
+        updated-user (-> (select-keys user-entity [:db/id])
+                         (assoc :user/games game))
+        entities (list game updated-user)]
 
-
-    (->> (->game game-level portfolio+journal subscriptions stocks)
-         (persistence.datomic/add-entity! conn))
-
-    ;; TODO bind to the user
-
-    ))
+    (persistence.datomic/transact-entities! conn entities)))
 
 (comment ;; Portfolio
 

@@ -86,24 +86,3 @@
               expected-status status
               expected-body body-parsed
               expected-headers headers)))))))
-
-
-
-(comment
-
-  ;; C query data
-
-  (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
-  (def db (d/db conn))
-
-  (def all-emails-q '[:find ?user-email
-                      :where [_ :user/email ?user-email]])
-  (d/q all-emails-q db)
-
-
-  (def name-from-email '[:find ?name ?identity-provider
-                         :where
-                         [?e :user/name ?name]
-                         [?e :user/identity-provider ?identity-provider]
-                         [?e :user/email "swashing@gmail.com"]])
-  (d/q name-from-email db))

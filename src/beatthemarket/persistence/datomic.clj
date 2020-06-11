@@ -208,7 +208,7 @@
     entity
     (list entity)))
 
-(defn add-entity! [conn entity]
+(defn transact-entities! [conn entity]
   (->> (conditionially-wrap-in-sequence entity)
-       util/pprint+identity
+       ;; util/pprint+identity
        (transact! conn)))

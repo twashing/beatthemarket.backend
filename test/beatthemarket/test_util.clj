@@ -50,7 +50,7 @@
 ;; Fixtures
 (defn component-prep-fixture
 
-  ([f] (component-prep-fixture :production f))
+  ([f] (component-prep-fixture :test f))
 
   ([profile f]
 
@@ -62,14 +62,6 @@
 (defn component-fixture [f]
 
   (util/dev-fixture persistence.datomic/transact-schema!)
-
-  ;; (halt)
-  ;; (go)
-  ;;
-  ;; ;; Create schema
-  ;; (-> integrant.repl.state/system
-  ;;     :persistence/datomic :conn
-  ;;     persistence.datomic/transact-schema!)
 
   (f))
 

@@ -21,8 +21,8 @@
                        ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit]]
                       (map #(apply bookkeeping/->account %)))]
 
-    (->> [{:user/email        email
-           :user/name         name
-           :user/external-uid uid
-           :user/accounts     accounts}]
-         (persistence.datomic/transact! conn))))
+    (->> {:user/email        email
+          :user/name         name
+          :user/external-uid uid
+          :user/accounts     accounts}
+         (persistence.datomic/transact-entities! conn))))
