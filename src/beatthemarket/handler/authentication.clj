@@ -19,6 +19,9 @@
   (log/debug :auth-request request)
 
   (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication (request->token request))]
+
+    ;; (println "auth-request-handler CALLED / " checked-authentication)
+
     (if (every? exists? [errorCode message])
       (throw (ex-info message checked-authentication))
       (assoc request :checked-authentication checked-authentication))))

@@ -54,7 +54,7 @@
         (json/read-str :key-fn keyword)
         :idToken)))
 
-(defn authorization-header-value
+#_(defn authorization-header-value
   "Possible Authorization headers values can be below.
    Taken from: https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication#Authentication_schemes
 

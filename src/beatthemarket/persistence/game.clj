@@ -20,7 +20,7 @@
 
     (set-and-subsets-note-empty? result-entities)))
 
-(defn conditionally-add-new-user! [conn {:keys [email name uid] :as checked-authentication}]
+#_(defn conditionally-add-new-user! [conn {:keys [email name uid] :as checked-authentication}]
 
   (when-not (user-exists? (user-by-email conn email))
     (->> [{:user/email email

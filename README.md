@@ -66,16 +66,32 @@ Procfile
 ```
 
 
-## TODOs 
+## TODOs
 
 
-* Rest login; New user has default accounts
-
+* Check that user exists in `auth-request-handler-ws`
+* Pushed Nested Game srtucture to GQL client
+```
+{:game/subscriptions
+ ({:game.stock/symbol "SUN"
+   :db/id "6d05b02b-1a88-4ade-b730-b1a4fe7416bb"
+   :game.stock/name "Sun Ra Inc"
+   :game.stock/id #uuid "e70180d1-2256-4378-b7c0-3f7cf39380a3"})
+ :game/stocks
+ ({:game.stock/symbol "SUN"
+   :db/id "6d05b02b-1a88-4ade-b730-b1a4fe7416bb"
+   :game.stock/name "Sun Ra Inc"
+   :game.stock/id #uuid "e70180d1-2256-4378-b7c0-3f7cf39380a3"}
+  {:game.stock/symbol "JONC"
+   :db/id "62739f1d-78b0-4473-ac09-dc274464e109"
+   :game.stock/name "John Coltrane Inc"
+   :game.stock/id #uuid "9646003d-8022-48d0-9ea9-991df907bc9d"})}
+```
 
 * Tests on command line
 * Automated test runner
 * Code linter
-* Add a migration to create the DB schema 
+* Add a migration to create the DB schema
 
 * Add a stock name generator
 * Howto db pull composite references
@@ -112,4 +128,3 @@ By using this software in any fashion, you are agreeing to be bound by
 the terms of this license.
 
 You must not remove this notice, or any other, from this software.
-

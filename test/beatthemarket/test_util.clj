@@ -99,20 +99,29 @@
           (<message!!))))
 
 (defn subscriptions-fixture
-  ([]
-   (subscriptions-fixture ws-uri))
+
+  ([] (subscriptions-fixture ws-uri))
+
   ([uri]
    (fn [f]
      (log/debug :reason ::test-start :uri uri)
-     (let [messages-ch (chan 10)
-           session (g/connect uri
-                              :on-receive (fn [message-text]
-                                            (log/debug :reason ::receive :message message-text)
-                                            (put! messages-ch (json/read-str message-text :key-fn keyword)))
-                              :on-connect (fn [_] (log/debug :reason ::connected))
-                              :on-close #(log/debug :reason ::closed :code %1 :message %2)
-                              :on-error #(log/error :reason ::unexpected-error
-                                                    :exception %))]
+     (let [id-token (util/->id-token)
+           messages-ch (chan 10)
+           session (try
+                     (g/connect uri
+                       :on-receive (fn [message-text]
+                                     (log/debug :reason ::receive :message message-text)
+                                     (put! messages-ch (json/read-str message-text :key-fn keyword)))
+                       :on-connect (fn [a]
+                                     (log/debug :reason ::connected))
+                       :on-close #(log/debug :reason ::closed :code %1 :message %2)
+                       :on-error #(log/error :reason ::unexpected-error
+                                             :exception %)
+                       :headers {"Authorization" (format "Bearer %s" id-token)})
+
+                     (catch Exception e
+                       (println (ex-data e))
+                       (throw e)))]
 
        (binding [*session* session
                  ;; New messages channel on each test as well, to ensure failed tests don't cause

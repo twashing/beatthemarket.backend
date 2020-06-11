@@ -1,8 +1,10 @@
 (ns beatthemarket.handler.http.graphql
-  (:require [beatthemarket.util :as util]
+  (:require [datomic.client.api :as d]
+            [beatthemarket.util :as util]
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.user :as iam.user]
-            [beatthemarket.persistence.datomic :as persistence.datomic]))
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.game :as game]))
 
 
 (defn resolve-hello
@@ -25,34 +27,34 @@
 (defn stream-new-game
   [context args source-stream]
 
-  ;; TODO play
+  (let [{{{email :email :as checked-authentication} :checked-authentication} :request} context
+        conn (-> integrant.repl.state/system :persistence/datomic :conn)
 
-  ;;   A.i creates a new game (:game :level :user)
-  ;;     :game
-  ;;     :level(s), :current-level
-  ;;     bind to :user
+        ;; _ (println "stream-new-game CALLED")
+        ;; _ (println "Args / " args)
+        ;; _ (println "Authorization / " (-> context identity #_:request #_:checked-authentication))
+        result-user-id (-> (d/q '[:find ?e
+                                  :in $ ?email
+                                  :where [?e :user/email ?email]]
+                                (d/db conn)
+                                email)
+                           ffirst)
 
-  ;;     A.ii create a bookkeeping book + set of accounts (:book)
+        user-entity (hash-map :db/id result-user-id)
 
-  ;;     A.iii creates a list of market stocks (:stock :subscription)
-  ;;           picks a default stock
+        ;; Initialize Game
+        message (-> (game/initialize-game conn user-entity)
+                    (select-keys [:game/subscriptions :game/stocks]))
 
-  ;;     A.iv subscribes user to default stock
-
-  ;; TODO
-
-  ;;   B.i pushes Portfolio positions + value to client
-  ;;   B.ii streams the default stock to client
-  [:game :level :user :book :stock :subscription]
-
-  (let [{:keys [message]} args
-
+        ;; _ (println "Initialize-game result / ")
+        ;; _ (clojure.pprint/pprint message)
         runnable ^Runnable (fn []
-                             (source-stream {:message message})
+                             (source-stream {:message "Foobar" #_message})
                              (Thread/sleep 50)
                              (source-stream nil))]
 
-    (.start (Thread. runnable "stream-ping-thread"))
+    (.start (Thread. runnable "stream-new-game-thread"))
+
     ;; Return a cleanup fn:
     (constantly nil)))
 
@@ -61,6 +63,7 @@
 (def *ping-subscribes (atom 0))
 (def *ping-cleanups (atom 0))
 (def *ping-context (atom nil))
+
 (defn stream-ping
   [context args source-stream]
   (swap! *ping-subscribes inc)

@@ -10,21 +10,6 @@
   (:import [java.util UUID]))
 
 
-;;   A.i creates a new game (:game :level :user)
-;;     :game
-;;     :level(s), :current-level
-;;     bind to :user
-
-;;     A.ii create a bookkeeping book + set of accounts (:book)
-
-;;     A.iii creates a list of market stocks (:stock :subscription)
-;;           picks a default stock
-
-;;     A.iv subscribes user to default stock
-
-;;   B.i pushes Portfolio positions + value to client
-;;   B.ii streams the default stock to client
-
 (defn bind-temporary-id [entity]
   (assoc entity :db/id (str (UUID/randomUUID))))
 
@@ -75,7 +60,8 @@
                          (assoc :user/games game))
         entities (list game updated-user)]
 
-    (persistence.datomic/transact-entities! conn entities)))
+    (persistence.datomic/transact-entities! conn entities)
+    game))
 
 (comment ;; Portfolio
 

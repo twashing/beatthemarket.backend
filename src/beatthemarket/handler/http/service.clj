@@ -18,8 +18,10 @@
             [integrant.core :as ig]
             [beatthemarket.handler.http.graphql :as graphql]
 
+            [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
+            [beatthemarket.util]
 
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.interceptor.chain :as chain]
@@ -30,7 +32,8 @@
             [com.walmartlabs.lacinia.pedestal :refer [inject]]
             [com.walmartlabs.lacinia.pedestal.subscriptions :as s])
 
-  (:import [org.eclipse.jetty.websocket.api Session]))
+  (:import [org.eclipse.jetty.websocket.api Session]
+           [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
 
 
 (defn about-page
@@ -124,28 +127,46 @@
 (def ^:private default-asset-path "/assets/graphiql")
 (def ^:private default-subscriptions-path "/ws")
 
+
 ;; NOTE subscription interceptor
-(def ^:private invoke-count-interceptor
+#_(def ^:private invoke-count-interceptor
   "Used to demonstrate that subscription interceptor customization works."
   (interceptor/interceptor
     {:name ::invoke-count
      :enter (fn [context]
-              ;; (println "invoke-count-interceptor CALLED / " context)
+              ;; (println "invoke-count-interceptor CALLED")
+              ;; (clojure.pprint/pprint context)
               context)}))
+
+(defn auth-request-handler-ws [context]
+
+  (let [id-token (-> context :request :authorization
+                     (clojure.string/split #"Bearer ")
+                     last)
+
+        {:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
+
+    (if (every? beatthemarket.util/exists? [errorCode message])
+      (throw (ex-info message checked-authentication))
+      (assoc-in context [:request :checked-authentication] checked-authentication))))
+
+(def auth-request-interceptor
+  (interceptor/interceptor
+    {:name ::auth-request
+     :enter auth-request-handler-ws}))
 
 (defn options-builder
   [compiled-schema]
   {:subscription-interceptors
-   ;; Add ::invoke-count, and ensure it executes before ::execute-operation.
    (-> (s/default-subscription-interceptors compiled-schema nil)
-       (inject invoke-count-interceptor :before ::s/execute-operation))
+       (inject auth-request-interceptor :before ::s/query-parser))
 
-   ;; :init-context
-   ;; (fn [ctx ^ServletUpgradeRequest req resp]
-   ;;   (reset! *invoke-count 0)
-   ;;   (reset! *user-agent nil)
-   ;;   (assoc-in ctx [:request :user-agent] (.getHeader (.getHttpServletRequest req) "User-Agent")))
-   })
+   :init-context
+   (fn [ctx ^ServletUpgradeRequest req resp]
+
+     (let [auth-h (.getHeader req "Authorization")
+           h-names (.getHeaders req)]
+       (assoc-in ctx [:request :authorization] auth-h)))})
 
 (defn default-service
   "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
@@ -226,6 +247,6 @@
        (datasource/combined-data-sequence-with-datetime (t/now))
        (map coerce-to-client)
        (take 30)
-       pprint)
+       clojure.pprint/pprint)
 
   (stream-stock-data))
