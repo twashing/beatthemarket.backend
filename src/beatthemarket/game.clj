@@ -74,7 +74,11 @@
 
 
     (->> (->game game-level portfolio+journal subscriptions stocks)
-         (persistence.datomic/add-entity! conn))))
+         (persistence.datomic/add-entity! conn))
+
+    ;; TODO bind to the user
+
+    ))
 
 (comment ;; Portfolio
 
@@ -149,12 +153,6 @@
 
 (comment ;; Game
 
-  ;; A. TODO Set of accounts (:book) belongs to a :user
-  (let [accounts (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit]
-                       ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit]]
-                      (map #(apply bookkeeping/->account %)))])
-
-  ;; B
   (let [;; Create a bookkeeping book
         portfolio+journal (->> (beatthemarket.bookkeeping/->journal)
                                beatthemarket.bookkeeping/->portfolio)

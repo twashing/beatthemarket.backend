@@ -13,7 +13,8 @@
             [expound.alpha :as expound]
             [compute.datomic-client-memdb.core :as memdb]
             [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]
-            [beatthemarket.persistence.datomic :as persistence.datomic]))
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.util :as util]))
 
 
 ;; Spec Helpers
@@ -59,13 +60,16 @@
    (f)))
 
 (defn component-fixture [f]
-  (halt)
-  (go)
 
-  ;; Create schema
-  (-> integrant.repl.state/system
-      :persistence/datomic :conn
-      persistence.datomic/transact-schema!)
+  (util/dev-fixture persistence.datomic/transact-schema!)
+
+  ;; (halt)
+  ;; (go)
+  ;;
+  ;; ;; Create schema
+  ;; (-> integrant.repl.state/system
+  ;;     :persistence/datomic :conn
+  ;;     persistence.datomic/transact-schema!)
 
   (f))
 

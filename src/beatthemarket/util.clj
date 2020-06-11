@@ -1,6 +1,7 @@
 (ns beatthemarket.util
   (:require [clojure.data.json :as json]
             [clj-http.client :as http]
+            [integrant.repl :refer [go halt]]
             [integrant.repl.state :as state])
   (:import [com.google.firebase.auth FirebaseAuth]))
 
@@ -66,7 +67,6 @@
   [auth-header]
   )
 
-
 (comment
 
 
@@ -98,3 +98,15 @@
       :idToken
       check-authentication ;; verify-id-token
       pprint))
+
+
+;; Component + DB Schema Helpers
+(defn dev-fixture [transact-fn]
+
+  (halt)
+  (go)
+
+  ;; Create schema
+  (-> state/system
+      :persistence/datomic :conn
+      transact-fn))

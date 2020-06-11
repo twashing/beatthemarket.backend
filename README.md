@@ -68,6 +68,10 @@ Procfile
 
 ## TODOs 
 
+
+* Rest login; New user has default accounts
+
+
 * Tests on command line
 * Automated test runner
 * Code linter

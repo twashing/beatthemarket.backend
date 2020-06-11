@@ -10,6 +10,7 @@
 
             [beatthemarket.handler.http.graphql :as sut]
             [beatthemarket.handler.authentication :as auth]
+            [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.util :as util]))
 
 
@@ -45,6 +46,27 @@
             expected-body body-parsed
             expected-headers headers)
 
+        (testing "A lookup of the added user"
+
+
+          (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
+                email-initial "twashing@gmail.com"
+                user-entity (persistence.user/user-by-email conn email-initial)
+
+                expected-email email-initial
+                expected-name "Timothy Washington"
+                expected-account-names ["Cash" "Equity"]
+
+                {:user/keys [email name accounts]} (d/pull (d/db conn) '[*] (ffirst user-entity))
+                account-names (->> accounts
+                                   (map :bookkeeping.account/name)
+                                   sort)]
+
+            (are [x y] (= x y)
+              expected-email email
+              expected-name name
+              expected-account-names account-names)))
+
         (testing "Subsequent logins find an existing user"
 
           (let [expected-body {:data {:login "user-exists"}}
@@ -64,6 +86,7 @@
               expected-status status
               expected-body body-parsed
               expected-headers headers)))))))
+
 
 
 (comment

@@ -3,20 +3,12 @@
             [integrant.core :as ig]
             [clojure.java.io :refer [resource]]
             [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]
-            [beatthemarket.persistence.datomic :as persistence.datomic]))
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.util :as util]))
 
 
 (set-prep+load-namespaces :development)
 
-
-(defn dev-fixture []
-  (halt)
-  (go)
-
-  ;; Create schema
-  (-> integrant.repl.state/system
-      :persistence/datomic :conn
-      persistence.datomic/transact-schema!))
 
 
 (comment ;; Convenience fns
@@ -34,7 +26,7 @@
 
 
   ;; Catach all
-  (dev-fixture)
+  (util/dev-fixture persistence.datomic/transact-schema!)
 
 
   (pprint integrant.repl.state/config)

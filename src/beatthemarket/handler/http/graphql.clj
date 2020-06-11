@@ -39,6 +39,8 @@
 
   ;;     A.iv subscribes user to default stock
 
+  ;; TODO
+
   ;;   B.i pushes Portfolio positions + value to client
   ;;   B.ii streams the default stock to client
   [:game :level :user :book :stock :subscription]
