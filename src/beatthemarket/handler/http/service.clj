@@ -162,7 +162,7 @@
 
         authenticated? (fn [{id-token :id-token :as input}]
 
-                         (println "Sanity id-token / " input)
+                         ;; (println "Sanity id-token / " input)
                          (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
 
                            (if (every? beatthemarket.util/exists? [errorCode message])

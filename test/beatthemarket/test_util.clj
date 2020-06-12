@@ -112,9 +112,7 @@
    (<message!! 75))
   ([timeout-ms]
    (alt!!
-     *messages-ch* ([message] message)
-
-     (timeout timeout-ms) ::timed-out)))
+     *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)))
 
 (defmacro expect-message
   [expected]

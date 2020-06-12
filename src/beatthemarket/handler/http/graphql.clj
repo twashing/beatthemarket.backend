@@ -1,10 +1,12 @@
 (ns beatthemarket.handler.http.graphql
   (:require [datomic.client.api :as d]
+            [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.util :as util]
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.game :as game]))
+            [beatthemarket.game :as game]
+            [clojure.data.json :as json]))
 
 
 (defn resolve-hello
@@ -43,13 +45,16 @@
         user-entity (hash-map :db/id result-user-id)
 
         ;; Initialize Game
-        message (-> (game/initialize-game conn user-entity)
-                    (select-keys [:game/subscriptions :game/stocks]))
+        message (as-> (game/initialize-game conn user-entity) game
+                  (select-keys game [:game/subscriptions :game/stocks])
+                  (transform [MAP-VALS ALL :game.stock/id] str game))
 
         ;; _ (println "Initialize-game result / ")
         ;; _ (clojure.pprint/pprint message)
         runnable ^Runnable (fn []
-                             (source-stream {:message "Foobar" #_message})
+                             (source-stream {:message
+                                             ;; "Foobar"
+                                             (json/write-str message)})
                              (Thread/sleep 50)
                              (source-stream nil))]
 

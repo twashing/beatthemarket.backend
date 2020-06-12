@@ -4,6 +4,7 @@
             [aero.core :as aero]
             [clojure.data.json :as json]
             [io.pedestal.http :as server]
+            [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.test-util :as test-util
              :refer [component-prep-fixture component-fixture subscriptions-fixture]]
             [integrant.repl.state :as state]
@@ -127,6 +128,14 @@
                         :payload
                         {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
 
-  (test-util/expect-message {:id 987
-                             :payload {:data {:newGame {:message "Foobar"}}}
-                             :type "data"}))
+  (let [data (test-util/<message!!)
+        message (-> data :payload :data :newGame :message (#(json/read-str % :key-fn keyword)))
+
+        game (transform [MAP-VALS ALL] #(dissoc % :id) message)
+
+        expected-game {:subscriptions [{:symbol "SUN" :name "Sun Ra Inc"}]
+                       :stocks [{:symbol "SUN" :name "Sun Ra Inc"}
+                                {:symbol "MILD" :name "Miles Davis Inc"}
+                                {:symbol "JONC" :name "John Coltrane Inc"}]}]
+
+    (is (= expected-game game))))
