@@ -5,7 +5,7 @@
             [clojure.data.json :as json]
             [datomic.client.api :as d]
 
-            [beatthemarket.test-util
+            [beatthemarket.test-util :as test-util
              :refer [component-prep-fixture component-fixture subscriptions-fixture]]
 
             [beatthemarket.handler.http.graphql :as sut]
@@ -19,30 +19,6 @@
 ;; (use-fixtures :each (subscriptions-fixture "ws://localhost:8080/graphql-ws"))
 
 
-(defn login-assertion [service id-token]
-
-  (let [expected-status 200
-        expected-body {:data {:login "user-added"}}
-        expected-headers {"Content-Type" "application/json"}
-
-        ;; id-token (util/->id-token)
-
-        {status :status
-         body :body
-         headers :headers}
-        (response-for service
-                      :post "/api"
-                      :body "{\"query\": \"{ login }\"}"
-                      :headers {"Content-Type" "application/json"
-                                "Authorization" (format "Bearer %s" id-token)})
-
-        body-parsed (json/read-str body :key-fn keyword)]
-
-    (are [x y] (= x y)
-      expected-status status
-      expected-body body-parsed
-      expected-headers headers)))
-
 (deftest login-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)]
@@ -51,7 +27,7 @@
 
       (let [id-token (util/->id-token)]
 
-        (login-assertion service id-token)
+        (test-util/login-assertion service id-token)
 
         (testing "A lookup of the added user"
 
@@ -104,42 +80,45 @@
 
       (let [id-token (util/->id-token)]
 
-        (login-assertion service id-token))
+        (test-util/login-assertion service id-token)
 
-      (let [
-            {status :status
-             body :body
-             headers :headers}
-            (response-for service
-                          :post "/api"
-                          :body "{\"query\": \"{ newGame }\"}"
-                          :headers {"Content-Type" "application/json"
-                                    "Authorization" (format "Bearer %s" id-token)})
+        (let [expected-status 200
+              ;; expected-body {:data {:login "user-added"}}
+              expected-headers {"Content-Type" "application/json"}
 
-            body-parsed (json/read-str body :key-fn keyword)]
+              {status :status
+               body :body
+               headers :headers}
+              (response-for service
+                            :post "/api"
+                            :body "{\"query\": \"{ newGame }\"}"
+                            :headers {"Content-Type" "application/json"
+                                      "Authorization" (format "Bearer %s" id-token)})
 
-        (are [x y] (= x y)
+              body-parsed (json/read-str body :key-fn keyword)]
+
+          (are [x y] (= x y)
             expected-status status
-            expected-body body-parsed
+            ;; expected-body body-parsed
             expected-headers headers)
 
-        (testing "A lookup of the added user"
+          (testing "A lookup of the added user"
 
 
-          (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
-                email-initial "twashing@gmail.com"
-                user-entity (persistence.user/user-by-email conn email-initial)
+            (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
+                  email-initial "twashing@gmail.com"
+                  user-entity (persistence.user/user-by-email conn email-initial)
 
-                expected-email email-initial
-                expected-name "Timothy Washington"
-                expected-account-names ["Cash" "Equity"]
+                  expected-email email-initial
+                  expected-name "Timothy Washington"
+                  expected-account-names ["Cash" "Equity"]
 
-                {:user/keys [email name accounts]} (d/pull (d/db conn) '[*] (ffirst user-entity))
-                account-names (->> accounts
-                                   (map :bookkeeping.account/name)
-                                   sort)]
+                  {:user/keys [email name accounts]} (d/pull (d/db conn) '[*] (ffirst user-entity))
+                  account-names (->> accounts
+                                     (map :bookkeeping.account/name)
+                                     sort)]
 
-            (are [x y] (= x y)
-              expected-email email
-              expected-name name
-              expected-account-names account-names)))))))
+              (are [x y] (= x y)
+                expected-email email
+                expected-name name
+                expected-account-names account-names))))))))

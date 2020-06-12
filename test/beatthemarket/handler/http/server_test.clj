@@ -113,6 +113,12 @@
 
 (deftest new-game-subscription-test
 
+  ;; Login doesn't happen over WebSocket
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (util/->id-token)]
+
+    (test-util/login-assertion service id-token))
+
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 

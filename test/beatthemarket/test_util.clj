@@ -4,6 +4,8 @@
             [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
             [clojure.java.io :refer [resource]]
+            [clojure.data.json :as json]
+            [io.pedestal.test :refer [response-for]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [clojure.tools.logging :as log]
@@ -65,6 +67,27 @@
 
   (f))
 
+(defn login-assertion [service id-token]
+
+  (let [expected-status 200
+        expected-body {:data {:login "user-added"}}
+        expected-headers {"Content-Type" "application/json"}
+
+        {status :status
+         body :body
+         headers :headers}
+        (response-for service
+                      :post "/api"
+                      :body "{\"query\": \"{ login }\"}"
+                      :headers {"Content-Type" "application/json"
+                                "Authorization" (format "Bearer %s" id-token)})
+
+        body-parsed (json/read-str body :key-fn keyword)]
+
+    (t/are [x y] (= x y)
+      expected-status status
+      expected-body body-parsed
+      expected-headers headers)))
 
 ;; GraphQL
 (def ws-uri "ws://localhost:8080/graphql-ws")

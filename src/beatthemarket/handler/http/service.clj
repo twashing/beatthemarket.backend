@@ -18,7 +18,9 @@
             [integrant.core :as ig]
             [beatthemarket.handler.http.graphql :as graphql]
 
+            [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.authentication :as iam.auth]
+            [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.util]
@@ -30,7 +32,8 @@
             [com.walmartlabs.lacinia.util :as util]
             [com.walmartlabs.lacinia.pedestal2]
             [com.walmartlabs.lacinia.pedestal :refer [inject]]
-            [com.walmartlabs.lacinia.pedestal.subscriptions :as s])
+            [com.walmartlabs.lacinia.pedestal.subscriptions :as s]
+            [rop.core :as rop])
 
   (:import [org.eclipse.jetty.websocket.api Session]
            [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
@@ -144,11 +147,39 @@
                      (clojure.string/split #"Bearer ")
                      last)
 
-        {:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
+        user-exists? (fn [{id-token :id-token :as input}]
 
-    (if (every? beatthemarket.util/exists? [errorCode message])
-      (throw (ex-info message checked-authentication))
-      (assoc-in context [:request :checked-authentication] checked-authentication))))
+                       (let [decoded-token (-> (iam.auth/decode-token id-token)
+                                               second)
+                             email (-> decoded-token
+                                       (#(get % "email")))
+
+                             conn (-> integrant.repl.state/system :persistence/datomic :conn)]
+
+                         (if (iam.user/user-exists? (persistence.user/user-by-email conn email))
+                           (rop/succeed input)
+                           (rop/fail (ex-info "User hasn't yet been created" decoded-token)))))
+
+        authenticated? (fn [{id-token :id-token :as input}]
+
+                         (println "Sanity id-token / " input)
+                         (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
+
+                           (if (every? beatthemarket.util/exists? [errorCode message])
+                             (rop/fail (ex-info message checked-authentication))
+                             (rop/succeed {:checked-authentication checked-authentication}))))
+
+        result (rop/>>= {:id-token id-token}
+                        user-exists?
+                        authenticated?)]
+
+    (if (= clojure.lang.ExceptionInfo (type result))
+
+      (let [{:keys [message data]} (bean result)]
+        (throw (ex-info message data)))
+
+      (let [{checked-authentication :checked-authentication} result]
+        (assoc-in context [:request :checked-authentication] checked-authentication)))))
 
 (def auth-request-interceptor
   (interceptor/interceptor
