@@ -68,9 +68,6 @@ Procfile
 
 ## TODOs
 
-### A
-* Tests on command line
-* Automated test runner (https://github.com/jakemcc/lein-test-refresh)
 
 ### B
 * Code linter

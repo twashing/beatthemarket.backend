@@ -11,7 +11,7 @@
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [io.pedestal.test :refer [response-for]]
             [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.handler.http.server :as sut]
+            [beatthemarket.handler.http.service :as http.service]
             [beatthemarket.util :as util]))
 
 
@@ -100,6 +100,13 @@
     (test-util/expect-message {:type "connection_ack"})))
 
 (deftest subscription-resolver-test
+
+  ;; REST Login (not WebSocket) ; creates a user
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (util/->id-token)]
+
+    (test-util/login-assertion service id-token))
+
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 
@@ -114,12 +121,13 @@
 
 (deftest new-game-subscription-test
 
-  ;; Login doesn't happen over WebSocket
+  ;; REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (util/->id-token)]
 
     (test-util/login-assertion service id-token))
 
+  ;; New Game
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 

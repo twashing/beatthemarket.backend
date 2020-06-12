@@ -1,20 +1,20 @@
-; Copyright 2013 Relevance, Inc.
-; Copyright 2014-2019 Cognitect, Inc.
-
-; The use and distribution terms for this software are covered by the
-; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
-; which can be found in the file epl-v10.html at the root of this distribution.
-;
-; By using this software in any fashion, you are agreeing to be bound by
-; the terms of this license.
-;
-; You must not remove this notice, or any other, from this software.
+;; Copyright 2013 Relevance, Inc.
+;; Copyright 2014-2019 Cognitect, Inc.
+;;
+;; The use and distribution terms for this software are covered by the
+;; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0)
+;; which can be found in the file epl-v10.html at the root of this distribution.
+;;
+;; By using this software in any fashion, you are agreeing to be bound by
+;; the terms of this license.
+;;
+;; You must not remove this notice, or any other, from this software.
 
 (defproject beatthemarket "0.5.5"
   :description "Sample of web sockets with Jetty"
   :url "http://pedestal.io/samples/index"
   :license {:name "Eclipse Public License"
-            :url "http://www.eclipse.org/legal/epl-v10.html"}
+            :url  "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [io.pedestal/pedestal.service "0.5.5"]
                  [org.clojure/core.async "0.4.474"]
@@ -122,26 +122,27 @@
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
 
-  :profiles {:dev {:aliases {"run-dev" ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]}
-                   :dependencies [[clj-http "3.10.1"]
-                                  [datomic-client-memdb "1.1.1"
-                                   :exclusions
-                                   [org.slf4j/slf4j-nop
-                                    com.cognitect/transit-clj
-                                    com.cognitect/transit-java
-                                    org.clojure/clojure
-                                    org.clojure/core.async
-                                    org.clojure/core.cache
-                                    org.clojure/core.memoize
-                                    org.clojure/tools.analyzer
-                                    org.clojure/tools.analyzer.jvm
-                                    org.clojure/tools.reader
-                                    org.eclipse.jetty/jetty-client
-                                    org.eclipse.jetty/jetty-http
-                                    org.eclipse.jetty/jetty-io
-                                    org.eclipse.jetty/jetty-util]]
-                                  [stylefruits/gniazdo "1.1.3"
-                                   :exclusions [org.eclipse.jetty.websocket/websocket-client]]
-                                  [expound "0.8.4"]]}
+  :profiles {:dev     {:aliases      {"run-dev" ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]}
+                       :dependencies [[clj-http "3.10.1"]
+                                      [datomic-client-memdb "1.1.1"
+                                       :exclusions
+                                       [org.slf4j/slf4j-nop
+                                        com.cognitect/transit-clj
+                                        com.cognitect/transit-java
+                                        org.clojure/clojure
+                                        org.clojure/core.async
+                                        org.clojure/core.cache
+                                        org.clojure/core.memoize
+                                        org.clojure/tools.analyzer
+                                        org.clojure/tools.analyzer.jvm
+                                        org.clojure/tools.reader
+                                        org.eclipse.jetty/jetty-client
+                                        org.eclipse.jetty/jetty-http
+                                        org.eclipse.jetty/jetty-io
+                                        org.eclipse.jetty/jetty-util]]
+                                      [stylefruits/gniazdo "1.1.3"
+                                       :exclusions [org.eclipse.jetty.websocket/websocket-client]]
+                                      [expound "0.8.4"]]
+                       :plugins      [[com.jakemccrary/lein-test-refresh "0.24.1"]]}
              :uberjar {:aot [beatthemarket.handler.http.server]}}
   :main ^{:skip-aot true} beatthemarket.handler.http.server)
