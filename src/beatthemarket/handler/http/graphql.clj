@@ -32,9 +32,6 @@
   (let [{{{email :email :as checked-authentication} :checked-authentication} :request} context
         conn (-> integrant.repl.state/system :persistence/datomic :conn)
 
-        ;; _ (println "stream-new-game CALLED")
-        ;; _ (println "Args / " args)
-        ;; _ (println "Authorization / " (-> context identity #_:request #_:checked-authentication))
         result-user-id (-> (d/q '[:find ?e
                                   :in $ ?email
                                   :where [?e :user/email ?email]]
@@ -49,18 +46,14 @@
                   (select-keys game [:game/subscriptions :game/stocks])
                   (transform [MAP-VALS ALL :game.stock/id] str game))
 
-        ;; _ (println "Initialize-game result / ")
-        ;; _ (clojure.pprint/pprint message)
         runnable ^Runnable (fn []
-                             (source-stream {:message
-                                             ;; "Foobar"
-                                             (json/write-str message)})
+                             (source-stream {:message (json/write-str message)})
                              (Thread/sleep 50)
                              (source-stream nil))]
 
     (.start (Thread. runnable "stream-new-game-thread"))
 
-    ;; Return a cleanup fn:
+    ;; Return a cleanup fn
     (constantly nil)))
 
 

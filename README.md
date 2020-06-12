@@ -68,10 +68,20 @@ Procfile
 
 ## TODOs
 
+### A
 * Tests on command line
-* Automated test runner
+* Automated test runner (https://github.com/jakemcc/lein-test-refresh)
+
+### B
 * Code linter
+  * https://github.com/jonase/eastwood (*)
+  * https://github.com/candid82/joker
+  * https://github.com/borkdude/clj-kondo
+
+### C
 * Add a migration to create the DB schema
+  * https://github.com/avescodes/conformity (*)
+  * https://github.com/vvvvalvalval/datofu
 
 * Add a stock name generator
 * Howto db pull composite references

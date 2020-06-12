@@ -123,19 +123,21 @@
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 
-  (test-util/send-data {:id 987
-                        :type :start
-                        :payload
-                        {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
+  (testing "Creating a new game returns subscriptions and all stocks"
 
-  (let [data (test-util/<message!!)
-        message (-> data :payload :data :newGame :message (#(json/read-str % :key-fn keyword)))
+    (test-util/send-data {:id 987
+                          :type :start
+                          :payload
+                          {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
 
-        game (transform [MAP-VALS ALL] #(dissoc % :id) message)
+    (let [data (test-util/<message!!)
+          message (-> data :payload :data :newGame :message (#(json/read-str % :key-fn keyword)))
 
-        expected-game {:subscriptions [{:symbol "SUN" :name "Sun Ra Inc"}]
-                       :stocks [{:symbol "SUN" :name "Sun Ra Inc"}
-                                {:symbol "MILD" :name "Miles Davis Inc"}
-                                {:symbol "JONC" :name "John Coltrane Inc"}]}]
+          game (transform [MAP-VALS ALL] #(dissoc % :id) message)
 
-    (is (= expected-game game))))
+          expected-game {:subscriptions [{:symbol "SUN" :name "Sun Ra Inc"}]
+                         :stocks [{:symbol "SUN" :name "Sun Ra Inc"}
+                                  {:symbol "MILD" :name "Miles Davis Inc"}
+                                  {:symbol "JONC" :name "John Coltrane Inc"}]}]
+
+      (is (= expected-game game)))))
