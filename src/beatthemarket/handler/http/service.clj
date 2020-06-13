@@ -51,7 +51,7 @@
   [_]
   (ring-resp/response "Hello World!"))
 
-(def service-error-handler
+#_(def service-error-handler
   "References:
    http://pedestal.io/reference/error-handling
    https://stuarth.github.io/clojure/error-dispatch/
@@ -69,7 +69,7 @@
     :else
     (assoc context :io.pedestal.interceptor.chain/error ex)))
 
-(def throwing-interceptor
+#_(def throwing-interceptor
   (interceptor/interceptor {:name ::throwing-interceptor
                             :enter (fn [_ctx]
                                      ;; Simulated processing error
@@ -102,7 +102,7 @@
   (swap! ws-clients assoc ws-session send-ch))
 
 ;; This is just for demo purposes
-(defn send-and-close! []
+#_(defn send-and-close! []
   (let [[ws-session send-ch] (first @ws-clients)]
     (async/put! send-ch "A message from the server")
     ;; And now let's close it down...
@@ -265,14 +265,14 @@
   (-> (vector (c/to-long time) price)
       json/write-str))
 
-(defn stream-stock-data []
+#_(defn stream-stock-data []
   (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
        (datasource/combined-data-sequence-with-datetime (t/now))
        (map coerce-to-client)
        (take 100)
        (run! send-message-to-all!)))
 
-(comment
+#_(comment
 
   (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
        (datasource/combined-data-sequence-with-datetime (t/now))

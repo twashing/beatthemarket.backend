@@ -1,10 +1,8 @@
 (ns beatthemarket.util
   (:require [clojure.data.json :as json]
             [clojure.pprint :as pprint]
-            [clj-http.client :as http]
             [integrant.repl :refer [go halt]]
-            [integrant.repl.state :as state])
-  (:import [com.google.firebase.auth FirebaseAuth]))
+            [integrant.repl.state :as state]))
 
 
 (defn exists? [a]
@@ -24,37 +22,9 @@
   (pprint/pprint e)
   e)
 
-(defn split-namespaced-keyword [kw]
+#_(defn split-namespaced-keyword [kw]
   ((juxt namespace name) kw))
 
-;; Firebase Token Helper
-;;
-;; Idea taken from this SO answer
-;; https://stackoverflow.com/a/51346783/375616
-(defn generate-custom-token [uid]
-  (.. (FirebaseAuth/getInstance)
-      (createCustomToken uid))  )
-
-(defn token->body-payload [customToken]
-  (json/write-str {:token customToken
-                   :returnSecureToken true}))
-
-(defn verify-custom-token [api-key customToken]
-  (http/post (format "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken?key=%s" api-key)
-             {:content-type :json
-              :body (token->body-payload customToken)}))
-
-(defn ->id-token []
-
-  (let [{uid :admin-user-id
-         api-key :api-key} (-> state/config :firebase/firebase)
-
-        customToken (generate-custom-token uid)]
-
-    (-> (verify-custom-token api-key customToken)
-        :body
-        (json/read-str :key-fn keyword)
-        :idToken)))
 
 #_(defn authorization-header-value
   "Possible Authorization headers values can be below.
@@ -73,7 +43,7 @@
 
   (require '[beatthemarket.iam.authentication :as iam.auth])
 
-  
+
   (def uid (-> state/config :firebase/firebase :admin-user-id))
   (def api-key (-> state/config :firebase/firebase :api-key))
 

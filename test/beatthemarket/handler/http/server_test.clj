@@ -103,7 +103,7 @@
 
   ;; REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (util/->id-token)]
+        id-token (test-util/->id-token)]
 
     (test-util/login-assertion service id-token))
 
@@ -123,7 +123,7 @@
 
   ;; REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (util/->id-token)]
+        id-token (test-util/->id-token)]
 
     (test-util/login-assertion service id-token))
 

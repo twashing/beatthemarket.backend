@@ -8,15 +8,18 @@
             [io.pedestal.test :refer [response-for]]
             [integrant.core :as ig]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
+            [integrant.repl.state :as repl.state]
             [clojure.tools.logging :as log]
             [clojure.core.async :refer [timeout alt!! chan put!]]
             [clojure.data.json :as json]
+            [clj-http.client :as http]
             [gniazdo.core :as g]
             [expound.alpha :as expound]
             [compute.datomic-client-memdb.core :as memdb]
             [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :as util])
+  (:import [com.google.firebase.auth FirebaseAuth]))
 
 
 ;; Spec Helpers
@@ -89,6 +92,37 @@
       expected-body body-parsed
       expected-headers headers)))
 
+
+;; Firebase Token Helpers
+
+;; Idea taken from this SO answer
+;; https://stackoverflow.com/a/51346783/375616
+(defn token->body-payload [customToken]
+  (json/write-str {:token customToken
+                   :returnSecureToken true}))
+
+(defn verify-custom-token [api-key customToken]
+  (http/post (format "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken?key=%s" api-key)
+             {:content-type :json
+              :body (token->body-payload customToken)}))
+
+(defn generate-custom-token [uid]
+  (.. (FirebaseAuth/getInstance)
+      (createCustomToken uid)))
+
+(defn ->id-token []
+
+  (let [{uid :admin-user-id
+         api-key :api-key} (-> repl.state/config :firebase/firebase)
+
+        customToken (generate-custom-token uid)]
+
+    (-> (verify-custom-token api-key customToken)
+        :body
+        (json/read-str :key-fn keyword)
+        :idToken)))
+
+
 ;; GraphQL
 (def ws-uri "ws://localhost:8080/graphql-ws")
 (def ^:dynamic *messages-ch* nil)
@@ -126,7 +160,7 @@
   ([uri]
    (fn [f]
      (log/debug :reason ::test-start :uri uri)
-     (let [id-token (util/->id-token)
+     (let [id-token (->id-token)
            messages-ch (chan 10)
            session (try
                      (g/connect uri

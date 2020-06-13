@@ -200,7 +200,6 @@
   )
 
 
-
 ;; HELPERs
 (defn conditionially-wrap-in-sequence [entity]
   (if (and (sequential? entity) ((comp not empty?) entity))

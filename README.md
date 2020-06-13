@@ -67,12 +67,24 @@ Procfile
 
 ## Code Hygiene
 
-### Clj-kondo
 
-[clj-kondo](https://github.com/borkdude/clj-kondo)
+### Automated Tools
+
+* [Clj-kondo](https://github.com/borkdude/clj-kondo) linter
 ```
 clj-kondo --lint src
 ```
+
+* [lein-kibit](https://github.com/jonase/kibit) idiom checker
+
+* [yagni](https://github.com/venantius/yagni) dead code checker
+```
+lein yagni
+```
+
+* [lein-nvm](https://github.com/rm-hull/lein-nvd) National Vulnerability Database dependency-checker plugin for Leiningen
+
+
 
 ## TODOs
 
@@ -84,7 +96,7 @@ clj-kondo --lint src
   * [x] https://github.com/candid82/joker
   * [ok] https://github.com/borkdude/clj-kondo (*)
 
-> Automate
+> Automated Tools
 
 clj-kondo (https://github.com/borkdude/clj-kondo)
   linter
@@ -122,6 +134,11 @@ Slamhound (https://github.com/technomancy/slamhound)
 * fn specs for all game and bookkeeping artifacts
 
 * Move code in `comment` blocks, to tests
+* Add git hooks to automate code checks
+  * Clj-kondo
+  * lein-kibit
+  * yagni
+  * lein-nvm
 
 
 * Integration Test

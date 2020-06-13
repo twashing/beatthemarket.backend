@@ -18,14 +18,14 @@
   (->> (persistence.datomic/conditionially-wrap-in-sequence account)
        (persistence.datomic/transact! conn)))
 
-(defn add-tentry! [conn tentry]
+#_(defn add-tentry! [conn tentry]
   (->> (persistence.datomic/conditionially-wrap-in-sequence tentry)
        (persistence.datomic/transact! conn)))
 
-(defn add-debit! [conn debit]
+#_(defn add-debit! [conn debit]
   (->> (persistence.datomic/conditionially-wrap-in-sequence debit)
        (persistence.datomic/transact! conn)))
 
-(defn add-credit! [conn credit]
+#_(defn add-credit! [conn credit]
   (->> (persistence.datomic/conditionially-wrap-in-sequence credit)
        (persistence.datomic/transact! conn)))

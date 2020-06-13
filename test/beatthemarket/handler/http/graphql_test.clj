@@ -24,7 +24,7 @@
 
     (testing "Basic login with a new user"
 
-      (let [id-token (util/->id-token)]
+      (let [id-token (test-util/->id-token)]
 
         (test-util/login-assertion service id-token)
 

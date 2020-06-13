@@ -27,7 +27,7 @@
     :bookkeeping.account/type type
     :bookkeeping.account/orientation orientation))
 
-(defn ->tentry
+#_(defn ->tentry
 
   ([] (->tentry nil nil))
   ([debits credits]
@@ -35,13 +35,13 @@
      (exists? debits) (assoc :bookkeeping.tentry/debits debits)
      (exists? credits) (assoc :bookkeeping.tentry/credits credits))))
 
-(defn ->debit [account amount]
+#_(defn ->debit [account amount]
   (hash-map
     :bookkeeping.debit/id (UUID/randomUUID)
     :bookkeeping.debit/account account
     :bookkeeping.debit/amount amount))
 
-(defn ->credit [account amount]
+#_(defn ->credit [account amount]
   (hash-map
     :bookkeeping.credit/id (UUID/randomUUID)
     :bookkeeping.credit/account account

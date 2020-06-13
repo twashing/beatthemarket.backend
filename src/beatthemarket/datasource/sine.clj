@@ -57,6 +57,6 @@
        (* (Math/sqrt 3)
           x))))
 
-(defn generate-sine+cosine-sequence []
+#_(defn generate-sine+cosine-sequence []
   (->> (range)
        (map sine+cosine)))
