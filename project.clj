@@ -38,7 +38,7 @@
                  [integrant/repl "0.3.1"]
                  [clj-time "0.15.2"]
                  [nrepl "0.7.0"]
-                 ;; [com.google.firebase/firebase-admin "6.13.0"]
+
                  [com.google.firebase/firebase-admin "6.13.0"
                   #_:exclusions
                   #_[com.google.api-client/google-api-client
@@ -117,7 +117,8 @@
                    org.eclipse.jetty/jetty-client
                    org.eclipse.jetty/jetty-util]]
                  [com.rpl/specter "1.1.3"]
-                 [rop "0.4.1"]]
+                 [rop "0.4.1"]
+                 [orchestra "2018.12.06-2"]]
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
@@ -148,4 +149,6 @@
                                       [lein-kibit "0.1.8"]
                                       [lein-nvd "1.4.0"]]}
              :uberjar {:aot [beatthemarket.handler.http.server]}}
+
+  :aliases {"slamhound" ["run" "-m" "slam.hound"]}
   :main ^{:skip-aot true} beatthemarket.handler.http.server)

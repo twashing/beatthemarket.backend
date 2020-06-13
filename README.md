@@ -70,7 +70,7 @@ Procfile
 ## Code Hygiene
 
 
-### Automated Tools
+> Automated Tools
 
 * [Clj-kondo](https://github.com/borkdude/clj-kondo) linter
 ```
@@ -92,21 +92,13 @@ lein kibit
 lein nvd check
 ```
 
-
-## TODOs
-
-
-### B
-
-
 > REPL
 
-Orchestra (https://github.com/jeaye/orchestra)
-  every call to a spec'd function will have its arguments, return value, and :fn spec validated
+* [Orchestra](https://github.com/jeaye/orchestra). Every call to a spec'd function will have its arguments, return value, and :fn spec validated
+* [x] [Slamhound](https://github.com/technomancy/slamhound) rips your namespace form apart and reconstructs it (demo [here](https://vimeo.com/80650659)).
 
-Slamhound (https://github.com/technomancy/slamhound)
-  Slamhound rips your namespace form apart and reconstructs it
-  https://vimeo.com/80650659
+
+## TODOs
 
 
 ### C
@@ -120,6 +112,7 @@ Slamhound (https://github.com/technomancy/slamhound)
 * generate specs from example data
   * https://github.com/stathissideris/spec-provider
 * fn specs for all game and bookkeeping artifacts
+  Use [Orchestra](https://github.com/jeaye/orchestra)
 
 * Move code in `comment` blocks, to tests
 * Add git hooks to automate code checks
