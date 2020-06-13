@@ -3,6 +3,7 @@
 
 This sample illustrates how to use WebSockets with Pedestal and Jetty.
 
+
 ## Getting started
 
 1. Start a REPL with `lein repl`
@@ -19,6 +20,7 @@ w.send("Hello from the Client!");
 You'll notice a corresponding log message in the Clojure REPL.
 
 4. Send a message to the client and close with `(service/send-and-close!)`
+
 
 ## Component
 
@@ -75,40 +77,26 @@ Procfile
 clj-kondo --lint src
 ```
 
-* [lein-kibit](https://github.com/jonase/kibit) idiom checker
-
 * [yagni](https://github.com/venantius/yagni) dead code checker
 ```
 lein yagni
 ```
 
-* [lein-nvm](https://github.com/rm-hull/lein-nvd) National Vulnerability Database dependency-checker plugin for Leiningen
+* [lein-kibit](https://github.com/jonase/kibit) idiom checker
+```
+lein kibit
+```
 
+* [lein-nvm](https://github.com/rm-hull/lein-nvd) National Vulnerability Database dependency-checker plugin for Leiningen
+```
+lein nvd check
+```
 
 
 ## TODOs
 
 
 ### B
-
-* Code linter
-  * https://github.com/jonase/eastwood
-  * [x] https://github.com/candid82/joker
-  * [ok] https://github.com/borkdude/clj-kondo (*)
-
-> Automated Tools
-
-clj-kondo (https://github.com/borkdude/clj-kondo)
-  linter
-
-lein-kibit (https://github.com/jonase/kibit)
-  idiom checker
-
-yagni (https://github.com/venantius/yagni)
-  dead code checker
-
-lein-nvm (https://github.com/rm-hull/lein-nvd)
-  National Vulnerability Database dependency-checker plugin for Leiningen
 
 
 > REPL

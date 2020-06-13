@@ -58,8 +58,7 @@
     :negative))
 
 (defn direction-changed? [ypos dirn]
-  (not (= (ydirection ypos)
-          dirn)))
+  (not= (ydirection ypos) dirn))
 
 (defn get-opposite-direction-key [ydir]
   (if (= ydir :positive)

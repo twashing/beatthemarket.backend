@@ -299,9 +299,9 @@
 
       ;; Polynomial
       (let [xaxis (range)
-            yaxis (->> (range)
-                       (map polynomial-redux) ;; polynomial-xintercept ;; generate-polynomial-sequence
-                       )]
+
+            ;; polynomial-xintercept ;; generate-polynomial-sequence
+            yaxis (map polynomial-redux (range))]
 
         (->> (interleave xaxis yaxis)
              (partition 2)
@@ -322,8 +322,7 @@
 
       ;; sin t + cos (sqrt(3)t)
       (let [xaxis (range -10 10)
-            yaxis (->> (range -10 10)
-                       (map sine+cosine))]
+            yaxis (map sine+cosine (range -10 10))]
         (->> (interleave xaxis yaxis)
              (partition 2)
              (take length)

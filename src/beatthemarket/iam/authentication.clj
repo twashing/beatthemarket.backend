@@ -42,15 +42,13 @@
        (bean e)))))
 
 (defn authentication?-raw [{:keys [email name uid]}]
-  (-> (and email name uid)
-      util/truthy?))
+  (util/truthy? (and email name uid)))
 
 (defn authenticated?
   ([token]
    (authenticated? token (comp bean verify-id-token)))
   ([token verification-fn]
-   (-> (check-authentication token verification-fn)
-       authentication?-raw)))
+   (authentication?-raw (check-authentication token verification-fn))))
 
 (defn decode-token [token]
   (as-> token jwt ;; returned-jwt is your full jwt string
@@ -101,11 +99,9 @@
     (.. (FirebaseAuth/getInstance)
         (createCustomToken uid)))
 
-  (-> (decode-token customToken)
-      clojure.pprint/pprint)
+  (clojure.pprint/pprint (decode-token customToken))
 
-  (-> (verify-id-token customToken)
-      clojure.pprint/pprint)
+  (clojure.pprint/pprint (verify-id-token customToken))
 
 
   (require '[clj-http.client :as http])

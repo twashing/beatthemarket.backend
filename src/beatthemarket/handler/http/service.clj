@@ -151,10 +151,8 @@
 
         user-exists? (fn [{id-token :id-token :as input}]
 
-                       (let [decoded-token (-> (iam.auth/decode-token id-token)
-                                               second)
-                             email (-> decoded-token
-                                       (#(get % "email")))
+                       (let [decoded-token (second (iam.auth/decode-token id-token))
+                             email (get decoded-token "email")
 
                              conn (-> repl.state/system :persistence/datomic :conn)]
 
@@ -262,8 +260,7 @@
     (default-service compiled-schema options')))
 
 (defn coerce-to-client [[time price]]
-  (-> (vector (c/to-long time) price)
-      json/write-str))
+  (json/write-str (vector (c/to-long time) price)))
 
 #_(defn stream-stock-data []
   (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)

@@ -144,6 +144,8 @@
                                        :exclusions [org.eclipse.jetty.websocket/websocket-client]]
                                       [expound "0.8.4"]]
                        :plugins      [[com.jakemccrary/lein-test-refresh "0.24.1"]
-                                      [venantius/yagni "0.1.7"]]}
+                                      [venantius/yagni "0.1.7"]
+                                      [lein-kibit "0.1.8"]
+                                      [lein-nvd "1.4.0"]]}
              :uberjar {:aot [beatthemarket.handler.http.server]}}
   :main ^{:skip-aot true} beatthemarket.handler.http.server)

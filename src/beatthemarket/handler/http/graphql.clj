@@ -19,8 +19,7 @@
         conn (-> repl.state/system :persistence/datomic :conn)
         {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
 
-    (if (-> (and db-before db-after tx-data tempids)
-            util/truthy?)
+    (if (util/truthy? (and db-before db-after tx-data tempids))
       "user-added"
       "user-exists")))
 
@@ -30,12 +29,12 @@
   (let [{{{email :email} :checked-authentication} :request} context
         conn (-> repl.state/system :persistence/datomic :conn)
 
-        result-user-id (-> (d/q '[:find ?e
-                                  :in $ ?email
-                                  :where [?e :user/email ?email]]
-                                (d/db conn)
-                                email)
-                           ffirst)
+        result-user-id (ffirst
+                         (d/q '[:find ?e
+                                :in $ ?email
+                                :where [?e :user/email ?email]]
+                              (d/db conn)
+                              email))
 
         user-entity (hash-map :db/id result-user-id)
 

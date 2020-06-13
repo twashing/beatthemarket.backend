@@ -69,8 +69,8 @@
        read-string)))
 
 (defn transact-schema! [conn]
-  (->> (load-schema)
-       (transact! conn)))
+  (transact! conn (load-schema)))
+
 
 (comment
 

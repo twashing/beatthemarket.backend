@@ -35,6 +35,4 @@
      (* 6  (Math/pow x 0))))
 
 (defn generate-polynomial-sequence []
-  (->> ;; (range)
-       (range -10 10)
-       (map polynomial)))
+  (map polynomial (range -10 10)))

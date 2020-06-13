@@ -42,8 +42,8 @@
 (defn initialize-game [conn user-entity]
 
   (let [;; Create a bookkeeping book
-        portfolio+journal (->> (beatthemarket.bookkeeping/->journal)
-                               beatthemarket.bookkeeping/->portfolio)
+        portfolio+journal (beatthemarket.bookkeeping/->portfolio
+                            (beatthemarket.bookkeeping/->journal))
 
         ;; Generate stocks + first subscription
         stocks (->> [["Sun Ra Inc" "SUN"]
