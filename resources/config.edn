@@ -18,7 +18,7 @@
                                                      :max-size 5120}
                                  :pattern           "%p [%d] %t - %c %m%n"
                                  :file              "logs/beatthemarket.log"}]
-                    :overrides {"org.apache.http"      :debug
+                    :overrides {"org.apache.http"      :info
                                 "org.apache.http.wire" :error}}}
 
  ;; MAIN
