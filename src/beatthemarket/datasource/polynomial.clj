@@ -1,5 +1,4 @@
-(ns beatthemarket.datasource.polynomial
-  (:require [beatthemarket.datasource.core :as datasource.core]))
+(ns beatthemarket.datasource.polynomial)
 
 
 #_(defn polynomial [a b c x]
@@ -36,6 +35,4 @@
      (* 6  (Math/pow x 0))))
 
 (defn generate-polynomial-sequence []
-  (->> ;; (range)
-       (range -10 10)
-       (map polynomial)))
+  (map polynomial (range -10 10)))

@@ -1,13 +1,13 @@
 (ns user
   (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.core :as ig]
-            [clojure.java.io :refer [resource]]))
+            [clojure.java.io :refer [resource]]
+            [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.util :as util]))
 
-(integrant.repl/set-prep!
-  (constantly (-> "config.edn"
-                  resource
-                  (aero.core/read-config {:profile :development})
-                  :integrant)))
+
+(set-prep+load-namespaces :development)
 
 
 (comment ;; Convenience fns
@@ -24,11 +24,18 @@
   (reset-all)
 
 
+  ;; Catach all
+  (util/dev-fixture persistence.datomic/transact-schema!)
+
+
   (pprint integrant.repl.state/config)
   (pprint integrant.repl.state/system)
 
+
+  ;; Individual
   (prep)
   (ig/init integrant.repl.state/config [:service/service])
+  (def datomic-client (ig/init integrant.repl.state/config [:persistence/datomic]))
 
 
   (require '[beatthemarket.dir]

@@ -34,7 +34,7 @@
 
 ;; >> ================================ >>
 
-(defn randomize-vertical-dilation
+#_(defn randomize-vertical-dilation
   "vertical dilation (or amplitude)
      polynomial: 2 - 0.5
      sine: 0.5 - 2.7"
@@ -42,7 +42,7 @@
   (let [a (rand-double-in-range min' max')]
     (partial mathfn a)))
 
-(defn randomize-horizontal-dilation
+#_(defn randomize-horizontal-dilation
   "horizontal dilation
      polynomial: between 2 - 0.5 (larger b yields a narrower curve)
      sine: 2.7 - 0.3"
@@ -58,8 +58,7 @@
     :negative))
 
 (defn direction-changed? [ypos dirn]
-  (not (= (ydirection ypos)
-          dirn)))
+  (not= (ydirection ypos) dirn))
 
 (defn get-opposite-direction-key [ydir]
   (if (= ydir :positive)

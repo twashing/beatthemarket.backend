@@ -4,3 +4,5 @@ out*
 logs/
 target/
 **/beatthemarket-c13f8-*.json
+datomic-pro*
+resources/secrets.edn

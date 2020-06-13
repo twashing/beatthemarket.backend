@@ -1,9 +1,7 @@
 (ns beatthemarket.datasource
   (:require [clj-time.core :as t]
-            [clj-time.coerce :as c]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.sine :as datasource.sine]
-            [beatthemarket.datasource.polynomial :as datasource.polynomial]
             [beatthemarket.datasource.oscillating :as datasource.oscillating]))
 
 
@@ -42,7 +40,7 @@
   (->> (->combined-data-sequence datasource.core/beta-configurations)
        (combined-data-sequence-with-datetime (t/now))
        (take 50)
-       pprint)
+       clojure.pprint/pprint)
 
 
 
@@ -301,9 +299,9 @@
 
       ;; Polynomial
       (let [xaxis (range)
-            yaxis (->> (range)
-                       (map polynomial-redux) ;; polynomial-xintercept ;; generate-polynomial-sequence
-                       )]
+
+            ;; polynomial-xintercept ;; generate-polynomial-sequence
+            yaxis (map polynomial-redux (range))]
 
         (->> (interleave xaxis yaxis)
              (partition 2)
@@ -324,8 +322,7 @@
 
       ;; sin t + cos (sqrt(3)t)
       (let [xaxis (range -10 10)
-            yaxis (->> (range -10 10)
-                       (map sine+cosine))]
+            yaxis (map sine+cosine (range -10 10))]
         (->> (interleave xaxis yaxis)
              (partition 2)
              (take length)

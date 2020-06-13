@@ -1,6 +1,8 @@
 (ns beatthemarket.handler.http.service
   (:require [clojure.java.io :refer [resource]]
             [clojure.edn :as edn]
+            [clojure.string :as s]
+            [integrant.repl.state :as repl.state]
             [io.pedestal.http :as http]
             [io.pedestal.log :as log]
             [io.pedestal.http.route :as route]
@@ -18,8 +20,12 @@
             [integrant.core :as ig]
             [beatthemarket.handler.http.graphql :as graphql]
 
+            [beatthemarket.iam.user :as iam.user]
+            [beatthemarket.iam.authentication :as iam.auth]
+            [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
+            [beatthemarket.util]
 
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.interceptor.chain :as chain]
@@ -28,22 +34,24 @@
             [com.walmartlabs.lacinia.util :as util]
             [com.walmartlabs.lacinia.pedestal2]
             [com.walmartlabs.lacinia.pedestal :refer [inject]]
-            [com.walmartlabs.lacinia.pedestal.subscriptions :as s])
+            [com.walmartlabs.lacinia.pedestal.subscriptions :as sub]
+            [rop.core :as rop])
 
-  (:import [org.eclipse.jetty.websocket.api Session]))
+  (:import [org.eclipse.jetty.websocket.api Session]
+           [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
 
 
 (defn about-page
-  [request]
+  [_]
   (ring-resp/response (format "Clojure %s - served from %s"
                               (clojure-version)
                               (route/url-for ::about-page))))
 
 (defn home-page
-  [request]
+  [_]
   (ring-resp/response "Hello World!"))
 
-(def service-error-handler
+#_(def service-error-handler
   "References:
    http://pedestal.io/reference/error-handling
    https://stuarth.github.io/clojure/error-dispatch/
@@ -54,16 +62,16 @@
 
     [{:exception-type :clojure.lang.ExceptionInfo
       :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
-    (let [response (-> (ring.util.response/response (.getMessage ex)) :status 401)]
+    (let [response (-> (ring.util.response/response (.getMessage ex)) :status)]
 
       (assoc context :response response))
 
     :else
     (assoc context :io.pedestal.interceptor.chain/error ex)))
 
-(def throwing-interceptor
+#_(def throwing-interceptor
   (interceptor/interceptor {:name ::throwing-interceptor
-                            :enter (fn [ctx]
+                            :enter (fn [_ctx]
                                      ;; Simulated processing error
                                      (/ 1 0))
                             :error (fn [ctx ex]
@@ -71,7 +79,7 @@
                                      ;; Remember to base your handling decision
                                      ;; on the ex-data of the exception.
 
-                                     (let [{:keys [exception-type exception]} (ex-data ex)]
+                                     (let [{:keys [_exception-type _exception]} (ex-data ex)]
                                        ;; If you cannot handle the exception, re-attach it to the ctx
                                        ;; using the `:io.pedestal.interceptor.chain/error` key
                                        (assoc ctx ::chain/error ex)))}))
@@ -94,7 +102,7 @@
   (swap! ws-clients assoc ws-session send-ch))
 
 ;; This is just for demo purposes
-(defn send-and-close! []
+#_(defn send-and-close! []
   (let [[ws-session send-ch] (first @ws-clients)]
     (async/put! send-ch "A message from the server")
     ;; And now let's close it down...
@@ -115,37 +123,80 @@
 (def ws-paths
   {"/ws" {:on-connect (ws/start-ws-connection new-ws-client)
           :on-text (fn [msg] (log/info :msg (str "A client sent - " msg)))
-          :on-binary (fn [payload offset length] (log/info :msg "Binary Message!" :bytes payload))
+          :on-binary (fn [payload _offset _length] (log/info :msg "Binary Message!" :bytes payload))
           :on-error (fn [t] (log/error :msg "WS Error happened" :exception t))
-          :on-close (fn [num-code reason-text]
+          :on-close (fn [_num-code reason-text]
                       (log/info :msg "WS Closed:" :reason reason-text))}})
 
 (def ^:private default-api-path "/api")
 (def ^:private default-asset-path "/assets/graphiql")
-(def ^:private default-subscriptions-path "/ws")
+;; (def ^:private default-subscriptions-path "/ws")
+
 
 ;; NOTE subscription interceptor
-(def ^:private invoke-count-interceptor
+#_(def ^:private invoke-count-interceptor
   "Used to demonstrate that subscription interceptor customization works."
   (interceptor/interceptor
     {:name ::invoke-count
      :enter (fn [context]
-              ;; (println "invoke-count-interceptor CALLED / " context)
+              ;; (println "invoke-count-interceptor CALLED")
+              ;; (clojure.pprint/pprint context)
               context)}))
+
+(defn auth-request-handler-ws [context]
+
+  (let [id-token (-> context :request :authorization
+                     (s/split #"Bearer ")
+                     last)
+
+        user-exists? (fn [{id-token :id-token :as input}]
+
+                       (let [decoded-token (second (iam.auth/decode-token id-token))
+                             email (get decoded-token "email")
+
+                             conn (-> repl.state/system :persistence/datomic :conn)]
+
+                         (if (iam.user/user-exists? (persistence.user/user-by-email conn email))
+                           (rop/succeed input)
+                           (rop/fail (ex-info "User hasn't yet been created" decoded-token)))))
+
+        authenticated? (fn [{id-token :id-token}]
+
+                         ;; (println "Sanity id-token / " input)
+                         (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
+
+                           (if (every? beatthemarket.util/exists? [errorCode message])
+                             (rop/fail (ex-info message checked-authentication))
+                             (rop/succeed {:checked-authentication checked-authentication}))))
+
+        result (rop/>>= {:id-token id-token}
+                        user-exists?
+                        authenticated?)]
+
+    (if (= clojure.lang.ExceptionInfo (type result))
+
+      (let [{:keys [message data]} (bean result)]
+        (throw (ex-info message data)))
+
+      (let [{checked-authentication :checked-authentication} result]
+        (assoc-in context [:request :checked-authentication] checked-authentication)))))
+
+(def auth-request-interceptor
+  (interceptor/interceptor
+    {:name ::auth-request
+     :enter auth-request-handler-ws}))
 
 (defn options-builder
   [compiled-schema]
   {:subscription-interceptors
-   ;; Add ::invoke-count, and ensure it executes before ::execute-operation.
-   (-> (s/default-subscription-interceptors compiled-schema nil)
-       (inject invoke-count-interceptor :before ::s/execute-operation))
+   (-> (sub/default-subscription-interceptors compiled-schema nil)
+       (inject auth-request-interceptor :before ::sub/query-parser))
 
-   ;; :init-context
-   ;; (fn [ctx ^ServletUpgradeRequest req resp]
-   ;;   (reset! *invoke-count 0)
-   ;;   (reset! *user-agent nil)
-   ;;   (assoc-in ctx [:request :user-agent] (.getHeader (.getHttpServletRequest req) "User-Agent")))
-   })
+   :init-context
+   (fn [ctx ^ServletUpgradeRequest req _resp]
+
+     (let [auth-h (.getHeader req "Authorization")]
+       (assoc-in ctx [:request :authorization] auth-h)))})
 
 (defn default-service
   "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
@@ -154,8 +205,7 @@
   (let [{:keys [api-path ide-path asset-path app-context port]
          :or {api-path default-api-path
               ide-path "/ide"
-              asset-path default-asset-path
-              port 8080}} options
+              asset-path default-asset-path}} options
 
         interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
 
@@ -180,7 +230,7 @@
                               :stream-new-game graphql/stream-new-game})
       schema/compile))
 
-(defmethod ig/init-key :service/service [_ {:keys [env join? hostname port] :as opts}]
+(defmethod ig/init-key :service/service [_ {:keys [env join? hostname port]}]
 
   (let [options {:env         env
                  ::http/join? join?
@@ -210,22 +260,21 @@
     (default-service compiled-schema options')))
 
 (defn coerce-to-client [[time price]]
-  (-> (vector (c/to-long time) price)
-      json/write-str))
+  (json/write-str (vector (c/to-long time) price)))
 
-(defn stream-stock-data []
+#_(defn stream-stock-data []
   (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
        (datasource/combined-data-sequence-with-datetime (t/now))
        (map coerce-to-client)
        (take 100)
        (run! send-message-to-all!)))
 
-(comment
+#_(comment
 
   (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
        (datasource/combined-data-sequence-with-datetime (t/now))
        (map coerce-to-client)
        (take 30)
-       pprint)
+       clojure.pprint/pprint)
 
   (stream-stock-data))

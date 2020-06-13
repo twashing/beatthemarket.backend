@@ -2,18 +2,36 @@
   (:gen-class)
   (:require [clojure.java.io :refer [resource]]
             [clojure.tools.cli :as tools.cli]
-            [clojure.tools.logging :as log]
             [io.pedestal.http :as server]
-            [io.pedestal.http.route :refer [expand-routes]]
-            [io.pedestal.interceptor :as interceptor]
-            [com.walmartlabs.lacinia.pedestal2 :as pedestal :refer [default-service]]
+            [com.rpl.specter :refer [transform MAP-VALS]]
             [integrant.core :as ig]
-            [integrant.repl :refer [clear go halt prep init reset reset-all]]
-            [beatthemarket.handler.http.service :as service]
-            [beatthemarket.handler.authentication :as auth]
-            ;; [beatthemarket.state.nrepl]
-            ;; [beatthemarket.iam.authentication]
-            [aero.core :as aero]))
+            [integrant.repl ]
+            [aero.core :as aero]
+            [beatthemarket.handler.authentication :as auth]))
+
+
+(defn read-config [profile resource]
+  (aero/read-config resource {:profile profile
+                              :resolver aero/resource-resolver}))
+
+(defn inject-environment [profile config]
+  (transform [MAP-VALS] #(assoc % :env profile) config))
+
+(defn set-prep+load-namespaces [profile]
+
+  (integrant.repl/set-prep!
+    (constantly (->> "config.edn"
+                     resource
+                     (read-config profile)
+                     :integrant
+                     (inject-environment profile))))
+
+  (ig/load-namespaces {:beatthemarket.handler.http/service :service/service
+                       :beatthemarket.handler.http/server :server/server
+                       :beatthemarket.iam/authentication :firebase/firebase
+                       :beatthemarket.persistence/datomic :persistence/datomic
+                       :beatthemarket.state/nrepl :nrepl/nrepl
+                       :beatthemarket.state/logging :logging/logging}))
 
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
@@ -62,17 +80,12 @@
   "The entry-point for 'lein run'"
   [& args]
 
-  (let [{:keys [options summary errors]} (tools.cli/parse-opts args cli-options)
+  (let [{:keys [options _summary _errors]} (tools.cli/parse-opts args cli-options)
         {profile :profile} (process-parsed-options options)]
 
     (println "\nCreating your server...")
 
-    (integrant.repl/set-prep!
-      (constantly (-> "config.edn"
-                      resource
-                      (aero.core/read-config {:profile profile})
-                      :integrant)))
-
+    (set-prep+load-namespaces profile)
     (integrant.repl/go)))
 
 (comment ;; Main
@@ -83,11 +96,11 @@
 
   (-> "integrant-config.edn"
       resource
-      (aero.core/read-config {:profile :dev})
+      (aero.core/read-config {:profile :development})
       :integrant)
 
 
   (binding [*data-readers* {'ig/ref ig/ref}]
     (-> "integrant-config.edn"
         resource
-        (aero.core/read-config {:profile :dev}))))
+        (aero.core/read-config {:profile :development}))))

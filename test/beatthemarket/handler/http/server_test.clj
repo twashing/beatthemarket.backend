@@ -4,16 +4,22 @@
             [aero.core :as aero]
             [clojure.data.json :as json]
             [io.pedestal.http :as server]
-            [beatthemarket.test-util :as test-util]
+            [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [beatthemarket.test-util :as test-util
+             :refer [component-prep-fixture component-fixture subscriptions-fixture]]
             [integrant.repl.state :as state]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [io.pedestal.test :refer [response-for]]
             [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.handler.http.server :as sut]))
+            [beatthemarket.handler.http.service :as http.service]
+            [beatthemarket.util :as util]))
 
 
-(use-fixtures :once test-util/component-fixture)
-(use-fixtures :each (test-util/subscriptions-fixture "ws://localhost:8080/ws"))
+(use-fixtures :each
+  (partial component-prep-fixture :test)
+  component-fixture
+  (subscriptions-fixture "ws://localhost:8080/ws"))
+
 
 (deftest basic-handler-test
 
@@ -94,6 +100,13 @@
     (test-util/expect-message {:type "connection_ack"})))
 
 (deftest subscription-resolver-test
+
+  ;; REST Login (not WebSocket) ; creates a user
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)]
+
+    (test-util/login-assertion service id-token))
+
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 
@@ -107,14 +120,32 @@
                              :type "data"}))
 
 (deftest new-game-subscription-test
+
+  ;; REST Login (not WebSocket) ; creates a user
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)]
+
+    (test-util/login-assertion service id-token))
+
+  ;; New Game
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 
-  (test-util/send-data {:id 987
-                        :type :start
-                        :payload
-                        {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
+  (testing "Creating a new game returns subscriptions and all stocks"
 
-  (test-util/expect-message {:id 987
-                             :payload {:data {:newGame {:message "Foobar"}}}
-                             :type "data"}))
+    (test-util/send-data {:id 987
+                          :type :start
+                          :payload
+                          {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
+
+    (let [data (test-util/<message!!)
+          message (-> data :payload :data :newGame :message (#(json/read-str % :key-fn keyword)))
+
+          game (transform [MAP-VALS ALL] #(dissoc % :id) message)
+
+          expected-game {:subscriptions [{:symbol "SUN" :name "Sun Ra Inc"}]
+                         :stocks [{:symbol "SUN" :name "Sun Ra Inc"}
+                                  {:symbol "MILD" :name "Miles Davis Inc"}
+                                  {:symbol "JONC" :name "John Coltrane Inc"}]}]
+
+      (is (= expected-game game)))))

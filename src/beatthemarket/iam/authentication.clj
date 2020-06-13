@@ -1,16 +1,14 @@
 (ns beatthemarket.iam.authentication
-  (:require [clojure.data.json :as json]
+  (:require [clojure.string :as s]
+            [clojure.data.json :as json]
             [clojure.java.io :refer [resource input-stream]]
             [clojure.tools.logging :as log]
-            [io.pedestal.interceptor :as pedestal.interceptor]
-            [io.pedestal.interceptor.helpers :as interceptor]
             [integrant.core :as ig]
             [beatthemarket.util :as util])
   (:import [com.google.firebase FirebaseApp FirebaseOptions]
            [com.google.firebase.auth FirebaseAuth FirebaseAuthException FirebaseToken]
            [com.google.auth.oauth2 GoogleCredentials]
-           [org.apache.commons.codec.binary Base64]
-           [java.io FileInputStream]))
+           [org.apache.commons.codec.binary Base64]))
 
 
 (defn initialize-firebase [firebase-database-url service-account-file-name]
@@ -43,25 +41,25 @@
      (catch FirebaseAuthException e
        (bean e)))))
 
+(defn authentication?-raw [{:keys [email name uid]}]
+  (util/truthy? (and email name uid)))
+
 (defn authenticated?
   ([token]
    (authenticated? token (comp bean verify-id-token)))
   ([token verification-fn]
-   (let [{:keys [email name uid]} (check-authentication token verification-fn)]
-     (-> (and email name uid)
-         util/truthy?))))
+   (authentication?-raw (check-authentication token verification-fn))))
 
 (defn decode-token [token]
   (as-> token jwt ;; returned-jwt is your full jwt string
-    (clojure.string/split jwt #"\.") ;; split into the 3 parts of a jwt, header, body, signature
+    (s/split jwt #"\.") ;; split into the 3 parts of a jwt, header, body, signature
     (take 2 jwt)  ;; get the header and body
     (map #(Base64/decodeBase64 %) jwt) ;; read it into a byte array
     (map #(String. %) jwt) ;; byte array to string
     (map json/read-str jwt)))
 
 (defmethod ig/init-key :firebase/firebase [_ {:keys [firebase-database-url
-                                                     service-account-file-name
-                                                     admin-user-id] :as opts}]
+                                                     service-account-file-name] :as opts}]
   (initialize-firebase firebase-database-url service-account-file-name)
   opts)
 
@@ -76,7 +74,7 @@
 
   (verify-id-token invalid-jwt)
   (def erroredToken (check-authentication invalid-jwt))
-  (let [{:keys [errorCode message]} errordToken]
+  (let [{:keys [errorCode message]} erroredToken]
     (println [errorCode message]))
 
 
@@ -92,7 +90,8 @@
 
 
   ;; ================
-  (require '[integrant.repl.state :as state])
+  (require '[integrant.repl.state :as state]
+           '[clojure.pprint])
 
   (def uid (-> state/config :firebase/firebase :admin-user-id))
 
@@ -100,8 +99,29 @@
     (.. (FirebaseAuth/getInstance)
         (createCustomToken uid)))
 
-  (-> (decode-token customToken)
-      pprint)
+  (clojure.pprint/pprint (decode-token customToken))
 
-  (-> (verify-id-token customToken)
-      pprint))
+  (clojure.pprint/pprint (verify-id-token customToken))
+
+
+  (require '[clj-http.client :as http])
+
+
+  (defn token->body-payload [customToken]
+    (json/write-str {:token customToken
+                     :returnSecureToken true}))
+
+  (def api-key (-> state/config :firebase/firebase :api-key))
+
+  (http/post (format "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken?key=%s" api-key)
+             {:content-type :json
+              :body (token->body-payload customToken)})
+
+  (def result *1)
+
+  (-> result
+      :body
+      (json/read-str :key-fn keyword)
+      :idToken
+      check-authentication ;; verify-id-token
+      clojure.pprint/pprint))

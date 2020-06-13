@@ -1,44 +1,56 @@
-(ns beatthemarket.handler.http.graphql)
+(ns beatthemarket.handler.http.graphql
+  (:require [datomic.client.api :as d]
+            [integrant.repl.state :as repl.state]
+            [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [beatthemarket.util :as util]
+            [beatthemarket.iam.user :as iam.user]
+            [beatthemarket.game :as game]
+            [clojure.data.json :as json]))
 
 
 (defn resolve-hello
-  [context args value]
+  [_context _args _value]
   "Hello, Clojurians!")
 
 (defn resolve-login
-  [context args value]
+  [context _ _]
 
-  ;; TODO conditionally saves new user
-  :user
+  (let [{{checked-authentication :checked-authentication} :request} context
+        conn (-> repl.state/system :persistence/datomic :conn)
+        {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
 
-  ;; TODO
-  {:status 200}
-
-  "login CALLED")
+    (if (util/truthy? (and db-before db-after tx-data tempids))
+      "user-added"
+      "user-exists")))
 
 (defn stream-new-game
-  [context args source-stream]
+  [context _ source-stream]
 
-  ;; TODO play
-  ;;   creates a new game
+  (let [{{{email :email} :checked-authentication} :request} context
+        conn (-> repl.state/system :persistence/datomic :conn)
 
-  ;;   creates a list of market stocks
-  ;;   picks a default stock
+        result-user-id (ffirst
+                         (d/q '[:find ?e
+                                :in $ ?email
+                                :where [?e :user/email ?email]]
+                              (d/db conn)
+                              email))
 
-  ;;   subscribes user to default stock
-  ;;   pushes Portfolio positions + value to client
-  ;;   streams the default stock to client
-  [:game :level :user :book :stock :subscription]
+        user-entity (hash-map :db/id result-user-id)
 
-  (let [{:keys [message]} args
+        ;; Initialize Game
+        message (as-> (game/initialize-game conn user-entity) game
+                  (select-keys game [:game/subscriptions :game/stocks])
+                  (transform [MAP-VALS ALL :game.stock/id] str game))
 
         runnable ^Runnable (fn []
-                             (source-stream {:message message})
+                             (source-stream {:message (json/write-str message)})
                              (Thread/sleep 50)
                              (source-stream nil))]
 
-    (.start (Thread. runnable "stream-ping-thread"))
-    ;; Return a cleanup fn:
+    (.start (Thread. runnable "stream-new-game-thread"))
+
+    ;; Return a cleanup fn
     (constantly nil)))
 
 
@@ -46,6 +58,7 @@
 (def *ping-subscribes (atom 0))
 (def *ping-cleanups (atom 0))
 (def *ping-context (atom nil))
+
 (defn stream-ping
   [context args source-stream]
   (swap! *ping-subscribes inc)

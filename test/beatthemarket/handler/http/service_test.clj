@@ -5,10 +5,11 @@
             [integrant.repl.state :as state]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.handler.http.service :as service]
-            [beatthemarket.test-util :refer [component-fixture]]))
+            [beatthemarket.test-util :refer [component-prep-fixture component-fixture]]))
 
 
-(use-fixtures :once component-fixture)
+(use-fixtures :once (partial component-prep-fixture :test))
+(use-fixtures :each component-fixture)
 
 (deftest home-page-test
 
