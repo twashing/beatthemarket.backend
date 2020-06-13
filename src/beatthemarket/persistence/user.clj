@@ -14,7 +14,7 @@
 
     (d/q user-q db email)))
 
-(defn add-user! [conn {:keys [email name uid] :as checked-authentication}]
+(defn add-user! [conn {:keys [email name uid]}]
 
   ;; Default set of accounts (:book)
   (let [accounts (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit]

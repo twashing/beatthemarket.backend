@@ -1,9 +1,7 @@
 (ns beatthemarket.datasource
   (:require [clj-time.core :as t]
-            [clj-time.coerce :as c]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.sine :as datasource.sine]
-            [beatthemarket.datasource.polynomial :as datasource.polynomial]
             [beatthemarket.datasource.oscillating :as datasource.oscillating]))
 
 
@@ -42,7 +40,7 @@
   (->> (->combined-data-sequence datasource.core/beta-configurations)
        (combined-data-sequence-with-datetime (t/now))
        (take 50)
-       pprint)
+       clojure.pprint/pprint)
 
 
 

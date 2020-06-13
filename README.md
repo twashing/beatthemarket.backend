@@ -65,22 +65,72 @@ zip -g target/$BEATTHEMARKET_VERSION \
 Procfile
 ```
 
+## Code Hygiene
+
+### Clj-kondo
+
+[clj-kondo](https://github.com/borkdude/clj-kondo)
+```
+clj-kondo --lint src
+```
 
 ## TODOs
 
 
 ### B
+
 * Code linter
-  * https://github.com/jonase/eastwood (*)
-  * https://github.com/candid82/joker
-  * https://github.com/borkdude/clj-kondo
+  * https://github.com/jonase/eastwood
+  * [x] https://github.com/candid82/joker
+  * [ok] https://github.com/borkdude/clj-kondo (*)
+
+> Automate
+
+clj-kondo (https://github.com/borkdude/clj-kondo)
+  linter
+
+lein-kibit (https://github.com/jonase/kibit)
+  idiom checker
+
+yagni (https://github.com/venantius/yagni)
+  dead code checker
+
+lein-nvm (https://github.com/rm-hull/lein-nvd)
+  National Vulnerability Database dependency-checker plugin for Leiningen
+
+
+> REPL
+
+Orchestra (https://github.com/jeaye/orchestra)
+  every call to a spec'd function will have its arguments, return value, and :fn spec validated
+
+Slamhound (https://github.com/technomancy/slamhound)
+  Slamhound rips your namespace form apart and reconstructs it
+  https://vimeo.com/80650659
+
 
 ### C
+
 * Add a migration to create the DB schema
   * https://github.com/avescodes/conformity (*)
   * https://github.com/vvvvalvalval/datofu
 
+
 * Add a stock name generator
+* generate specs from example data
+  * https://github.com/stathissideris/spec-provider
+* fn specs for all game and bookkeeping artifacts
+
+* Move code in `comment` blocks, to tests
+
+
+* Integration Test
+  * Apollo client, login, new game, stream to client
+  * Buy a stock sell a stock
+  * Complete level 1
+* Stream two games at the same time
+
+
 * Howto db pull composite references
 * Howto ensure the type of a db reference
 * Dockerize datomic
@@ -101,6 +151,10 @@ Procfile
  :db/cardinality :db.cardinality/one
  :db/doc         "Identity Provider of the user"}
 ```
+
+
+? Why aren't subscription / WS paths available
+
 
 
 License

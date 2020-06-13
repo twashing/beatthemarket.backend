@@ -1,5 +1,4 @@
-(ns beatthemarket.datasource.polynomial
-  (:require [beatthemarket.datasource.core :as datasource.core]))
+(ns beatthemarket.datasource.polynomial)
 
 
 #_(defn polynomial [a b c x]

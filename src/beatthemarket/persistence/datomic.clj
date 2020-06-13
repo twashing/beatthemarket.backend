@@ -3,12 +3,11 @@
             [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
             [integrant.core :as ig]
-            [compute.datomic-client-memdb.core :as memdb]
-            [beatthemarket.util :as util]))
+            [compute.datomic-client-memdb.core :as memdb]))
 
 
 ;; COMPONENT
-(defn config->client [{:keys [db-name config env]}]
+(defn config->client [{:keys [config env]}]
 
   (let [client (d/client config)]
     (hash-map
@@ -34,7 +33,7 @@
 
 (defmulti close-db-connection! :env)
 
-(defmethod close-db-connection! :production [opts])   ;; a no-op
+(defmethod close-db-connection! :production [_])   ;; a no-op
 
 (defmethod close-db-connection! :development [{client :client}]
   (close-db-connection-local! client))

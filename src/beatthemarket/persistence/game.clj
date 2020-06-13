@@ -1,7 +1,6 @@
 (ns beatthemarket.persistence.game
   (:require [datomic.client.api :as d]
-            [beatthemarket.util :as util]
-            [beatthemarket.persistence.datomic :as persistence.datomic]))
+            [beatthemarket.util :as util]))
 
 
 (defn user-by-email [conn email]
@@ -19,11 +18,3 @@
         (every-pred util/exists? (partial every? util/exists?))]
 
     (set-and-subsets-note-empty? result-entities)))
-
-#_(defn conditionally-add-new-user! [conn {:keys [email name uid] :as checked-authentication}]
-
-  (when-not (user-exists? (user-by-email conn email))
-    (->> [{:user/email email
-           :user/name name
-           :user/external-uid uid}]
-         (persistence.datomic/transact! conn))))

@@ -1,5 +1,6 @@
 (ns beatthemarket.util
   (:require [clojure.data.json :as json]
+            [clojure.pprint :as pprint]
             [clj-http.client :as http]
             [integrant.repl :refer [go halt]]
             [integrant.repl.state :as state])
@@ -12,14 +13,15 @@
     (seqable? a) ((comp not empty?) a)
     :else true))
 
-(defn truthy? [a]
+(defn truthy?
   "Based on Clojure truthiness
    http://blog.jayfields.com/2011/02/clojure-truthy-and-falsey.html"
+  [a]
   (if (or (nil? a) (false? a))
     false true))
 
 (defn pprint+identity [e]
-  (clojure.pprint/pprint e)
+  (pprint/pprint e)
   e)
 
 (defn split-namespaced-keyword [kw]
@@ -64,19 +66,21 @@
    HOBA
    Mutual
    AWS4-HMAC-SHA256"
-  [auth-header]
-  )
+  [auth-header])
 
 (comment
 
 
+  (require '[beatthemarket.iam.authentication :as iam.auth])
+
+  
   (def uid (-> state/config :firebase/firebase :admin-user-id))
   (def api-key (-> state/config :firebase/firebase :api-key))
 
 
   (def ^String customToken (generate-custom-token uid))
   (-> (iam.auth/decode-token customToken)
-      pprint)
+      pprint/pprint)
 
 
   (def verified-token (verify-custom-token api-key customToken))
@@ -89,15 +93,15 @@
 
   (-> idToken
       iam.auth/check-authentication
-      pprint)
+      pprint/pprint)
 
 
   (-> verified-token
       :body
       (json/read-str :key-fn keyword)
       :idToken
-      check-authentication ;; verify-id-token
-      pprint))
+      iam.auth/check-authentication ;; verify-id-token
+      pprint/pprint))
 
 
 ;; Component + DB Schema Helpers

@@ -1,7 +1,6 @@
 (ns beatthemarket.game
   (:require [clj-time.core :as t]
             [clj-time.coerce :as c]
-            [beatthemarket.util :refer [exists?]]
             [beatthemarket.bookkeeping :as bookkeeping]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.bookkeeping :as persistence.bookkeeping]
@@ -26,9 +25,9 @@
              :game/id (UUID/randomUUID)
              :game/start-time (c/to-date (t/now))
              :game/level game-level)
-     (exists? portfolio) (assoc :game/portfolio portfolio)
-     (exists? subscriptions) (assoc :game/subscriptions subscriptions)
-     (exists? stocks) (assoc :game/stocks stocks))))
+     (util/exists? portfolio) (assoc :game/portfolio portfolio)
+     (util/exists? subscriptions) (assoc :game/subscriptions subscriptions)
+     (util/exists? stocks) (assoc :game/stocks stocks))))
 
 (defn ->stock
 
@@ -38,7 +37,7 @@
              :game.stock/id (UUID/randomUUID)
              :game.stock/name name
              :game.stock/symbol symbol)
-     (exists? price-history) (assoc :game.stock/price-history price-history))))
+     (util/exists? price-history) (assoc :game.stock/price-history price-history))))
 
 (defn initialize-game [conn user-entity]
 
@@ -64,6 +63,9 @@
     game))
 
 (comment ;; Portfolio
+
+
+  (require '[integrant.repl.state])
 
 
   (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
@@ -94,15 +96,15 @@
   (d/pull (d/db conn) '[*] (ffirst result-portfolio))
 
 
-
-
-  (require '[datomic.client.api :as d])
-
   (def db (d/db conn))
   (d/q '[:find ?e
          :where [?e :bookkeeping.journal/id]] db))
 
 (comment ;; Accounts
+
+
+  (require '[integrant.repl.state])
+
 
   ;; Insert
   (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)]
@@ -124,15 +126,6 @@
   (->> result-accounts
        (map #(d/pull (d/db conn) '[*] (first %)))))
 
-(comment ;; Stocks + Subscriptions
-
-  (let [stocks (->> [["Sun Ra Inc" "SUN"]
-                     ["Miles Davis Inc" "MILD"]
-                     ["John Coltrane Inc" "JONC"]]
-                    (map #(apply ->stock %))
-                    (map bind-temporary-id))
-
-        subscriptions (take 1 stocks)]))
 
 (comment ;; Game
 

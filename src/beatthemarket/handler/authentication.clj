@@ -1,8 +1,7 @@
 (ns beatthemarket.handler.authentication
   (:require [clojure.tools.logging :as log]
+            [clojure.string :as s]
             [io.pedestal.interceptor :as interceptor]
-            [io.pedestal.interceptor.helpers :as interceptor.helpers]
-            [integrant.core :as ig]
             [ring.util.response]
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.util :refer [exists?]]))
@@ -11,7 +10,7 @@
 (defn request->token [request]
   (-> request :headers
       (get "authorization")
-      (clojure.string/split #"Bearer ")
+      (s/split #"Bearer ")
       last))
 
 (defn auth-request-handler [request]
@@ -28,17 +27,6 @@
 
 (def auth-request
   "Authenticate the request"
-
-  #_(interceptor.helpers/on-request
-      ::auth-interceptor
-      (fn [request]
-
-      (log/debug :auth-request request)
-
-      #_(let [{:keys [errorCode message] :as error} (iam.auth/check-authentication (request->token request))]
-        (if (every? exists? [errorCode message])
-          (throw (ex-info message error))
-          request))))
 
   (interceptor/interceptor
     {:name ::auth-interceptor

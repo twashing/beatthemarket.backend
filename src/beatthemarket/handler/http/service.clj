@@ -1,6 +1,8 @@
 (ns beatthemarket.handler.http.service
   (:require [clojure.java.io :refer [resource]]
             [clojure.edn :as edn]
+            [clojure.string :as s]
+            [integrant.repl.state :as repl.state]
             [io.pedestal.http :as http]
             [io.pedestal.log :as log]
             [io.pedestal.http.route :as route]
@@ -32,7 +34,7 @@
             [com.walmartlabs.lacinia.util :as util]
             [com.walmartlabs.lacinia.pedestal2]
             [com.walmartlabs.lacinia.pedestal :refer [inject]]
-            [com.walmartlabs.lacinia.pedestal.subscriptions :as s]
+            [com.walmartlabs.lacinia.pedestal.subscriptions :as sub]
             [rop.core :as rop])
 
   (:import [org.eclipse.jetty.websocket.api Session]
@@ -40,13 +42,13 @@
 
 
 (defn about-page
-  [request]
+  [_]
   (ring-resp/response (format "Clojure %s - served from %s"
                               (clojure-version)
                               (route/url-for ::about-page))))
 
 (defn home-page
-  [request]
+  [_]
   (ring-resp/response "Hello World!"))
 
 (def service-error-handler
@@ -60,7 +62,7 @@
 
     [{:exception-type :clojure.lang.ExceptionInfo
       :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
-    (let [response (-> (ring.util.response/response (.getMessage ex)) :status 401)]
+    (let [response (-> (ring.util.response/response (.getMessage ex)) :status)]
 
       (assoc context :response response))
 
@@ -69,7 +71,7 @@
 
 (def throwing-interceptor
   (interceptor/interceptor {:name ::throwing-interceptor
-                            :enter (fn [ctx]
+                            :enter (fn [_ctx]
                                      ;; Simulated processing error
                                      (/ 1 0))
                             :error (fn [ctx ex]
@@ -77,7 +79,7 @@
                                      ;; Remember to base your handling decision
                                      ;; on the ex-data of the exception.
 
-                                     (let [{:keys [exception-type exception]} (ex-data ex)]
+                                     (let [{:keys [_exception-type _exception]} (ex-data ex)]
                                        ;; If you cannot handle the exception, re-attach it to the ctx
                                        ;; using the `:io.pedestal.interceptor.chain/error` key
                                        (assoc ctx ::chain/error ex)))}))
@@ -121,14 +123,14 @@
 (def ws-paths
   {"/ws" {:on-connect (ws/start-ws-connection new-ws-client)
           :on-text (fn [msg] (log/info :msg (str "A client sent - " msg)))
-          :on-binary (fn [payload offset length] (log/info :msg "Binary Message!" :bytes payload))
+          :on-binary (fn [payload _offset _length] (log/info :msg "Binary Message!" :bytes payload))
           :on-error (fn [t] (log/error :msg "WS Error happened" :exception t))
-          :on-close (fn [num-code reason-text]
+          :on-close (fn [_num-code reason-text]
                       (log/info :msg "WS Closed:" :reason reason-text))}})
 
 (def ^:private default-api-path "/api")
 (def ^:private default-asset-path "/assets/graphiql")
-(def ^:private default-subscriptions-path "/ws")
+;; (def ^:private default-subscriptions-path "/ws")
 
 
 ;; NOTE subscription interceptor
@@ -144,7 +146,7 @@
 (defn auth-request-handler-ws [context]
 
   (let [id-token (-> context :request :authorization
-                     (clojure.string/split #"Bearer ")
+                     (s/split #"Bearer ")
                      last)
 
         user-exists? (fn [{id-token :id-token :as input}]
@@ -154,13 +156,13 @@
                              email (-> decoded-token
                                        (#(get % "email")))
 
-                             conn (-> integrant.repl.state/system :persistence/datomic :conn)]
+                             conn (-> repl.state/system :persistence/datomic :conn)]
 
                          (if (iam.user/user-exists? (persistence.user/user-by-email conn email))
                            (rop/succeed input)
                            (rop/fail (ex-info "User hasn't yet been created" decoded-token)))))
 
-        authenticated? (fn [{id-token :id-token :as input}]
+        authenticated? (fn [{id-token :id-token}]
 
                          ;; (println "Sanity id-token / " input)
                          (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
@@ -189,14 +191,13 @@
 (defn options-builder
   [compiled-schema]
   {:subscription-interceptors
-   (-> (s/default-subscription-interceptors compiled-schema nil)
-       (inject auth-request-interceptor :before ::s/query-parser))
+   (-> (sub/default-subscription-interceptors compiled-schema nil)
+       (inject auth-request-interceptor :before ::sub/query-parser))
 
    :init-context
-   (fn [ctx ^ServletUpgradeRequest req resp]
+   (fn [ctx ^ServletUpgradeRequest req _resp]
 
-     (let [auth-h (.getHeader req "Authorization")
-           h-names (.getHeaders req)]
+     (let [auth-h (.getHeader req "Authorization")]
        (assoc-in ctx [:request :authorization] auth-h)))})
 
 (defn default-service
@@ -206,8 +207,7 @@
   (let [{:keys [api-path ide-path asset-path app-context port]
          :or {api-path default-api-path
               ide-path "/ide"
-              asset-path default-asset-path
-              port 8080}} options
+              asset-path default-asset-path}} options
 
         interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
 
@@ -232,7 +232,7 @@
                               :stream-new-game graphql/stream-new-game})
       schema/compile))
 
-(defmethod ig/init-key :service/service [_ {:keys [env join? hostname port] :as opts}]
+(defmethod ig/init-key :service/service [_ {:keys [env join? hostname port]}]
 
   (let [options {:env         env
                  ::http/join? join?

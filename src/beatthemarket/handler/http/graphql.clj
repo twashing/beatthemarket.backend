@@ -1,36 +1,34 @@
 (ns beatthemarket.handler.http.graphql
   (:require [datomic.client.api :as d]
+            [integrant.repl.state :as repl.state]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.util :as util]
-            [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.user :as iam.user]
-            [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.game :as game]
             [clojure.data.json :as json]))
 
 
 (defn resolve-hello
-  [context args value]
+  [_context _args _value]
   "Hello, Clojurians!")
 
 (defn resolve-login
   [context _ _]
 
   (let [{{checked-authentication :checked-authentication} :request} context
-        conn (-> integrant.repl.state/system :persistence/datomic :conn)]
+        conn (-> repl.state/system :persistence/datomic :conn)
+        {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
 
-    (let [{:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
-
-      (if (-> (and db-before db-after tx-data tempids)
-              util/truthy?)
-        "user-added"
-        "user-exists"))))
+    (if (-> (and db-before db-after tx-data tempids)
+            util/truthy?)
+      "user-added"
+      "user-exists")))
 
 (defn stream-new-game
-  [context args source-stream]
+  [context _ source-stream]
 
-  (let [{{{email :email :as checked-authentication} :checked-authentication} :request} context
-        conn (-> integrant.repl.state/system :persistence/datomic :conn)
+  (let [{{{email :email} :checked-authentication} :request} context
+        conn (-> repl.state/system :persistence/datomic :conn)
 
         result-user-id (-> (d/q '[:find ?e
                                   :in $ ?email

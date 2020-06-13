@@ -1,6 +1,5 @@
 (ns beatthemarket.iam.user
   (:require [beatthemarket.util :as util]
-            [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.user :as persistence.user]))
 
 

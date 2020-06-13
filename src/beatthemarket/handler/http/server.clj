@@ -2,18 +2,12 @@
   (:gen-class)
   (:require [clojure.java.io :refer [resource]]
             [clojure.tools.cli :as tools.cli]
-            [clojure.tools.logging :as log]
             [io.pedestal.http :as server]
-            [io.pedestal.http.route :refer [expand-routes]]
-            [io.pedestal.interceptor :as interceptor]
-            [com.walmartlabs.lacinia.pedestal2 :as pedestal :refer [default-service]]
-            [com.rpl.specter :refer [select transform MAP-VALS]]
+            [com.rpl.specter :refer [transform MAP-VALS]]
             [integrant.core :as ig]
-            [integrant.repl :refer [clear go halt prep init reset reset-all]]
+            [integrant.repl ]
             [aero.core :as aero]
-            [beatthemarket.handler.http.service :as service]
-            [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.util :refer [pprint+identity]]))
+            [beatthemarket.handler.authentication :as auth]))
 
 
 (defn read-config [profile resource]
@@ -86,7 +80,7 @@
   "The entry-point for 'lein run'"
   [& args]
 
-  (let [{:keys [options summary errors]} (tools.cli/parse-opts args cli-options)
+  (let [{:keys [options _summary _errors]} (tools.cli/parse-opts args cli-options)
         {profile :profile} (process-parsed-options options)]
 
     (println "\nCreating your server...")
