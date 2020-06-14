@@ -1,4 +1,4 @@
-# BeataTheMarket.Backend
+# BeatTheMarket.Backend
 
 
 This sample illustrates how to use WebSockets with Pedestal and Jetty.
@@ -46,6 +46,7 @@ Reloaded Workflow uses [weavejester/integrant-repl](https://github.com/weavejest
 To configure logging see config/logback.xml. By default, the app logs to stdout and logs/.
 To learn more about configuring Logback, read its [documentation](http://logback.qos.ch/documentation.html).
 
+
 ## Links
 * [Other Pedestal examples](http://pedestal.io/samples)
 
@@ -92,10 +93,11 @@ lein kibit
 lein nvd check
 ```
 
+
 > REPL
 
 * [Orchestra](https://github.com/jeaye/orchestra). Every call to a spec'd function will have its arguments, return value, and :fn spec validated
-* [x] [Slamhound](https://github.com/technomancy/slamhound) rips your namespace form apart and reconstructs it (demo [here](https://vimeo.com/80650659)).
+* __[Slamhound](https://github.com/technomancy/slamhound)__ rips your namespace form apart and reconstructs it (demo [here](https://vimeo.com/80650659)).
 
 
 ## TODOs
@@ -114,19 +116,20 @@ lein nvd check
 * fn specs for all game and bookkeeping artifacts
   Use [Orchestra](https://github.com/jeaye/orchestra)
 
-* Move code in `comment` blocks, to tests
-* Add git hooks to automate code checks
-  * Clj-kondo
-  * lein-kibit
-  * yagni
-  * lein-nvm
-
 
 * Integration Test
   * Apollo client, login, new game, stream to client
   * Buy a stock sell a stock
   * Complete level 1
 * Stream two games at the same time
+
+
+* Move code in `comment` blocks, to tests
+* Add git hooks to automate code checks
+  * Clj-kondo
+  * lein-kibit
+  * yagni
+  * lein-nvm
 
 
 * Howto db pull composite references

@@ -18,32 +18,35 @@
                                                      :max-size 5120}
                                  :pattern           "%p [%d] %t - %c %m%n"
                                  :file              "logs/beatthemarket.log"}]
-                    :overrides {"org.apache.http"      :info
+                    :overrides {"org.apachea.http"     :info
                                 "org.apache.http.wire" :error}}}
 
  ;; MAIN
  :integrant #profile
- {:production {:service/service     {:join?    false
-                                     :hostname "0.0.0.0"
-                                     :port     5000}
-               :server/server       {:service #ig/ref :service/service}
-               :firebase/firebase   #ref [:secrets :firebase]
-               :persistence/datomic #ref [:secrets :production :persistence/datomic]
-               :nrepl/nrepl         #ref [:nrepl]
-               :logging/logging     #ref [:logging]}
+ {:production {:service/service               {:join?    false
+                                               :hostname "0.0.0.0"
+                                               :port     5000}
+               :server/server                 {:service #ig/ref :service/service}
+               :firebase/firebase             #ref [:secrets :firebase]
+               :persistence/datomic           #ref [:secrets :production :persistence/datomic]
+               :nrepl/nrepl                   #ref [:nrepl]
+               :logging/logging               #ref [:logging]
+               :name-generator/name-generator {}}
 
-  :development {:service/service     #ref [:service]
-                :server/server       {:service #ig/ref :service/service}
-                :firebase/firebase   #ref [:secrets :firebase]
-                :persistence/datomic {:db-name "beaththemarket"
-                                      :config  {}}
-                :nrepl/nrepl         #ref [:nrepl]
-                :logging/logging     #ref [:logging]}
+  :development {:service/service               #ref [:service]
+                :server/server                 {:service #ig/ref :service/service}
+                :firebase/firebase             #ref [:secrets :firebase]
+                :persistence/datomic           {:db-name "beaththemarket"
+                                                :config  {}}
+                :nrepl/nrepl                   #ref [:nrepl]
+                :logging/logging               #ref [:logging]
+                :name-generator/name-generator {}}
 
-  :test {:service/service     #ref [:service]
-         :server/server       {:service #ig/ref :service/service}
-         :firebase/firebase   #ref [:secrets :firebase]
-         :persistence/datomic {:db-name "beaththemarket"
-                               :config  {}}
-         :nrepl/nrepl         #ref [:nrepl]
-         :logging/logging     #ref [:logging]}}}
+  :test {:service/service               #ref [:service]
+         :server/server                 {:service #ig/ref :service/service}
+         :firebase/firebase             #ref [:secrets :firebase]
+         :persistence/datomic           {:db-name "beaththemarket"
+                                         :config  {}}
+         :nrepl/nrepl                   #ref [:nrepl]
+         :logging/logging               #ref [:logging]
+         :name-generator/name-generator {}}}}
