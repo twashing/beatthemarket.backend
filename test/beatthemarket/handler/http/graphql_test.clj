@@ -5,17 +5,17 @@
             [clojure.data.json :as json]
             [datomic.client.api :as d]
 
-            [beatthemarket.test-util :as test-util
-             :refer [component-prep-fixture component-fixture subscriptions-fixture]]
-
+            [beatthemarket.test-util :as test-util]
             [beatthemarket.handler.http.graphql :as sut]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.util :as util]))
 
 
-(use-fixtures :once (partial component-prep-fixture :test))
-(use-fixtures :each component-fixture)
+(use-fixtures :once (partial test-util/component-prep-fixture :test))
+(use-fixtures :each
+  test-util/component-fixture
+  test-util/migration-fixture)
 
 
 (deftest login-test

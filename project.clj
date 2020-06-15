@@ -42,25 +42,25 @@
                  [com.google.firebase/firebase-admin "6.13.0"
                   #_:exclusions
                   #_[com.google.api-client/google-api-client
-                   com.google.api.grpc/proto-google-iam-v1
-                   com.google.auth/google-auth-library-credentials
-                   com.google.auth/google-auth-library-oauth2-http
-                   com.google.cloud/google-cloud-core
-                   com.google.errorprone/error_prone_annotations
-                   com.google.guava/guava
-                   com.google.http-client/google-http-client
-                   com.google.http-client/google-http-client-jackson2
-                   com.google.protobuf/protobuf-java-util
-                   io.grpc/grpc-api
-                   io.grpc/grpc-context
-                   io.grpc/grpc-core
-                   io.grpc/grpc-netty-shaded
-                   io.opencensus/opencensus-api
-                   io.opencensus/opencensus-contrib-http-util
-                   org.apache.httpcomponents/httpclient
-                   org.apache.httpcomponents/httpcore
-                   org.checkerframework/checker-compat-qual
-                   org.codehaus.mojo/animal-sniffer-annotations]]
+                     com.google.api.grpc/proto-google-iam-v1
+                     com.google.auth/google-auth-library-credentials
+                     com.google.auth/google-auth-library-oauth2-http
+                     com.google.cloud/google-cloud-core
+                     com.google.errorprone/error_prone_annotations
+                     com.google.guava/guava
+                     com.google.http-client/google-http-client
+                     com.google.http-client/google-http-client-jackson2
+                     com.google.protobuf/protobuf-java-util
+                     io.grpc/grpc-api
+                     io.grpc/grpc-context
+                     io.grpc/grpc-core
+                     io.grpc/grpc-netty-shaded
+                     io.opencensus/opencensus-api
+                     io.opencensus/opencensus-contrib-http-util
+                     org.apache.httpcomponents/httpclient
+                     org.apache.httpcomponents/httpcore
+                     org.checkerframework/checker-compat-qual
+                     org.codehaus.mojo/animal-sniffer-annotations]]
 
                  [spootnik/unilog "0.7.25"]
                  [org.clojure/tools.logging "1.1.0"]
@@ -124,7 +124,8 @@
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
 
-  :profiles {:dev     {:aliases      {"run-dev" ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]}
+  :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
+                                      "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
                        :dependencies [[clj-http "3.10.1"]
                                       [datomic-client-memdb "1.1.1"
                                        :exclusions

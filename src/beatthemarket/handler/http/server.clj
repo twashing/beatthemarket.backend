@@ -5,33 +5,11 @@
             [io.pedestal.http :as server]
             [com.rpl.specter :refer [transform MAP-VALS]]
             [integrant.core :as ig]
-            [integrant.repl ]
+            [integrant.repl]
             [aero.core :as aero]
+            [beatthemarket.state.core :as state.core]
             [beatthemarket.handler.authentication :as auth]))
 
-
-(defn read-config [profile resource]
-  (aero/read-config resource {:profile profile
-                              :resolver aero/resource-resolver}))
-
-(defn inject-environment [profile config]
-  (transform [MAP-VALS] #(assoc % :env profile) config))
-
-(defn set-prep+load-namespaces [profile]
-
-  (integrant.repl/set-prep!
-    (constantly (->> "config.edn"
-                     resource
-                     (read-config profile)
-                     :integrant
-                     (inject-environment profile))))
-
-  (ig/load-namespaces {:beatthemarket.handler.http/service :service/service
-                       :beatthemarket.handler.http/server :server/server
-                       :beatthemarket.iam/authentication :firebase/firebase
-                       :beatthemarket.persistence/datomic :persistence/datomic
-                       :beatthemarket.state/nrepl :nrepl/nrepl
-                       :beatthemarket.state/logging :logging/logging}))
 
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
@@ -45,11 +23,6 @@
 
 (defmethod ig/halt-key! :server/server [_ server]
   (server/stop server))
-
-;; NOTE taken from a suggestion from an Integrant issue
-;; https://github.com/weavejester/integrant/issues/12#issuecomment-283415380
-(defmethod aero/reader 'ig/ref [_ _ value]
-  (ig/ref value))
 
 (def default-environment "production")
 (def cli-options
@@ -85,8 +58,9 @@
 
     (println "\nCreating your server...")
 
-    (set-prep+load-namespaces profile)
-    (integrant.repl/go)))
+    (state.core/set-prep)
+    (state.core/init-components)))
+
 
 (comment ;; Main
 

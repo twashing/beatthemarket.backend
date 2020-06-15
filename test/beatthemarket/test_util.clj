@@ -16,8 +16,9 @@
             [gniazdo.core :as g]
             [expound.alpha :as expound]
             [compute.datomic-client-memdb.core :as memdb]
-            [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]
+            [beatthemarket.state.core :as state.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.migration.core :as migration.core]
             [beatthemarket.util :as util])
   (:import [com.google.firebase.auth FirebaseAuth]))
 
@@ -60,13 +61,19 @@
   ([profile f]
 
    ;; Prep components and load namespaces
-   (set-prep+load-namespaces profile)
+   (state.core/set-prep+load-namespaces profile)
 
    (f)))
 
 (defn component-fixture [f]
 
-  (util/dev-fixture persistence.datomic/transact-schema!)
+  (beatthemarket.state.core/init-components)
+
+  (f))
+
+(defn migration-fixture [f]
+
+  (migration.core/apply-norms!)
 
   (f))
 

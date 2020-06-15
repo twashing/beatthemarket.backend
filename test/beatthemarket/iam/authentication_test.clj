@@ -2,12 +2,15 @@
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer [response-for]]
             [integrant.repl.state :as state]
-            [beatthemarket.test-util :refer [component-prep-fixture component-fixture]]
+            [beatthemarket.test-util :as test-util]
             [beatthemarket.iam.authentication :as sut]))
 
 
-(use-fixtures :once (partial component-prep-fixture :test))
-(use-fixtures :each component-fixture)
+(use-fixtures :once (partial test-util/component-prep-fixture :test))
+(use-fixtures :each
+  test-util/component-fixture
+  test-util/migration-fixture)
+
 
 (deftest check-authentication-test
 

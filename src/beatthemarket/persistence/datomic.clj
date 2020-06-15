@@ -59,18 +59,6 @@
 (defn transact! [conn data]
   (d/transact conn {:tx-data data}))
 
-(defn load-schema
-
-  ([] (load-schema "schema.datomic.edn"))
-
-  ([schema]
-   (-> schema
-       resource slurp
-       read-string)))
-
-(defn transact-schema! [conn]
-  (transact! conn (load-schema)))
-
 
 (comment
 

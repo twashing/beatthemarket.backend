@@ -2,12 +2,9 @@
   (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.core :as ig]
             [clojure.java.io :refer [resource]]
-            [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]
-            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.state.core :as state.core]
+            [beatthemarket.migration.core :as migration.core]
             [beatthemarket.util :as util]))
-
-
-(set-prep+load-namespaces :development)
 
 
 (comment ;; Convenience fns
@@ -25,7 +22,10 @@
 
 
   ;; Catach all
-  (util/dev-fixture persistence.datomic/transact-schema!)
+  (do
+    (state.core/set-prep :development)
+    (state.core/init-components)
+    (migration.core/run-migrations))
 
 
   (pprint integrant.repl.state/config)

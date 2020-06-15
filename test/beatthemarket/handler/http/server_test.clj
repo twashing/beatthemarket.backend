@@ -5,8 +5,7 @@
             [clojure.data.json :as json]
             [io.pedestal.http :as server]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
-            [beatthemarket.test-util :as test-util
-             :refer [component-prep-fixture component-fixture subscriptions-fixture]]
+            [beatthemarket.test-util :as test-util]
             [integrant.repl.state :as state]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [io.pedestal.test :refer [response-for]]
@@ -15,10 +14,11 @@
             [beatthemarket.util :as util]))
 
 
+(use-fixtures :once (partial test-util/component-prep-fixture :test))
 (use-fixtures :each
-  (partial component-prep-fixture :test)
-  component-fixture
-  (subscriptions-fixture "ws://localhost:8080/ws"))
+  test-util/component-fixture
+  test-util/migration-fixture
+  (test-util/subscriptions-fixture "ws://localhost:8080/ws"))
 
 
 (deftest basic-handler-test

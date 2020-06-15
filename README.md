@@ -105,12 +105,12 @@ lein nvd check
 
 ### C
 
-* Add a migration to create the DB schema
+* [ok] Add a stock name generator
+* [ok] Add a migration to create the DB schema
   * https://github.com/avescodes/conformity (*)
   * https://github.com/vvvvalvalval/datofu
 
 
-* Add a stock name generator
 * generate specs from example data
   * https://github.com/stathissideris/spec-provider
 * fn specs for all game and bookkeeping artifacts

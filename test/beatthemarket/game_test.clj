@@ -2,16 +2,16 @@
   (:require [clojure.test :refer :all]
             [datomic.client.api :as d]
             [integrant.repl.state :as state]
-            [beatthemarket.test-util
-             :refer [component-prep-fixture component-fixture subscriptions-fixture]]
-
+            [beatthemarket.test-util :as test-util]
             [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.game :as game])
   (:import [java.util UUID]))
 
 
-(use-fixtures :once (partial component-prep-fixture :test))
-(use-fixtures :each component-fixture)
+(use-fixtures :once (partial test-util/component-prep-fixture :test))
+(use-fixtures :each
+  test-util/component-fixture
+  test-util/migration-fixture)
 
 
 (deftest initialize-game-test
