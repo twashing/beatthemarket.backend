@@ -113,6 +113,7 @@ lein nvd check
 
 * generate specs from example data
   * https://github.com/stathissideris/spec-provider
+
 * fn specs for all game and bookkeeping artifacts
   Use [Orchestra](https://github.com/jeaye/orchestra)
 

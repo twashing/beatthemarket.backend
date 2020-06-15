@@ -2,6 +2,7 @@
   (:require [clj-time.core :as t]
             [clj-time.coerce :as c]
             [beatthemarket.bookkeeping :as bookkeeping]
+            [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.bookkeeping :as persistence.bookkeeping]
             [beatthemarket.util :as util]
@@ -46,9 +47,8 @@
                             (beatthemarket.bookkeeping/->journal))
 
         ;; Generate stocks + first subscription
-        stocks (->> [["Sun Ra Inc" "SUN"]
-                     ["Miles Davis Inc" "MILD"]
-                     ["John Coltrane Inc" "JONC"]]
+        stocks (->> (name-generator/generate-names 4)
+                    (map (juxt :stock-name :stock-symbol))
                     (map #(apply ->stock %))
                     (map bind-temporary-id))
         subscriptions (take 1 stocks)
@@ -126,7 +126,6 @@
   (->> result-accounts
        (map #(d/pull (d/db conn) '[*] (first %)))))
 
-
 (comment ;; Game
 
   (let [;; Create a bookkeeping book
@@ -164,3 +163,13 @@
                         (d/db conn)))
 
   (d/pull (d/db conn) '[*] (ffirst result-game)))
+
+
+#_(comment
+
+  (->> (name-generator/generate-names 4)
+       (map (juxt :stock-name :stock-symbol))
+       (map #(apply ->stock %))
+       (map bind-temporary-id))
+
+  )

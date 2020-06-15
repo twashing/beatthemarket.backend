@@ -121,16 +121,17 @@
 
 (deftest new-game-subscription-test
 
-  ;; REST Login (not WebSocket) ; creates a user
+  ;; A. REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)]
 
     (test-util/login-assertion service id-token))
 
-  ;; New Game
+
   (test-util/send-init)
   (test-util/expect-message {:type "connection_ack"})
 
+  ;; B. NEW GAME
   (testing "Creating a new game returns subscriptions and all stocks"
 
     (test-util/send-data {:id 987
@@ -141,11 +142,14 @@
     (let [data (test-util/<message!!)
           message (-> data :payload :data :newGame :message (#(json/read-str % :key-fn keyword)))
 
-          game (transform [MAP-VALS ALL] #(dissoc % :id) message)
+          {:keys [stocks subscriptions]} (transform [MAP-VALS ALL] #(dissoc % :id) message)]
 
-          expected-game {:subscriptions [{:symbol "SUN" :name "Sun Ra Inc"}]
-                         :stocks [{:symbol "SUN" :name "Sun Ra Inc"}
-                                  {:symbol "MILD" :name "Miles Davis Inc"}
-                                  {:symbol "JONC" :name "John Coltrane Inc"}]}]
+      (is (some (into #{} stocks) subscriptions)))))
 
-      (is (= expected-game game)))))
+
+;; Buy Stock
+;; Sell Stock
+;; Calculate Profit / Loss
+;; Complete a Level
+;; Win a Game
+;; Lose a Game
