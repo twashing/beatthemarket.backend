@@ -1,4 +1,4 @@
-(ns beatthemarket.handler.http.graphql-test
+(ns beatthemarket.graphql-test
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer [response-for]]
             [integrant.repl.state :as state]
@@ -6,7 +6,7 @@
             [datomic.client.api :as d]
 
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.handler.http.graphql :as sut]
+            [beatthemarket.graphql :as sut]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.util :as util]))

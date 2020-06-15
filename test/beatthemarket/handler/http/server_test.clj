@@ -147,9 +147,31 @@
       (is (some (into #{} stocks) subscriptions)))))
 
 
+
+;; TODO
+
+;; A.
+;; test workbench with stock as sine wave
+;; time series with tick-id
+;; start streaming stock price
+;;   db/transact game stock tick(s)
+
+;; B.
 ;; Buy Stock
+;;   db/q game stock
+;;   verify tick id
+;;   verify tick price
+;;   verify buy price is most recent
+;;   tentry verify balanced
+
 ;; Sell Stock
+
+;; C.
 ;; Calculate Profit / Loss
+
+;; D.
 ;; Complete a Level
+
+;; E.
 ;; Win a Game
 ;; Lose a Game

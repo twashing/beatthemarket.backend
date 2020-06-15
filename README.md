@@ -105,11 +105,10 @@ lein nvd check
 
 ### C
 
-* [ok] Add a stock name generator
-* [ok] Add a migration to create the DB schema
-  * https://github.com/avescodes/conformity (*)
-  * https://github.com/vvvvalvalval/datofu
-
+* Integration Test
+  * Apollo client, login, new game, stream to client
+  * Buy a stock sell a stock
+  * Complete level 1
 
 * generate specs from example data
   * https://github.com/stathissideris/spec-provider
@@ -117,14 +116,10 @@ lein nvd check
 * fn specs for all game and bookkeeping artifacts
   Use [Orchestra](https://github.com/jeaye/orchestra)
 
-
-* Integration Test
-  * Apollo client, login, new game, stream to client
-  * Buy a stock sell a stock
-  * Complete level 1
-* Stream two games at the same time
+* UI workbench for Integration test
 
 
+* ? Stream two games at the same time
 * Move code in `comment` blocks, to tests
 * Add git hooks to automate code checks
   * Clj-kondo

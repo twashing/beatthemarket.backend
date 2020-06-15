@@ -18,7 +18,7 @@
             [io.pedestal.http.jetty.websockets :as ws]
             [io.pedestal.interceptor.error :as error-int]
             [integrant.core :as ig]
-            [beatthemarket.handler.http.graphql :as graphql]
+            [beatthemarket.graphql :as graphql]
 
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.authentication :as iam.auth]

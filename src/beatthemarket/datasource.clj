@@ -15,6 +15,13 @@
 ;;   (beta curve) Sine + Polynomial + Stochastic Oscillating, distributed under a Beta Curve
 ;; => beta distribution of a=2 b=4.1 x=0 (see: http://keisan.casio.com/exec/system/1180573226)
 
+(defn ->datasources [beta-configurations]
+  {:datasource.sine/generate-sine-sequence (datasource.sine/generate-sine-sequence 1.5 2.7 0)
+   :datasource.sine/generate-cosine-sequence (datasource.sine/generate-cosine-sequence)
+   :datasource.oscillating/generate-oscillating-sequence
+   (datasource.oscillating/generate-oscillating-sequence beta-configurations)})
+
+
 (defn combine-data-sequences [& data-sequences]
   (apply (partial map +) data-sequences))
 
@@ -32,7 +39,6 @@
      (map (fn [t y] [t (+ y-offset y)])
           time-seq
           combined-data-sequence))))
-
 
 
 (comment ;; LATEST
@@ -126,7 +132,6 @@
              (partition 2)
              (take 500)
              (csv/write-csv combined-writer))))))
-
 
 ;; TODO Cleanup
 ;; put into fn

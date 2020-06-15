@@ -1,4 +1,4 @@
-(ns beatthemarket.handler.http.graphql
+(ns beatthemarket.graphql
   (:require [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
@@ -44,9 +44,14 @@
                   (transform [MAP-VALS ALL :game.stock/id] str game))
 
         runnable ^Runnable (fn []
+
                              (source-stream {:message (json/write-str message)})
-                             (Thread/sleep 50)
-                             (source-stream nil))]
+
+                             ;; config for which data sequences to send
+                             ;; clock for each tick send
+
+                             #_(Thread/sleep 50)
+                             #_(source-stream nil))]
 
     (.start (Thread. runnable "stream-new-game-thread"))
 
