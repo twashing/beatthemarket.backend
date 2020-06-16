@@ -15,7 +15,6 @@
   test-util/migration-fixture)
 
 
-;; TODO REFACTOR
 (deftest initialize-game-test
 
   (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
@@ -26,7 +25,7 @@
                   :name "Foo Bar"
                   :uid (str (UUID/randomUUID)))
 
-         ;; Add User
+        ;; Add User
         _              (persistence.user/add-user! conn checked-authentication)
         result-user-id (-> (d/q '[:find ?e
                                   :in $ ?email
@@ -39,25 +38,26 @@
 
         ;; Initialize Game
         game (game/initialize-game conn user-entity)
-               ;; result-game-id (-> (d/q '[:find ?e
-               ;;                           :in $ ?game-id
-               ;;                           :where [?e :game/id ?game-id]]
-               ;;                         (d/db conn)
-               ;;                         (:game/id game))
-               ;;                    ffirst)
+        result-game-id (-> (d/q '[:find ?e
+                                  :in $ ?game-idre
+                                  :where [?e :game/id ?game-id]]
+                                (d/db conn)
+                                (:game/id game))
+                           ffirst)
 
-               ;; pulled-game (util/pprint+identity (d/pull (d/db conn) '[*] result-game-id))
-               ;; pulled-user (d/pull (d/db conn) '[*] result-user-id)
-        ]
+        pulled-game (d/pull (d/db conn) '[*] result-game-id)
+        pulled-user (d/pull (d/db conn) '[*] result-user-id)]
 
-    (is true)
-    #_(testing "User has bound game"
+    (let [game-users (:game/users pulled-game)]
 
-        (let [{bound-games :user/games}      pulled-user
-              [{subscriptions :game/subscriptions
-                stocks        :game/stocks}] bound-games]
+      (testing "User has bound game"
 
-          (is (= (sort '(:db/id :user/email :user/name :user/external-uid :user/games :user/accounts))
-                 (-> pulled-user keys sort)))
+        (-> game-users first :game.user/user :user/email (= email) is)
 
-          (is (some (into #{} stocks) subscriptions))))))
+        (is (= pulled-user (-> game-users first :game.user/user))))
+
+      (testing "User's stock subscriptions are a part of the games stocks"
+        (let [game-stocks (:game/stocks pulled-game)
+              game-user-subscriptions (-> game-users first :game.user/subscriptions)]
+
+          (is (some (into #{} game-stocks) game-user-subscriptions)))))))

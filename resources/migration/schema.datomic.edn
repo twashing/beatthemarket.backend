@@ -22,11 +22,6 @@
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         "User's ID in the external Authentication system (Firebase)"}
- {:db/ident       :user/games
-  :db/valueType   :db.type/ref ;; :game
-  :db/cardinality :db.cardinality/many
-  :db/isComponent true
-  :db/doc         ""}
  {:db/ident       :user/accounts
   :db/valueType   :db.type/ref ;; List of default :account
   :db/cardinality :db.cardinality/many
@@ -45,6 +40,7 @@
  {:db/ident :game-level/eight}
  {:db/ident :game-level/nine}
  {:db/ident :game-level/ten}
+ {:db/ident :game-level/market}
 
 
  ;; GAME PROPER
@@ -62,13 +58,16 @@
   :db/valueType   :db.type/instant
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
+
+ {:db/ident       :game/users
+  :db/valueType   :db.type/ref ;; :game.user
+  :db/cardinality :db.cardinality/many
+  :db/isComponent true
+  :db/doc         ""}
+
  {:db/ident       :game/level
   :db/valueType   :db.type/ref ;; :game-level
   :db/cardinality :db.cardinality/one
-  :db/doc         ""}
- {:db/ident       :game/subscriptions
-  :db/valueType   :db.type/ref ;; List of :stock
-  :db/cardinality :db.cardinality/many
   :db/isComponent true
   :db/doc         ""}
  {:db/ident       :game/stocks
@@ -76,7 +75,20 @@
   :db/cardinality :db.cardinality/many
   :db/isComponent true
   :db/doc         ""}
- {:db/ident       :game/portfolio
+
+
+ ;; PER GAME USER Data
+ {:db/ident       :game.user/user
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
+ {:db/ident       :game.user/subscriptions
+  :db/valueType   :db.type/ref ;; List of :stock
+  :db/cardinality :db.cardinality/many
+  :db/isComponent true
+  :db/doc         ""}
+ {:db/ident       :game.user/portfolio
   :db/valueType   :db.type/ref ;; :bookkeeping.portfolio
   :db/cardinality :db.cardinality/one
   :db/isComponent true

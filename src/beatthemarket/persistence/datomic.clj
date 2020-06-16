@@ -3,7 +3,8 @@
             [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
             [integrant.core :as ig]
-            [compute.datomic-client-memdb.core :as memdb]))
+            [compute.datomic-client-memdb.core :as memdb]
+            [beatthemarket.util :as util]))
 
 
 ;; COMPONENT

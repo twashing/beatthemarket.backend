@@ -19,20 +19,12 @@
         portfolio-with-journal (beatthemarket.bookkeeping/->portfolio
                                  (beatthemarket.bookkeeping/->journal))
 
-        ;; user (hash-map
-        ;;        :user/id (str (UUID/randomUUID))
-        ;;        :user/email "foo@bar.com"
-        ;;        :user/name "Foo Bar"
-        ;;        :user/external-uid "asdfqwerty")
-
         game-users (-> (hash-map
                          :game.user/user user
-                         ;; :game.user/subscriptions subscriptions
-                         ;; :game.user/portfolio portfolio-with-journal
-                         )
+                         :game.user/subscriptions subscriptions
+                         :game.user/portfolio portfolio-with-journal)
                        bind-temporary-id
-                       list
-                       #_util/pprint+identity)]
+                       list)]
 
     (hash-map
       :game/id (UUID/randomUUID)
@@ -40,23 +32,6 @@
       :game/level game-level
       :game/stocks stocks
       :game/users game-users)))
-
-#_(defn ->game
-
-  ([game-level]
-
-   (let [portfolio (bookkeeping/->portfolio)]
-     (->game game-level portfolio nil nil)))
-
-  ([game-level portfolio subscriptions stocks]
-
-   (cond-> (hash-map
-             :game/id (UUID/randomUUID)
-             :game/start-time (c/to-date (t/now))
-             :game/level game-level)
-     (util/exists? portfolio) (assoc :game/portfolio portfolio)
-     (util/exists? subscriptions) (assoc :game/subscriptions subscriptions)
-     (util/exists? stocks) (assoc :game/stocks stocks))))
 
 (defn ->stock
 
@@ -75,32 +50,10 @@
                         (map (juxt :stock-name :stock-symbol))
                         (map #(apply ->stock %))
                         (map bind-temporary-id))
-        game (util/pprint+identity (->game game-level stocks user-entity))]
+        game (->game game-level stocks user-entity)]
 
     (persistence.datomic/transact-entities! conn game)
-    game
-    ))
-
-#_(defn initialize-game [conn user-entity]
-
-  (let [;; Create a bookkeeping book
-        portfolio+journal (beatthemarket.bookkeeping/->portfolio
-                            (beatthemarket.bookkeeping/->journal))
-
-        ;; Generate stocks + first subscription
-        stocks (->> (name-generator/generate-names 4)
-                    (map (juxt :stock-name :stock-symbol))
-                    (map #(apply ->stock %))
-                    (map bind-temporary-id))
-
-        game-level :game-level/one
-
-        game (->game game-level portfolio+journal subscriptions stocks)
-        updated-user (-> (select-keys user-entity [:db/id])
-                         (assoc :user/games game))
-        entities (list game updated-user)]
-
-    (persistence.datomic/transact-entities! conn entities)))
+    game))
 
 (comment ;; Portfolio
 
@@ -203,7 +156,6 @@
                         (d/db conn)))
 
   (d/pull (d/db conn) '[*] (ffirst result-game)))
-
 
 #_(comment
 
