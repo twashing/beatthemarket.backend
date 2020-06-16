@@ -16,10 +16,11 @@
 ;; => beta distribution of a=2 b=4.1 x=0 (see: http://keisan.casio.com/exec/system/1180573226)
 
 (defn ->data-sequences [beta-configurations]
-  {:datasource.sine/generate-sine-sequence (datasource.sine/generate-sine-sequence 1.5 2.7 0)
-   :datasource.sine/generate-cosine-sequence (datasource.sine/generate-cosine-sequence)
-   :datasource.oscillating/generate-oscillating-sequence
-   (datasource.oscillating/generate-oscillating-sequence beta-configurations)})
+  (let [yintercept (datasource.core/random-double-in-range 50 120)]
+    {:datasource.sine/generate-sine-sequence (datasource.sine/generate-sine-sequence 1.5 2.7 yintercept)
+     :datasource.sine/generate-cosine-sequence (datasource.sine/generate-cosine-sequence)
+     :datasource.oscillating/generate-oscillating-sequence
+     (datasource.oscillating/generate-oscillating-sequence beta-configurations)}))
 
 (defn combine-data-sequences [& data-sequences]
   (apply (partial map +) data-sequences))
@@ -55,9 +56,7 @@
 
   ;; ALL alias
   (->combined-data-sequence datasource.core/beta-configurations)
-  (->combined-data-sequence datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
-
-  )
+  (->combined-data-sequence datasource.core/beta-configurations :datasource.sine/generate-sine-sequence))
 
 (comment ;; LATEST
 

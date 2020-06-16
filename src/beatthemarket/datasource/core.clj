@@ -23,7 +23,7 @@
 
 ;; >> ================================ >>
 
-(defn rand-double-in-range
+(defn random-double-in-range
   "Returns a random double between min and max.
 
    stolen from lazytest - no longer under active development
@@ -39,7 +39,7 @@
      polynomial: 2 - 0.5
      sine: 0.5 - 2.7"
   [mathfn min' max']
-  (let [a (rand-double-in-range min' max')]
+  (let [a (random-double-in-range min' max')]
     (partial mathfn a)))
 
 #_(defn randomize-horizontal-dilation
@@ -47,7 +47,7 @@
      polynomial: between 2 - 0.5 (larger b yields a narrower curve)
      sine: 2.7 - 0.3"
   [mathfn-curried min' max']
-  (let [b (rand-double-in-range min' max')]
+  (let [b (random-double-in-range min' max')]
     (partial mathfn-curried b)))
 
 ;; >> ================================ >>

@@ -15,7 +15,7 @@
 
 (defn ->game [game-level stocks user]
 
-  (let [subscriptions (take 1 stocks)
+  (let [subscriptions          (take 1 stocks)
         portfolio-with-journal (beatthemarket.bookkeeping/->portfolio
                                  (beatthemarket.bookkeeping/->journal))
 
@@ -43,17 +43,22 @@
              :game.stock/symbol symbol)
      (util/exists? price-history) (assoc :game.stock/price-history price-history))))
 
-(defn initialize-game [conn user-entity]
+(defn initialize-game
 
-  (let [game-level :game-level/one
-        stocks     (->> (name-generator/generate-names 4)
-                        (map (juxt :stock-name :stock-symbol))
-                        (map #(apply ->stock %))
-                        (map bind-temporary-id))
-        game (->game game-level stocks user-entity)]
+  ([conn user-entity]
 
-    (persistence.datomic/transact-entities! conn game)
-    game))
+   (initialize-game conn user-entity (->> (name-generator/generate-names 4)
+                                          (map (juxt :stock-name :stock-symbol))
+                                          (map #(apply ->stock %))
+                                          (map bind-temporary-id))))
+
+  ([conn user-entity stocks]
+
+   (let [game-level :game-level/one
+         game (->game game-level stocks user-entity)]
+
+     (persistence.datomic/transact-entities! conn game)
+     game)))
 
 (comment ;; Portfolio
 

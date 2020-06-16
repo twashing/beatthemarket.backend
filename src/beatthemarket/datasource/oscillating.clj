@@ -87,7 +87,7 @@
                                    price-directions
                                    price-changes)
 
-        initial-price (datasource.core/rand-double-in-range 15 35)]
+        initial-price (datasource.core/random-double-in-range 15 35)]
 
 
 

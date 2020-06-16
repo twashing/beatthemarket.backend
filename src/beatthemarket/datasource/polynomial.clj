@@ -17,7 +17,7 @@
         xinterc-polyn-left (datasource.core/find-xintercept - polynomial-xintercept)
         xinterc-polyn-right (datasource.core/find-xintercept + polynomial-xintercept)
 
-        granularityP (datasource.core/rand-double-in-range 0.1 1)
+        granularityP (datasource.core/random-double-in-range 0.1 1)
         xsequenceP (iterate (partial + granularityP) xinterc-polyn-left)]
 
     (map polyn-partial xsequenceP)))

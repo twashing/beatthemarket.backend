@@ -23,9 +23,6 @@
       "user-added"
       "user-exists")))
 
-(defn game-user-by-dbid [game]
-
-  )
 
 (defn stream-new-game
   [context _ source-stream]
@@ -34,16 +31,21 @@
         conn (-> repl.state/system :persistence/datomic :conn)
 
         result-user-id (ffirst
-                         (d/q '[:find ?e
-                                :in $ ?email
-                                :where [?e :user/email ?email]]
-                              (d/db conn)
-                              email))
+                        (d/q '[:find ?e
+                               :in $ ?email
+                               :where [?e :user/email ?email]]
+                             (d/db conn)
+                             email))
 
         user-entity (hash-map :db/id result-user-id)
 
-        ;; Initialize Game
+               ;; Initialize Game
         game (game/initialize-game conn user-entity)
+
+        ;; TODO register game
+        ;; TODO send initial game info
+        ;; TODO stream tick data
+
         game-stocks (:game/stocks game)
         game-subscriptions (:game.user/subscriptions
                             (select-one [:game/users ALL (pred #(= result-user-id
@@ -55,13 +57,9 @@
                             :subscriptions game-subscriptions})
         runnable ^Runnable (fn []
 
-                             ;; TODO
-                             ;; generate data sequences for game
-                             ;; ? where to register game
+                             ;; NOTE work in beatthemarket.game.games
                              (source-stream {:message (json/write-str message)})
 
-                             ;; config for which data sequences to send
-                             ;; clock for each tick send
 
                              #_(Thread/sleep 50)
                              #_(source-stream nil))]
