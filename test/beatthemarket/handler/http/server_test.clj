@@ -119,8 +119,7 @@
                              :payload {:data {:ping {:message "short #1"}}}
                              :type "data"}))
 
-;; TODO REFACTOR
-#_(deftest new-game-subscription-test
+(deftest new-game-subscription-test
 
   ;; A. REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
@@ -142,7 +141,6 @@
 
     (let [data (test-util/<message!!)
           message (-> data :payload :data :newGame :message (#(json/read-str % :key-fn keyword)))
-
-          {:keys [stocks subscriptions]} (transform [MAP-VALS ALL] #(dissoc % :id) message)]
+          {:keys [stocks subscriptions]} message]
 
       (is (some (into #{} stocks) subscriptions)))))

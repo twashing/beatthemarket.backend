@@ -1,7 +1,7 @@
 (ns beatthemarket.graphql
   (:require [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
-            [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [com.rpl.specter :refer [select-one transform pred ALL MAP-VALS]]
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game :as game]
@@ -23,6 +23,10 @@
       "user-added"
       "user-exists")))
 
+(defn game-user-by-dbid [game]
+
+  )
+
 (defn stream-new-game
   [context _ source-stream]
 
@@ -39,13 +43,16 @@
         user-entity (hash-map :db/id result-user-id)
 
         ;; Initialize Game
-        message (as-> (game/initialize-game conn user-entity) game
+        game (game/initialize-game conn user-entity)
+        game-stocks (:game/stocks game)
+        game-subscriptions (:game.user/subscriptions
+                            (select-one [:game/users ALL (pred #(= result-user-id
+                                                                   (-> % :game.user/user :db/id)))]
+                                        game))
 
-                  ;; TODO db pull game
-
-                  (select-keys game [:game/subscriptions :game/stocks])
-                  (transform [MAP-VALS ALL :game.stock/id] str game))
-
+        message (transform [MAP-VALS ALL :game.stock/id] str
+                           {:stocks game-stocks
+                            :subscriptions game-subscriptions})
         runnable ^Runnable (fn []
 
                              ;; TODO

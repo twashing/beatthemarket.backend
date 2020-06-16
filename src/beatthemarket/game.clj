@@ -156,10 +156,3 @@
                         (d/db conn)))
 
   (d/pull (d/db conn) '[*] (ffirst result-game)))
-
-#_(comment
-
-  (->> (name-generator/generate-names 4)
-       (map (juxt :stock-name :stock-symbol))
-       (map #(apply ->stock %))
-       (map bind-temporary-id)))
