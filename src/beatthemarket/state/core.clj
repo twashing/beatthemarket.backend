@@ -13,7 +13,7 @@
   (ig/ref value))
 
 (defn read-config [profile resource]
-  (aero/read-config resource {:profile profile
+  (aero/read-config resource {:profile  profile
                               :resolver aero/resource-resolver}))
 
 (defn inject-environment [profile config]
@@ -28,13 +28,14 @@
                      :integrant
                      (inject-environment profile))))
 
-  (ig/load-namespaces {:beatthemarket.handler.http/service :service/service
-                       :beatthemarket.handler.http/server :server/server
-                       :beatthemarket.iam/authentication :firebase/firebase
-                       :beatthemarket.persistence/datomic :persistence/datomic
-                       :beatthemarket.state/nrepl :nrepl/nrepl
-                       :beatthemarket.state/logging :logging/logging
-                       :beatthemarket.datasource/name-generator :name-generator/name-generator}))
+  (ig/load-namespaces {:beatthemarket.handler.http/service      :service/service
+                       :beatthemarket.handler.http/server       :server/server
+                       :beatthemarket.iam/authentication        :firebase/firebase
+                       :beatthemarket.persistence/datomic       :persistence/datomic
+                       :beatthemarket.state/nrepl               :nrepl/nrepl
+                       :beatthemarket.state/logging             :logging/logging
+                       :beatthemarket.datasource/name-generator :name-generator/name-generator
+                       :beatthemarket.game/core                 :game/games}))
 
 (defn set-prep
 

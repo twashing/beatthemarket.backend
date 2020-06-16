@@ -15,21 +15,29 @@
 ;;   (beta curve) Sine + Polynomial + Stochastic Oscillating, distributed under a Beta Curve
 ;; => beta distribution of a=2 b=4.1 x=0 (see: http://keisan.casio.com/exec/system/1180573226)
 
-(defn ->datasources [beta-configurations]
+(defn ->data-sequences [beta-configurations]
   {:datasource.sine/generate-sine-sequence (datasource.sine/generate-sine-sequence 1.5 2.7 0)
    :datasource.sine/generate-cosine-sequence (datasource.sine/generate-cosine-sequence)
    :datasource.oscillating/generate-oscillating-sequence
    (datasource.oscillating/generate-oscillating-sequence beta-configurations)})
 
-
 (defn combine-data-sequences [& data-sequences]
   (apply (partial map +) data-sequences))
 
-(defn ->combined-data-sequence [beta-configurations]
-  (let [a (datasource.sine/generate-sine-sequence 1.5 2.7 0)
-        b (datasource.sine/generate-cosine-sequence)
-        d (datasource.oscillating/generate-oscillating-sequence beta-configurations)]
-    (combine-data-sequences a b d)))
+(defn ->combined-data-sequence
+
+  ([beta-configurations]
+   (let [named-sequences [:datasource.sine/generate-sine-sequence
+                          :datasource.sine/generate-cosine-sequence
+                          :datasource.oscillating/generate-oscillating-sequence]]
+
+     (apply (partial ->combined-data-sequence beta-configurations) named-sequences)))
+
+  ([beta-configurations & named-sequences]
+
+   (->> (->data-sequences beta-configurations)
+        ((apply juxt named-sequences))
+        (apply combine-data-sequences))))
 
 (defn combined-data-sequence-with-datetime
   ([start-time combined-data-sequence]
@@ -40,6 +48,16 @@
           time-seq
           combined-data-sequence))))
 
+
+(comment
+
+  (def data-sequences (->data-sequences datasource.core/beta-configurations))
+
+  ;; ALL alias
+  (->combined-data-sequence datasource.core/beta-configurations)
+  (->combined-data-sequence datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
+
+  )
 
 (comment ;; LATEST
 

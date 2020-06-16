@@ -119,7 +119,8 @@
                              :payload {:data {:ping {:message "short #1"}}}
                              :type "data"}))
 
-(deftest new-game-subscription-test
+;; TODO REFACTOR
+#_(deftest new-game-subscription-test
 
   ;; A. REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
@@ -145,33 +146,3 @@
           {:keys [stocks subscriptions]} (transform [MAP-VALS ALL] #(dissoc % :id) message)]
 
       (is (some (into #{} stocks) subscriptions)))))
-
-
-
-;; TODO
-
-;; A.
-;; test workbench with stock as sine wave
-;; time series with tick-id
-;; start streaming stock price
-;;   db/transact game stock tick(s)
-
-;; B.
-;; Buy Stock
-;;   db/q game stock
-;;   verify tick id
-;;   verify tick price
-;;   verify buy price is most recent
-;;   tentry verify balanced
-
-;; Sell Stock
-
-;; C.
-;; Calculate Profit / Loss
-
-;; D.
-;; Complete a Level
-
-;; E.
-;; Win a Game
-;; Lose a Game

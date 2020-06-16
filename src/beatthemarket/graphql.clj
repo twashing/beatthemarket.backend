@@ -40,11 +40,17 @@
 
         ;; Initialize Game
         message (as-> (game/initialize-game conn user-entity) game
+
+                  ;; TODO db pull game
+
                   (select-keys game [:game/subscriptions :game/stocks])
                   (transform [MAP-VALS ALL :game.stock/id] str game))
 
         runnable ^Runnable (fn []
 
+                             ;; TODO
+                             ;; generate data sequences for game
+                             ;; ? where to register game
                              (source-stream {:message (json/write-str message)})
 
                              ;; config for which data sequences to send

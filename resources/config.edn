@@ -29,6 +29,7 @@
                :server/server                 {:service #ig/ref :service/service}
                :firebase/firebase             #ref [:secrets :firebase]
                :persistence/datomic           #ref [:secrets :production :persistence/datomic]
+               :game/games                    {}
                :nrepl/nrepl                   #ref [:nrepl]
                :logging/logging               #ref [:logging]
                :name-generator/name-generator {}}
@@ -38,6 +39,7 @@
                 :firebase/firebase             #ref [:secrets :firebase]
                 :persistence/datomic           {:db-name "beaththemarket"
                                                 :config  {}}
+                :game/games                    {}
                 :nrepl/nrepl                   #ref [:nrepl]
                 :logging/logging               #ref [:logging]
                 :name-generator/name-generator {}}
@@ -47,6 +49,7 @@
          :firebase/firebase             #ref [:secrets :firebase]
          :persistence/datomic           {:db-name "beaththemarket"
                                          :config  {}}
+         :game/games                    {}
          :nrepl/nrepl                   #ref [:nrepl]
          :logging/logging               #ref [:logging]
          :name-generator/name-generator {}}}}
