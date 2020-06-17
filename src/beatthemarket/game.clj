@@ -1,6 +1,7 @@
 (ns beatthemarket.game
   (:require [clj-time.core :as t]
             [clj-time.coerce :as c]
+            [com.rpl.specter :refer [select-one  pred ALL]]
             [beatthemarket.bookkeeping :as bookkeeping]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.persistence.datomic :as persistence.datomic]
@@ -9,6 +10,11 @@
             [datomic.client.api :as d])
   (:import [java.util UUID]))
 
+
+(defn game-user-by-user-id [game result-user-id]
+  (select-one [:game/users ALL (pred #(= result-user-id
+                                         (-> % :game.user/user :db/id)))]
+              game))
 
 (defn bind-temporary-id [entity]
   (assoc entity :db/id (str (UUID/randomUUID))))
@@ -115,8 +121,8 @@
   ;; Query
   (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
   (def result-accounts (d/q '[:find ?e
-                               :where [?e :bookkeeping.account/id]]
-                             (d/db conn)))
+                              :where [?e :bookkeeping.account/id]]
+                            (d/db conn)))
 
 
   (d/pull (d/db conn) '[*] (ffirst result-accounts))

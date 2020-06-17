@@ -1,14 +1,16 @@
 (ns beatthemarket.game.games
-  (:require [clojure.core.async
-             :as core.async :refer [go go-loop chan timeout alts!
-                                    <! >!!]]
+  (:require [clojure.core.async :as core.async
+             :refer [go go-loop chan timeout alts! <! >!!]]
             [clj-time.core :as t]
             [clojure.data.json :as json]
             [integrant.core :as ig]
+            [integrant.repl.state]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
-            [beatthemarket.game :as game]))
+            [beatthemarket.game :as game]
+            [beatthemarket.util :as util]
+            ))
 
 
 (defmethod ig/init-key :game/games [_ _]
@@ -17,45 +19,62 @@
 
 (defn stream-subscription [tick-sleep-ms
                            data-subscription-channel
-                           control-chanel
+                           control-channel
                            close-sink-fn
                            sink-fn]
 
   (go-loop []
     (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
                                     control-channel])]
+
       (if (= :exit v)
         (close-sink-fn)
         (do
           (sink-fn (<! data-subscription-channel))
           (recur))))))
 
+(defn narrow-stocks-by-game-user-subscription [stocks subscription-id-set]
+  (filter #(some subscription-id-set [(:game.stock/id %)])
+          stocks))
+
+(defn register-game-control! [game game-control]
+  (swap! (:game/games integrant.repl.state/system)
+           assoc (:game/id game) game-control))
+
 (defn initialize-game [conn user-entity source-stream]
 
-  (let [stocks (->> (name-generator/generate-names 4)
-                    (map (juxt :stock-name :stock-symbol))
-                    (map #(apply game/->stock %))
-                    (map game/bind-temporary-id))
-
-        bind-data-sequence #(->> (datasource/->combined-data-sequence datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
-                                 (datasource/combined-data-sequence-with-datetime (t/now))
-                                 (assoc % :data-sequence))
-
+  (let [bind-data-sequence    #(->> (datasource/->combined-data-sequence
+                                      datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
+                                    (datasource/combined-data-sequence-with-datetime (t/now))
+                                    (assoc % :data-sequence))
+        stocks                (->> (name-generator/generate-names 4)
+                                   (map (juxt :stock-name :stock-symbol))
+                                   (map #(apply game/->stock %))
+                                   (map game/bind-temporary-id))
         stocks-with-tick-data (map bind-data-sequence stocks)
+        game                  (game/initialize-game conn user-entity stocks)
 
-        game (game/initialize-game conn user-entity stocks-with-tick-data)]
 
-    ;; TODO
-    ;; get :data-subscription-channel
-    ;; game/initialize-game AND stocks-with-tick-data without :data-sequence
-    ;; register game in component
+        data-subscription-stock
+        (->> (game/game-user-by-user-id game (:db/id user-entity))
+             :game.user/subscriptions
+             (map :game.stock/id)
+             (into #{})
+             (narrow-stocks-by-game-user-subscription stocks-with-tick-data))
 
-    {:game game
-     :tick-sleep-ms 500
-     :data-subscription-channel 1 ;; data-subscription-channel
-     :control-chanel (chan)
-     :close-sink-fn (partial source-stream nil)
-     :sink-fn #(source-stream {:message (json/write-str %)})}))
+
+        data-subscription-channel (chan)
+        ;; _                         (core.async/onto-chan data-subscription-channel (:data-sequence data-subscription-stock))
+        game-control              {:game                      game
+                                   :stocks-with-tick-data     stocks-with-tick-data
+                                   :tick-sleep-ms             500
+                                   :data-subscription-channel data-subscription-channel
+                                   :control-channel           (chan)
+                                   :close-sink-fn             (partial source-stream nil)
+                                   :sink-fn                   #(source-stream {:message (json/write-str %)})}]
+
+    (register-game-control! game game-control)
+    game-control))
 
 
 (comment
@@ -65,7 +84,7 @@
   (def result *1)
 
   (require '[integrant.repl.state])
-  (-> integrant.repl.state/system :game/games pprint)
+  (-> integrant.repl.state/system :game/games)
 
 
   ;; TODO

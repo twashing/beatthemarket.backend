@@ -1,10 +1,13 @@
 (ns beatthemarket.graphql
-  (:require [datomic.client.api :as d]
+  (:require [clojure.core.async :as core.async
+             :refer [>!!]]
+            [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
-            [com.rpl.specter :refer [select-one transform pred ALL MAP-VALS]]
+            [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game :as game]
+            [beatthemarket.game.games :as games]
             [clojure.data.json :as json]))
 
 
@@ -39,32 +42,26 @@
 
         user-entity (hash-map :db/id result-user-id)
 
-               ;; Initialize Game
-        game (game/initialize-game conn user-entity)
+        ;; A
+        {:keys [game tick-sleep-ms
+                data-subscription-channel control-channel
+                close-sink-fn sink-fn]}
+        (games/initialize-game conn user-entity source-stream)
 
-        ;; TODO register game
-        ;; TODO send initial game info
-        ;; TODO stream tick data
-
+        ;; B
         game-stocks (:game/stocks game)
-        game-subscriptions (:game.user/subscriptions
-                            (select-one [:game/users ALL (pred #(= result-user-id
-                                                                   (-> % :game.user/user :db/id)))]
-                                        game))
+        game-subscriptions (:game.user/subscriptions (game/game-user-by-user-id game result-user-id))
+        message (-> (transform [MAP-VALS ALL :game.stock/id] str
+                               {:stocks game-stocks
+                                :subscriptions game-subscriptions})
+                    (assoc :game/id (str (:game/id game))))]
 
-        message (transform [MAP-VALS ALL :game.stock/id] str
-                           {:stocks game-stocks
-                            :subscriptions game-subscriptions})
-        runnable ^Runnable (fn []
+    (games/stream-subscription tick-sleep-ms
+                               data-subscription-channel control-channel
+                               close-sink-fn sink-fn)
 
-                             ;; NOTE work in beatthemarket.game.games
-                             (source-stream {:message (json/write-str message)})
+    (>!! data-subscription-channel message)
 
-
-                             #_(Thread/sleep 50)
-                             #_(source-stream nil))]
-
-    (.start (Thread. runnable "stream-new-game-thread"))
 
     ;; Return a cleanup fn
     (constantly nil)))

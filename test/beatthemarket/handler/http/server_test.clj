@@ -11,7 +11,8 @@
             [io.pedestal.test :refer [response-for]]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.handler.http.service :as http.service]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :as util])
+  (:import [java.util UUID]))
 
 
 (use-fixtures :once (partial test-util/component-prep-fixture :test))
@@ -139,8 +140,18 @@
                           :payload
                           {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
 
-    (let [data (test-util/<message!!)
+    (let [data (trace (test-util/<message!! 1000))
           message (-> data :payload :data :newGame :message (#(json/read-str % :key-fn keyword)))
-          {:keys [stocks subscriptions]} message]
+          {:keys [id stocks subscriptions]} message]
 
-      (is (some (into #{} stocks) subscriptions)))))
+      (is (some (into #{} stocks) subscriptions))
+
+      (testing "Returned game is what's registered in the :game/games component"
+
+        (let [game-id (UUID/fromString id)
+              expected-component-game-keys
+              (sort '(:game :stocks-with-tick-data :tick-sleep-ms :data-subscription-channel :control-channel :close-sink-fn :sink-fn))]
+
+          (-> integrant.repl.state/system :game/games deref (get game-id) keys sort
+              (= expected-component-game-keys)
+              is))))))
