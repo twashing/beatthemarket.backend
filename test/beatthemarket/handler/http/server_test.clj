@@ -1,6 +1,8 @@
 (ns beatthemarket.handler.http.server-test
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
+            [clj-time.core :as t]
+            [clj-time.format :as f]
             [aero.core :as aero]
             [clojure.data.json :as json]
             [io.pedestal.http :as server]
@@ -140,8 +142,11 @@
                           :payload
                           {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
 
-    (let [data (trace (test-util/<message!! 1000))
-          message (-> data :payload :data :newGame :message (#(json/read-str % :key-fn keyword)))
+    (let [parse-newGame-message (fn [a] (-> a :payload :data :newGame :message (#(json/read-str % :key-fn keyword))))
+
+
+          data (test-util/<message!! 1000)
+          message (parse-newGame-message data)
           {:keys [id stocks subscriptions]} message]
 
       (is (some (into #{} stocks) subscriptions))
@@ -154,4 +159,15 @@
 
           (-> integrant.repl.state/system :game/games deref (get game-id) keys sort
               (= expected-component-game-keys)
-              is))))))
+              is)))
+
+      (testing "Subscription is being streamed to client"
+
+        (let [[t0-time t0-value] (parse-newGame-message (test-util/<message!! 1000))
+              [t1-time t1-value] (parse-newGame-message (test-util/<message!! 1000))
+
+              custom-formatter (f/formatter "yyyy-MM-dd'T'HH:mm:ss.SSSZ")]
+
+          (is (t/after?
+                (f/parse custom-formatter t1-time)
+                (f/parse custom-formatter t0-time))))))))

@@ -9,13 +9,15 @@
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.game :as game]
-            [beatthemarket.util :as util]
-            ))
+            [beatthemarket.util :as util]))
 
 
 (defmethod ig/init-key :game/games [_ _]
   (atom {}))
 
+(defmethod ig/halt-key! :game/games [_ games]
+  (run! #(>!! (:control-channel %) :exit)
+        (-> games deref vals)))
 
 (defn stream-subscription [tick-sleep-ms
                            data-subscription-channel
@@ -28,9 +30,13 @@
                                     control-channel])]
 
       (if (= :exit v)
-        (close-sink-fn)
         (do
-          (sink-fn (<! data-subscription-channel))
+          (close-sink-fn)
+          (core.async/close! data-subscription-channel))
+        (do
+          (let [vv (<! data-subscription-channel)]
+            ;; (trace (format "Sink value / %s" vv))
+            (sink-fn vv))
           (recur))))))
 
 (defn narrow-stocks-by-game-user-subscription [stocks subscription-id-set]
@@ -39,7 +45,7 @@
 
 (defn register-game-control! [game game-control]
   (swap! (:game/games integrant.repl.state/system)
-           assoc (:game/id game) game-control))
+         assoc (:game/id game) game-control))
 
 (defn initialize-game [conn user-entity source-stream]
 
@@ -54,17 +60,7 @@
         stocks-with-tick-data (map bind-data-sequence stocks)
         game                  (game/initialize-game conn user-entity stocks)
 
-
-        data-subscription-stock
-        (->> (game/game-user-by-user-id game (:db/id user-entity))
-             :game.user/subscriptions
-             (map :game.stock/id)
-             (into #{})
-             (narrow-stocks-by-game-user-subscription stocks-with-tick-data))
-
-
         data-subscription-channel (chan)
-        ;; _                         (core.async/onto-chan data-subscription-channel (:data-sequence data-subscription-stock))
         game-control              {:game                      game
                                    :stocks-with-tick-data     stocks-with-tick-data
                                    :tick-sleep-ms             500
@@ -88,13 +84,8 @@
 
 
   ;; TODO
-  ;; A. register game (with user) into beatthemarket.game.games
-  ;; B. generate data sequences for each stock in game
-  ;;    subscription pulls from the bound game
-
   ;; config for which data sequences to send
   ;; clock for each tick send
-
   (let [runnable ^Runnable (fn []
 
                              ;; game (or market)
@@ -119,11 +110,12 @@
 
 
 
-    (def tick-sleep-ms 500)
+
 
     (>!! control-channel :foo)
     (>!! control-channel :exit)
 
+    (def tick-sleep-ms 500)
     (def control-channel (chan))
     (let [data-sequence-channel (chan)]
 

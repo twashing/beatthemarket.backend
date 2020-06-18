@@ -34,18 +34,18 @@
         conn (-> repl.state/system :persistence/datomic :conn)
 
         result-user-id (ffirst
-                        (d/q '[:find ?e
-                               :in $ ?email
-                               :where [?e :user/email ?email]]
-                             (d/db conn)
-                             email))
+                         (d/q '[:find ?e
+                                :in $ ?email
+                                :where [?e :user/email ?email]]
+                              (d/db conn)
+                              email))
 
         user-entity (hash-map :db/id result-user-id)
 
         ;; A
-        {:keys [game tick-sleep-ms
+        {:keys [game stocks-with-tick-data tick-sleep-ms
                 data-subscription-channel control-channel
-                close-sink-fn sink-fn]}
+                close-sink-fn sink-fn] :as game-control}
         (games/initialize-game conn user-entity source-stream)
 
         ;; B
@@ -56,12 +56,27 @@
                                 :subscriptions game-subscriptions})
                     (assoc :game/id (str (:game/id game))))]
 
+    ;; C
     (games/stream-subscription tick-sleep-ms
                                data-subscription-channel control-channel
                                close-sink-fn sink-fn)
 
     (>!! data-subscription-channel message)
 
+    ;; D
+    (let [data-subscription-stock
+          (->> (game/game-user-by-user-id game (:db/id user-entity))
+               :game.user/subscriptions
+               (map :game.stock/id)
+               (into #{})
+               (games/narrow-stocks-by-game-user-subscription stocks-with-tick-data))
+
+          ;; TODO have a mechanism to stream multiple subscriptions
+          data-subscription-stock-sequence
+          (->> data-subscription-stock first :data-sequence
+               (map (fn [[moment value]] [(str moment) value])))]
+
+      (core.async/onto-chan data-subscription-channel data-subscription-stock-sequence))
 
     ;; Return a cleanup fn
     (constantly nil)))

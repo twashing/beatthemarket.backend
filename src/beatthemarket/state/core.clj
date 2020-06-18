@@ -44,8 +44,9 @@
   ([profile]
    (set-prep+load-namespaces profile)))
 
-;; Component + DB Schema Helpers
 (defn init-components []
 
   (halt)
   (go))
+
+(def halt-components halt)

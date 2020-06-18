@@ -120,6 +120,8 @@ lein nvd check
 
 
 * ? Stream two games at the same time
+* Have a mechanism to simultaneously stream multiple subscriptions (beatthemarket.graphql/stream-new-game)
+
 * Move code in `comment` blocks, to tests
 * Add git hooks to automate code checks
   * Clj-kondo
