@@ -20,6 +20,19 @@
   (run! #(>!! (:control-channel %) :exit)
         (-> games deref vals)))
 
+;; C.
+;; Calculate Profit / Loss
+
+;; D.
+;; Complete a Level
+
+;; E.
+;; Win a Game
+;; Lose a Game
+
+;; F.
+;; Pause | Resume a Game
+
 (defn stream-subscription [tick-sleep-ms
                            data-subscription-channel
                            control-channel
@@ -37,7 +50,7 @@
         (do
           (let [vv (<! data-subscription-channel)]
 
-            ;; TODO db/transact game stock tick
+            ;; TODO calculate game position
             ;; (trace (format "Sink value / %s" vv))
             (sink-fn vv))
           (recur))))))

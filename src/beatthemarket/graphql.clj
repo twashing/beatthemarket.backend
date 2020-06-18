@@ -28,6 +28,22 @@
       "user-exists")))
 
 
+;; TODO
+;; Buy Stock
+;;   ? pause subscription stream
+;;     custom onto-chan (pause, inject vals)
+;;   db/q game stock
+;;   verify tick id
+;;   verify tick price
+;;   verify buy price is most recent
+;;   tentry verify balanced
+
+
+(defn resolve-buy-stock [context a b]
+
+  (println "resolve-buy-stock CALLED / " a b)
+  {:message "Ack"})
+
 (defn stream-new-game
   [context _ source-stream]
 
@@ -97,7 +113,6 @@
 
     ;; Return a cleanup fn
     (constantly nil)))
-
 
 ;; NOTE subscription resolver
 (def *ping-subscribes (atom 0))

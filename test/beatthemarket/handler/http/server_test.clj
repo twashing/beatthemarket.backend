@@ -172,7 +172,7 @@
                 (c/from-long (Long/parseLong t1-time))
                 (c/from-long (Long/parseLong t0-time))))
 
-          (testing "The two pushed ticks, got saved to the DB"
+          (testing "Two ticks streamed to client, got saved to the DB"
 
             (let [conn (-> state/system :persistence/datomic :conn)
 
@@ -188,3 +188,52 @@
                    count
                    (= 2)
                    is))))))))
+
+;; TODO
+;; Buy Stock
+;;   db/q game stock
+;;   verify tick id
+;;   verify tick price
+;;   verify buy price is most recent
+;;   tentry verify balanced
+
+(deftest buy-stock-test
+
+  ;; A. REST Login (not WebSocket) ; creates a user
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)]
+
+    (test-util/login-assertion service id-token))
+
+
+  (test-util/send-init)
+  (test-util/expect-message {:type "connection_ack"})
+
+  (test-util/send-data {:id 987
+                        :type :start
+                        :payload
+                        {:query
+
+                         #_"mutation {
+                                   buyStock(input: \"Foo\") {
+                                     message
+                                   }
+                                 }"
+
+                         "mutation BuyStock($input: BuyStock!) {
+                                   buyStock(input: $input) {
+                                     message
+                                   }
+                                 }"
+
+                         :variables {:input {:tickId "asdf"
+                                             :tickTime 3456
+                                             :tickPrice 1234.45}}
+
+                         }})
+
+  (let [ack (test-util/<message!! 1000)]
+
+    (is (= {:type "data" :id 987 :payload {:data {:buyStock {:message "Ack"}}}}
+           ack))
+    ))

@@ -225,7 +225,8 @@
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
       (util/attach-resolvers {:resolve-hello graphql/resolve-hello
-                              :resolve-login graphql/resolve-login})
+                              :resolve-login graphql/resolve-login
+                              :resolve-buy-stock graphql/resolve-buy-stock})
       (util/attach-streamers {:stream-ping graphql/stream-ping
                               :stream-new-game graphql/stream-new-game})
       schema/compile))

@@ -1,4 +1,6 @@
-{:objects
+{
+ ;; //
+ :objects
  {:Ping
   {:description "Captures a message and a timestamp. This is used when testing Subscriptions."
    :fields
@@ -8,8 +10,28 @@
   :Game
   {:description "Container for game events."
    :fields
+   {:message {:type (non-null String)}}}
+
+  :Tick
+  {:fields
+   {:message {:type (non-null String)}}}
+
+  :BuyStockAck
+  {:fields
    {:message {:type (non-null String)}}}}
 
+
+ ;; //
+ :input-objects
+ {:BuyStock
+  {:description "An event to buy a stock"
+   :fields
+   {:tickId {:type (non-null String)}
+    :tickTime {:type (non-null Int)}
+    :tickPrice {:type (non-null Float)}}}}
+
+
+ ;; //
  :queries
  {:hello
   {:type String
@@ -19,6 +41,17 @@
   {:type String
    :resolve :resolve-login}}
 
+
+ ;; //
+ :mutations
+ {:buyStock
+  {:type :BuyStockAck
+   ;; :args {:input {:type String}}
+   :args {:input {:type :BuyStock}}
+   :resolve :resolve-buy-stock}}
+
+
+ ;; //
  :subscriptions
  {:ping
   {:type :Ping
@@ -30,7 +63,7 @@
     :message {:type (non-null String)}}}
 
   :newGame
-  {:type :Game
+  {:type :Tick
    :description "Creates a new game and sends updates to the client"
    :stream :stream-new-game
    :args
