@@ -5,6 +5,7 @@
             [clj-time.format :as f]
             [aero.core :as aero]
             [clojure.data.json :as json]
+            [datomic.client.api :as d]
             [io.pedestal.http :as server]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.test-util :as test-util]
@@ -13,7 +14,8 @@
             [io.pedestal.test :refer [response-for]]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.handler.http.service :as http.service]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :as util]
+            [clj-time.coerce :as c])
   (:import [java.util UUID]))
 
 
@@ -157,17 +159,32 @@
               expected-component-game-keys
               (sort '(:game :stocks-with-tick-data :tick-sleep-ms :data-subscription-channel :control-channel :close-sink-fn :sink-fn))]
 
-          (-> integrant.repl.state/system :game/games deref (get game-id) keys sort
+          (-> state/system :game/games deref (get game-id) keys sort
               (= expected-component-game-keys)
               is)))
 
       (testing "Subscription is being streamed to client"
 
-        (let [[t0-time t0-value] (parse-newGame-message (test-util/<message!! 1000))
-              [t1-time t1-value] (parse-newGame-message (test-util/<message!! 1000))
-
-              custom-formatter (f/formatter "yyyy-MM-dd'T'HH:mm:ss.SSSZ")]
+        (let [[t0-time _v0 id0] (trace (parse-newGame-message (test-util/<message!! 1000)))
+              [t1-time _v1 id1] (parse-newGame-message (test-util/<message!! 1000))]
 
           (is (t/after?
-                (f/parse custom-formatter t1-time)
-                (f/parse custom-formatter t0-time))))))))
+                (c/from-long (Long/parseLong t1-time))
+                (c/from-long (Long/parseLong t0-time))))
+
+          (testing "The two pushed ticks, got saved to the DB"
+
+            (let [conn (-> state/system :persistence/datomic :conn)
+
+                  tick-id0 (UUID/fromString id0)
+                  tick-id1 (UUID/fromString id1)]
+
+              (->> (d/q '[:find ?e
+                          :in $ [?tick-id ...]
+                          :where
+                          [?e :game.stock.tick/id ?tick-id]]
+                        (d/db conn)
+                        [tick-id0 tick-id1])
+                   count
+                   (= 2)
+                   is))))))))

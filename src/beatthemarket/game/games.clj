@@ -9,7 +9,8 @@
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.game :as game]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :as util])
+  (:import [java.util UUID]))
 
 
 (defmethod ig/init-key :game/games [_ _]
@@ -35,6 +36,8 @@
           (core.async/close! data-subscription-channel))
         (do
           (let [vv (<! data-subscription-channel)]
+
+            ;; TODO db/transact game stock tick
             ;; (trace (format "Sink value / %s" vv))
             (sink-fn vv))
           (recur))))))
@@ -49,10 +52,12 @@
 
 (defn initialize-game [conn user-entity source-stream]
 
-  (let [bind-data-sequence    #(->> (datasource/->combined-data-sequence
-                                      datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
-                                    (datasource/combined-data-sequence-with-datetime (t/now))
-                                    (assoc % :data-sequence))
+  (let [bind-data-sequence    (fn [a]
+                                (->> (datasource/->combined-data-sequence
+                                       datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
+                                     (datasource/combined-data-sequence-with-datetime (t/now))
+                                     (map #(conj % (UUID/randomUUID)))
+                                     (assoc a :data-sequence)))
         stocks                (->> (name-generator/generate-names 4)
                                    (map (juxt :stock-name :stock-symbol))
                                    (map #(apply game/->stock %))
@@ -83,53 +88,25 @@
   (-> integrant.repl.state/system :game/games)
 
 
-  ;; TODO
-  ;; config for which data sequences to send
-  ;; clock for each tick send
-  (let [runnable ^Runnable (fn []
 
-                             ;; game (or market)
-                             ;; user
-                             ;; stocks -> data-sequences
+  (>!! control-channel :foo)
+  (>!! control-channel :exit)
 
-                             (loop [
-                                    ;; new tick (on timer)
-                                    ;; calculate profit | loss
-                                    ;;   level completed
-                                    ;;   game won (ended)
-                                    ;;   game lost (ended)
-                                    ;; signals
-                                    ;;   game suspended
-                                    ;;   game resumed
-                                    ]
+  (def tick-sleep-ms 500)
+  (def control-channel (chan))
+  (let [data-sequence-channel (chan)]
 
-                               (recur))
-                             )]
+    (core.async/onto-chan data-sequence-channel (range))
 
-    (.start (Thread. runnable "stream-new-game-thread"))
+    (go-loop []
+      (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
+                                      control-channel])]
+        (if (= :exit v)
+          (println v)
+          (do
+            (println (<! data-sequence-channel))
+            (recur))))))
 
+  (def result *1)
 
-
-
-
-    (>!! control-channel :foo)
-    (>!! control-channel :exit)
-
-    (def tick-sleep-ms 500)
-    (def control-channel (chan))
-    (let [data-sequence-channel (chan)]
-
-      (core.async/onto-chan data-sequence-channel (range))
-
-      (go-loop []
-        (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
-                                        control-channel])]
-          (if (= :exit v)
-            (println v)
-            (do
-              (println (<! data-sequence-channel))
-              (recur))))))
-
-    (def result *1)
-
-    ))
+  )

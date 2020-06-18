@@ -2,10 +2,11 @@
   (:require [clojure.core.async :as core.async
              :refer [>!!]]
             [datomic.client.api :as d]
-            [integrant.repl.state :as repl.state]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [integrant.repl.state :as repl.state]
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
+            [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.game :as game]
             [beatthemarket.game.games :as games]
             [clojure.data.json :as json]))
@@ -43,16 +44,16 @@
         user-entity (hash-map :db/id result-user-id)
 
         ;; A
-        {:keys [game stocks-with-tick-data tick-sleep-ms
-                data-subscription-channel control-channel
-                close-sink-fn sink-fn] :as game-control}
+        {:keys                         [game stocks-with-tick-data tick-sleep-ms
+                                        data-subscription-channel control-channel
+                                        close-sink-fn sink-fn] :as game-control}
         (games/initialize-game conn user-entity source-stream)
 
         ;; B
         game-stocks (:game/stocks game)
         game-subscriptions (:game.user/subscriptions (game/game-user-by-user-id game result-user-id))
         message (-> (transform [MAP-VALS ALL :game.stock/id] str
-                               {:stocks game-stocks
+                               {:stocks        game-stocks
                                 :subscriptions game-subscriptions})
                     (assoc :game/id (str (:game/id game))))]
 
@@ -71,10 +72,26 @@
                (into #{})
                (games/narrow-stocks-by-game-user-subscription stocks-with-tick-data))
 
-          ;; TODO have a mechanism to stream multiple subscriptions
+          ;; NOTE have a mechanism to stream multiple subscriptions
+          conn (-> integrant.repl.state/system :persistence/datomic :conn)
           data-subscription-stock-sequence
           (->> data-subscription-stock first :data-sequence
-               (map (fn [[moment value]] [(str moment) value])))]
+               (map (fn [[m v t]]
+
+                      (let [moment (str m)
+                            value v
+                            tick-id (str t)]
+
+                        ;; i
+                        (persistence.datomic/transact-entities!
+                          conn
+                          (hash-map
+                            :game.stock.tick/trade-time m
+                            :game.stock.tick/close value
+                            :game.stock.tick/id t))
+
+                        ;; ii
+                        [moment value tick-id]))))]
 
       (core.async/onto-chan data-subscription-channel data-subscription-stock-sequence))
 

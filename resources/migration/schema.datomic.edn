@@ -123,7 +123,7 @@
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
  {:db/ident       :game.stock.tick/trade-time
-  :db/valueType   :db.type/instant
+  :db/valueType   :db.type/long
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
  {:db/ident       :game.stock.tick/close

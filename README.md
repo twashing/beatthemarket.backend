@@ -117,6 +117,7 @@ lein nvd check
   Use [Orchestra](https://github.com/jeaye/orchestra)
 
 * UI workbench for Integration test
+* Replace clj-time with juxt/tick (https://github.com/juxt/tick)
 
 
 * ? Stream two games at the same time

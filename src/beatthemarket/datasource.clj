@@ -1,5 +1,6 @@
 (ns beatthemarket.datasource
   (:require [clj-time.core :as t]
+            [clj-time.coerce :as c]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.sine :as datasource.sine]
             [beatthemarket.datasource.oscillating :as datasource.oscillating]))
@@ -45,7 +46,9 @@
    (combined-data-sequence-with-datetime start-time 0 combined-data-sequence))
   ([start-time y-offset combined-data-sequence]
    (let [time-seq (iterate #(t/plus % (t/seconds 1)) start-time)]
-     (map (fn [t y] [t (+ y-offset y)])
+     (map (fn [t y]
+            [(c/to-long t)
+             (+ y-offset y)])
           time-seq
           combined-data-sequence))))
 
