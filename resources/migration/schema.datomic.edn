@@ -1,6 +1,6 @@
 [
 
- ;; USERS
+ ;; USER
 
  ;; NOTE This entity is a Firebase user, tied to an external Identity Provider
  {:db/ident       :user/id
@@ -188,11 +188,19 @@
  {:db/ident       :bookkeeping.account/type
   :db/valueType   :db.type/ref ;; List of :bookkeeping.account.type
   :db/cardinality :db.cardinality/one
+  :db/isComponent true
   :db/doc         ""}
  {:db/ident       :bookkeeping.account/orientation
   :db/valueType   :db.type/ref ;; List of :bookkeeping.account.orientation
   :db/cardinality :db.cardinality/one
+  :db/isComponent true
   :db/doc         ""}
+ {:db/ident       :bookkeeping.account/counter-party
+  :db/valueType   :db.type/ref ;; :game.stock/id
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
+
 
 
  {:db/ident       :bookkeeping.tentry/id

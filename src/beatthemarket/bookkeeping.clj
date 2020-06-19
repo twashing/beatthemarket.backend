@@ -20,14 +20,20 @@
      (exists? entries) (assoc :bookkeeping.journal/entries entries))))
 
 
-(defn ->account [name type orientation]
-  (hash-map
-    :bookkeeping.account/id (UUID/randomUUID)
-    :bookkeeping.account/name name
-    :bookkeeping.account/type type
-    :bookkeeping.account/orientation orientation))
+(defn ->account
 
-#_(defn ->tentry
+  ([name type orientation] (->account name type orientation nil))
+
+  ([name type orientation counter-party]
+
+   (cond-> (hash-map
+             :bookkeeping.account/id (UUID/randomUUID)
+             :bookkeeping.account/name name
+             :bookkeeping.account/type type
+             :bookkeeping.account/orientation orientation)
+     (exists? counter-party) (assoc :bookkeeping.account/counter-party counter-party))))
+
+(defn ->tentry
 
   ([] (->tentry nil nil))
   ([debits credits]
@@ -35,14 +41,24 @@
      (exists? debits) (assoc :bookkeeping.tentry/debits debits)
      (exists? credits) (assoc :bookkeeping.tentry/credits credits))))
 
-#_(defn ->debit [account amount]
-  (hash-map
-    :bookkeeping.debit/id (UUID/randomUUID)
-    :bookkeeping.debit/account account
-    :bookkeeping.debit/amount amount))
+(defn ->debit
 
-#_(defn ->credit [account amount]
-  (hash-map
-    :bookkeeping.credit/id (UUID/randomUUID)
-    :bookkeeping.credit/account account
-    :bookkeeping.credit/amount amount))
+  ([account value] (->debit account value nil))
+
+  ([account value amount]
+   (cond-> (hash-map
+             :bookkeeping.debit/id (UUID/randomUUID)
+             :bookkeeping.debit/account account
+             :bookkeeping.debit/value value)
+     (exists? amount) (assoc :bookkeeping.debit/amount amount))))
+
+(defn ->credit
+
+  ([account value] (->credit account value nil))
+
+  ([account value amount]
+   (cond-> (hash-map
+             :bookkeeping.credit/id (UUID/randomUUID)
+             :bookkeeping.credit/account account
+             :bookkeeping.credit/value value)
+     (exists? amount) (assoc :bookkeeping.credit/amount amount))))

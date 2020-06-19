@@ -6,15 +6,15 @@
 
 
 
-(defn add-portfolio! [conn portfolio]
+#_(defn add-portfolio! [conn portfolio]
   (->> (persistence.datomic/conditionially-wrap-in-sequence portfolio)
        (persistence.datomic/transact! conn)))
 
-(defn add-journal! [conn journal]
+#_(defn add-journal! [conn journal]
   (->> (persistence.datomic/conditionially-wrap-in-sequence journal)
        (persistence.datomic/transact! conn)))
 
-(defn add-account! [conn account]
+#_(defn add-account! [conn account]
   (->> (persistence.datomic/conditionially-wrap-in-sequence account)
        (persistence.datomic/transact! conn)))
 

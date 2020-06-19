@@ -197,5 +197,4 @@
 
 (defn transact-entities! [conn entity]
   (->> (conditionially-wrap-in-sequence entity)
-       ;; util/pprint+identity
        (transact! conn)))

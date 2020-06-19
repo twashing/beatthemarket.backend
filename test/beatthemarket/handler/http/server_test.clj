@@ -219,7 +219,8 @@
                                  }"
 
 
-                         :variables {:input {:tickId "asdf"
+                         :variables {:input {:stockId 1234
+                                             :tickId "asdf"
                                              :tickTime 3456
                                              :tickPrice 1234.45}}}})
 

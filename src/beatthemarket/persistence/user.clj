@@ -14,6 +14,9 @@
 
     (d/q user-q db email)))
 
+(defn pull-user [conn user-id]
+  (d/pull (d/db conn) '[*] user-id))
+
 (defn add-user! [conn {:keys [email name uid]}]
 
   ;; Default set of accounts (:book)

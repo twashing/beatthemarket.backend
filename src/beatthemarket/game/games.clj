@@ -14,7 +14,8 @@
             [beatthemarket.game.game :as game]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.util :as util]
-            [beatthemarket.test-util :as test-util])
+            [beatthemarket.test-util :as test-util]
+            [beatthemarket.bookkeeping :as bookkeeping])
   (:import [java.util UUID]))
 
 
@@ -76,10 +77,7 @@
                                      (datasource/combined-data-sequence-with-datetime (t/now))
                                      (map #(conj % (UUID/randomUUID)))
                                      (assoc a :data-sequence)))
-        stocks                (->> (name-generator/generate-names 4)
-                                   (map (juxt :stock-name :stock-symbol))
-                                   (map #(apply game/->stock %))
-                                   (map game/bind-temporary-id))
+        stocks                (game/generate-stocks 4)
         stocks-with-tick-data (map bind-data-sequence stocks)
         game                  (game/initialize-game conn user-entity stocks)
 
@@ -140,43 +138,48 @@
 (comment
 
 
-
   (require '[beatthemarket.test-util :as test-util]
            '[beatthemarket.iam.authentication :as iam.auth]
            '[beatthemarket.iam.user :as iam.user])
 
 
-  (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
-        id-token                                            (test-util/->id-token)
-        {{email :email} :claims :as checked-authentication} (util/pprint+identity (iam.auth/check-authentication id-token))
-        {:keys [db-before db-after tx-data tempids]}        (iam.user/conditionally-add-new-user! conn checked-authentication)
-        result-user-id                                      (ffirst
-                                                              (d/q '[:find ?e
-                                                                     :in $ ?email
-                                                                     :where [?e :user/email ?email]]
-                                                                   (d/db conn)
-                                                                   email))
-        sink-fn                                             util/pprint+identity
+  ;; A
+  (do
 
-        ;; A
-        {:keys [game stocks-with-tick-data tick-sleep-ms
+    (def conn                   (-> repl.state/system :persistence/datomic :conn))
+    (def id-token               (test-util/->id-token))
+    (def checked-authentication (iam.auth/check-authentication id-token))
+    (def add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication))
+    (def result-user-id         (ffirst
+                                  (d/q '[:find ?e
+                                         :in $ ?email
+                                         :where [?e :user/email ?email]]
+                                       (d/db conn)
+                                       (-> checked-authentication
+                                           :claims (get "email")))))
+    (def sink-fn                util/pprint+identity)
+    (def game-control           (create-game! conn result-user-id sink-fn)))
+
+
+  ;; B
+  (let [{:keys [game stocks-with-tick-data tick-sleep-ms
                 data-subscription-channel control-channel
-                close-sink-fn sink-fn] :as game-control} (create-game! conn result-user-id sink-fn)
+                close-sink-fn sink-fn]}
+        game-control]
 
-        ;; B
-        message (game->new-game-message game result-user-id)]
-
-    ;; C
     (stream-subscription! tick-sleep-ms
                           data-subscription-channel control-channel
                           close-sink-fn sink-fn)
 
-    (>!! data-subscription-channel message)
+    ;; (def message                (game->new-game-message game result-user-id))
+    ;; (>!! data-subscription-channel message)
 
-    ;; D  NOTE have a mechanism to stream multiple subscriptions
     (core.async/onto-chan
       data-subscription-channel
-      (data-subscription-stock-sequence conn game user-id stocks-with-tick-data))))
+      (data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data)))
+
+  ;; C
+  (-> game-control :control-channel (>!! :exit)))
 
 (comment
 
