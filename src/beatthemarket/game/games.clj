@@ -3,13 +3,18 @@
              :refer [go go-loop chan timeout alts! <! >!!]]
             [clj-time.core :as t]
             [clojure.data.json :as json]
+            [datomic.client.api :as d]
+            [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [integrant.core :as ig]
-            [integrant.repl.state]
+            [integrant.repl.state :as repl.state]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
+            [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.game :as game]
-            [beatthemarket.util :as util])
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.util :as util]
+            [beatthemarket.test-util :as test-util])
   (:import [java.util UUID]))
 
 
@@ -33,11 +38,11 @@
 ;; F.
 ;; Pause | Resume a Game
 
-(defn stream-subscription [tick-sleep-ms
-                           data-subscription-channel
-                           control-channel
-                           close-sink-fn
-                           sink-fn]
+(defn stream-subscription! [tick-sleep-ms
+                            data-subscription-channel
+                            control-channel
+                            close-sink-fn
+                            sink-fn]
 
   (go-loop []
     (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
@@ -60,10 +65,10 @@
           stocks))
 
 (defn register-game-control! [game game-control]
-  (swap! (:game/games integrant.repl.state/system)
+  (swap! (:game/games repl.state/system)
          assoc (:game/id game) game-control))
 
-(defn initialize-game [conn user-entity source-stream]
+(defn initialize-game [conn user-entity sink-fn]
 
   (let [bind-data-sequence    (fn [a]
                                 (->> (datasource/->combined-data-sequence
@@ -84,12 +89,94 @@
                                    :tick-sleep-ms             500
                                    :data-subscription-channel data-subscription-channel
                                    :control-channel           (chan)
-                                   :close-sink-fn             (partial source-stream nil)
-                                   :sink-fn                   #(source-stream {:message (json/write-str %)})}]
+                                   :close-sink-fn             (partial sink-fn nil)
+                                   :sink-fn                   #(sink-fn {:message (json/write-str %)})}]
 
     (register-game-control! game game-control)
     game-control))
 
+
+(defn create-game! [conn user-id sink-fn]
+  (let [user-entity (hash-map :db/id user-id)]
+    (initialize-game conn user-entity sink-fn)))
+
+(defn game->new-game-message [game user-id]
+
+  (let [game-stocks        (:game/stocks game)
+        game-subscriptions (:game.user/subscriptions (game/game-user-by-user-id game user-id))]
+
+    (-> (transform [MAP-VALS ALL :game.stock/id] str
+                   {:stocks        game-stocks
+                    :subscriptions game-subscriptions})
+        (assoc :game/id (str (:game/id game))))))
+
+(defn data-subscription-stock-sequence [conn game user-id stocks-with-tick-data]
+
+  (let [data-subscription-stock
+        (->> (game/game-user-by-user-id game user-id)
+             :game.user/subscriptions
+             (map :game.stock/id)
+             (into #{})
+             (narrow-stocks-by-game-user-subscription stocks-with-tick-data))]
+
+    (->> data-subscription-stock first :data-sequence
+         (map (fn [[m v t]]
+
+                (let [moment  (str m)
+                      value   v
+                      tick-id (str t)]
+
+                  ;; i
+                  (persistence.datomic/transact-entities!
+                    conn
+                    (hash-map
+                      :game.stock.tick/trade-time m
+                      :game.stock.tick/close value
+                      :game.stock.tick/id t))
+
+                  ;; ii
+                  [moment value tick-id]))))))
+
+(comment
+
+
+
+  (require '[beatthemarket.test-util :as test-util]
+           '[beatthemarket.iam.authentication :as iam.auth]
+           '[beatthemarket.iam.user :as iam.user])
+
+
+  (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
+        id-token                                            (test-util/->id-token)
+        {{email :email} :claims :as checked-authentication} (util/pprint+identity (iam.auth/check-authentication id-token))
+        {:keys [db-before db-after tx-data tempids]}        (iam.user/conditionally-add-new-user! conn checked-authentication)
+        result-user-id                                      (ffirst
+                                                              (d/q '[:find ?e
+                                                                     :in $ ?email
+                                                                     :where [?e :user/email ?email]]
+                                                                   (d/db conn)
+                                                                   email))
+        sink-fn                                             util/pprint+identity
+
+        ;; A
+        {:keys [game stocks-with-tick-data tick-sleep-ms
+                data-subscription-channel control-channel
+                close-sink-fn sink-fn] :as game-control} (create-game! conn result-user-id sink-fn)
+
+        ;; B
+        message (game->new-game-message game result-user-id)]
+
+    ;; C
+    (stream-subscription! tick-sleep-ms
+                          data-subscription-channel control-channel
+                          close-sink-fn sink-fn)
+
+    (>!! data-subscription-channel message)
+
+    ;; D  NOTE have a mechanism to stream multiple subscriptions
+    (core.async/onto-chan
+      data-subscription-channel
+      (data-subscription-stock-sequence conn game user-id stocks-with-tick-data))))
 
 (comment
 
@@ -97,9 +184,8 @@
   (initialize-game)
   (def result *1)
 
-  (require '[integrant.repl.state])
-  (-> integrant.repl.state/system :game/games)
 
+  (-> repl.state/system :game/games)
 
 
   (>!! control-channel :foo)
@@ -120,6 +206,4 @@
             (println (<! data-sequence-channel))
             (recur))))))
 
-  (def result *1)
-
-  )
+  (def result *1))
