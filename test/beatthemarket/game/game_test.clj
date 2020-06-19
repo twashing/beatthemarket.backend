@@ -1,10 +1,10 @@
-(ns beatthemarket.game-test
+(ns beatthemarket.game.game-test
   (:require [clojure.test :refer :all]
             [datomic.client.api :as d]
             [integrant.repl.state :as state]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.persistence.user :as persistence.user]
-            [beatthemarket.game :as game]
+            [beatthemarket.game.game :as game]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
 

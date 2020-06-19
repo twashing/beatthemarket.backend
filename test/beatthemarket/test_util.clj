@@ -131,7 +131,7 @@
 
 
 ;; GraphQL
-(def ws-uri "ws://localhost:8080/graphql-ws")
+(def ws-uri "ws://localhost:8080/ws")
 (def ^:dynamic *messages-ch* nil)
 (def ^:dynamic *session* nil)
 (def *subscriber-id (atom 0))

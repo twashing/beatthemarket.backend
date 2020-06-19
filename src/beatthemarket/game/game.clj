@@ -1,4 +1,4 @@
-(ns beatthemarket.game
+(ns beatthemarket.game.game
   (:require [clj-time.core :as t]
             [clj-time.coerce :as c]
             [com.rpl.specter :refer [select-one  pred ALL]]

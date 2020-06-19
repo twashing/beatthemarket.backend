@@ -8,7 +8,7 @@
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
-            [beatthemarket.game :as game]
+            [beatthemarket.game.game :as game]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
 

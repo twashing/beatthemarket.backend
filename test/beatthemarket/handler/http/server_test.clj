@@ -165,7 +165,7 @@
 
       (testing "Subscription is being streamed to client"
 
-        (let [[t0-time _v0 id0] (trace (parse-newGame-message (test-util/<message!! 1000)))
+        (let [[t0-time _v0 id0] (parse-newGame-message (test-util/<message!! 1000))
               [t1-time _v1 id1] (parse-newGame-message (test-util/<message!! 1000))]
 
           (is (t/after?
@@ -212,25 +212,16 @@
   (test-util/send-data {:id 987
                         :type :start
                         :payload
-                        {:query
-
-                         #_"mutation {
-                                   buyStock(input: \"Foo\") {
-                                     message
-                                   }
-                                 }"
-
-                         "mutation BuyStock($input: BuyStock!) {
+                        {:query "mutation BuyStock($input: BuyStock!) {
                                    buyStock(input: $input) {
                                      message
                                    }
                                  }"
 
+
                          :variables {:input {:tickId "asdf"
                                              :tickTime 3456
-                                             :tickPrice 1234.45}}
-
-                         }})
+                                             :tickPrice 1234.45}}}})
 
   (let [ack (test-util/<message!! 1000)]
 

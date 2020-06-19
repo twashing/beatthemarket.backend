@@ -7,7 +7,7 @@
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.game :as game]
+            [beatthemarket.game.game :as game]
             [beatthemarket.game.games :as games]
             [clojure.data.json :as json]))
 
@@ -30,8 +30,10 @@
 
 ;; TODO
 ;; Buy Stock
+
 ;;   ? pause subscription stream
 ;;     custom onto-chan (pause, inject vals)
+
 ;;   db/q game stock
 ;;   verify tick id
 ;;   verify tick price
@@ -42,7 +44,8 @@
 (defn resolve-buy-stock [context a b]
 
   (println "resolve-buy-stock CALLED / " a b)
-  {:message "Ack"})
+  {:message
+   "Ack"})
 
 (defn stream-new-game
   [context _ source-stream]
