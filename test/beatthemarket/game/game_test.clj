@@ -61,3 +61,108 @@
               game-user-subscriptions (-> game-users first :game.user/subscriptions)]
 
           (is (some (into #{} game-stocks) game-user-subscriptions)))))))
+
+#_(deftest create-entry-test
+
+  (let [result-user-id (test-utils/generate-user conn)]
+
+    ))
+
+
+(comment ;; TEntry
+
+
+  (require '[integrant.repl.state :as repl.state]
+           '[beatthemarket.test-util :as test-util]
+           '[beatthemarket.bookkeeping :as bookkeeping]
+           '[beatthemarket.iam.authentication :as iam.auth]
+           '[beatthemarket.iam.user :as iam.user])
+
+
+  ;; USER
+  (do
+
+    (def conn                   (-> repl.state/system :persistence/datomic :conn))
+    (def id-token               (test-util/->id-token))
+    (def checked-authentication (iam.auth/check-authentication id-token))
+    (def add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication))
+    (def result-user-id         (ffirst
+                                  (d/q '[:find ?e
+                                         :in $ ?email
+                                         :where [?e :user/email ?email]]
+                                       (d/db conn)
+                                       (-> checked-authentication
+                                           :claims (get "email"))))))
+
+  ;; ACCOUNT
+  (do
+    (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
+    (->> (d/pull (d/db conn) '[*] result-user-id)
+         util/pprint+identity
+         (def user-pulled)))
+
+  ;; (cash-account-by-user user-pulled)
+  ;; (equity-account-by-user user-pulled)
+
+  ;; TODO Input
+  #_{:stockId 1234
+     :tickId "asdf"
+     :tickTime 3456
+     :tickPrice 1234.45}
+
+
+  ;; STOCK
+  (def stocks (generate-stocks 1))
+  (persistence.datomic/transact-entities! conn stocks)
+  (def result-stock-id (ffirst
+                         (d/q '[:find ?e
+                                :in $ ?stock-id
+                                :where [?e :game.stock/id ?stock-id]]
+                              (d/db conn)
+                              (-> stocks first :game.stock/id))))
+  (->> (d/pull (d/db conn) '[*] result-stock-id)
+       util/pprint+identity
+       (def stock-pulled))
+
+
+  ;; Create account for stock
+  (let [counter-party (select-keys stock-pulled [:db/id])]
+
+    (def account (apply bookkeeping/->account
+                        [(->> stock-pulled :game.stock/name (format "STOCK.%s"))
+                         :bookkeeping.account.type/asset
+                         :bookkeeping.account.orientation/debit
+                         counter-party]))
+    (persistence.datomic/transact-entities! conn account))
+  (def stock-account-id (ffirst
+                          (d/q '[:find ?e
+                                 :in $ ?account-id
+                                 :where [?e :bookkeeping.account/id ?account-id]]
+                               (d/db conn)
+                               (-> account :bookkeeping.account/id))))
+
+
+  ;; TENTRY
+  (let [cash-account (:db/id (cash-account-by-user user-pulled))
+        debit-value 1234.45
+
+        credit-account {:db/id stock-account-id}
+        credit-value 1234.45
+
+        debits+credits [(bookkeeping/->debit cash-account debit-value)
+                        (bookkeeping/->credit credit-account credit-value)]]
+
+    ;; TODO Create TEntry
+    (def tentry (apply bookkeeping/->tentry debits+credits))
+    (persistence.datomic/transact-entities! conn tentry))
+
+  (def result-tentry-id (ffirst
+                         (d/q '[:find ?e
+                                :in $ ?tentry-id
+                                :where [?e :bookkeeping.tentry/id ?tentry-id]]
+                              (d/db conn)
+                              (:bookkeeping.tentry/id tentry))))
+  (->> (d/pull (d/db conn) '[*] result-tentry-id)
+       util/pprint+identity
+       (def tentry-pulled))
+  )

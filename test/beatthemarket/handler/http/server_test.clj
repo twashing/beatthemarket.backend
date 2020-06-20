@@ -23,7 +23,7 @@
 (use-fixtures :each
   test-util/component-fixture
   test-util/migration-fixture
-  (test-util/subscriptions-fixture "ws://localhost:8080/ws"))
+  (test-util/subscriptions-fixture "ws://localhost:8081/ws"))
 
 
 (deftest basic-handler-test
@@ -219,12 +219,12 @@
                                  }"
 
 
-                         :variables {:input {:stockId 1234
+                         :variables {:input {:stockId "qwerty"
                                              :tickId "asdf"
                                              :tickTime 3456
                                              :tickPrice 1234.45}}}})
 
-  (let [ack (test-util/<message!! 1000)]
+  (let [ack (trace (test-util/<message!! 1000))]
 
     (is (= {:type "data" :id 987 :payload {:data {:buyStock {:message "Ack"}}}}
            ack))

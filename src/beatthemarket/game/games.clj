@@ -1,6 +1,6 @@
 (ns beatthemarket.game.games
   (:require [clojure.core.async :as core.async
-             :refer [go go-loop chan timeout alts! <! >!!]]
+             :refer [go go-loop chan close! timeout alts! >! <! >!!]]
             [clj-time.core :as t]
             [clojure.data.json :as json]
             [datomic.client.api :as d]
@@ -23,7 +23,10 @@
   (atom {}))
 
 (defmethod ig/halt-key! :game/games [_ games]
-  (run! #(>!! (:control-channel %) :exit)
+  (run! (fn [{:keys [data-subscription-channel control-channel]}]
+          (go (>! control-channel :exit))
+          (close! data-subscription-channel)
+          (close! control-channel))
         (-> games deref vals)))
 
 ;; C.
@@ -49,15 +52,17 @@
     (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
                                     control-channel])]
 
+      (println (format "go-loop / value / %s" v))
       (if (= :exit v)
-        (do
+        (close-sink-fn)
+        #_(do
           (close-sink-fn)
           (core.async/close! data-subscription-channel))
         (do
           (let [vv (<! data-subscription-channel)]
 
             ;; TODO calculate game position
-            ;; (trace (format "Sink value / %s" vv))
+            (println (format "Sink value / %s" vv))
             (sink-fn vv))
           (recur))))))
 
@@ -81,11 +86,10 @@
         stocks-with-tick-data (map bind-data-sequence stocks)
         game                  (game/initialize-game conn user-entity stocks)
 
-        data-subscription-channel (chan)
         game-control              {:game                      game
                                    :stocks-with-tick-data     stocks-with-tick-data
                                    :tick-sleep-ms             500
-                                   :data-subscription-channel data-subscription-channel
+                                   :data-subscription-channel (chan)
                                    :control-channel           (chan)
                                    :close-sink-fn             (partial sink-fn nil)
                                    :sink-fn                   #(sink-fn {:message (json/write-str %)})}]
@@ -134,52 +138,6 @@
 
                   ;; ii
                   [moment value tick-id]))))))
-
-(comment
-
-
-  (require '[beatthemarket.test-util :as test-util]
-           '[beatthemarket.iam.authentication :as iam.auth]
-           '[beatthemarket.iam.user :as iam.user])
-
-
-  ;; A
-  (do
-
-    (def conn                   (-> repl.state/system :persistence/datomic :conn))
-    (def id-token               (test-util/->id-token))
-    (def checked-authentication (iam.auth/check-authentication id-token))
-    (def add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication))
-    (def result-user-id         (ffirst
-                                  (d/q '[:find ?e
-                                         :in $ ?email
-                                         :where [?e :user/email ?email]]
-                                       (d/db conn)
-                                       (-> checked-authentication
-                                           :claims (get "email")))))
-    (def sink-fn                util/pprint+identity)
-    (def game-control           (create-game! conn result-user-id sink-fn)))
-
-
-  ;; B
-  (let [{:keys [game stocks-with-tick-data tick-sleep-ms
-                data-subscription-channel control-channel
-                close-sink-fn sink-fn]}
-        game-control]
-
-    (stream-subscription! tick-sleep-ms
-                          data-subscription-channel control-channel
-                          close-sink-fn sink-fn)
-
-    ;; (def message                (game->new-game-message game result-user-id))
-    ;; (>!! data-subscription-channel message)
-
-    (core.async/onto-chan
-      data-subscription-channel
-      (data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data)))
-
-  ;; C
-  (-> game-control :control-channel (>!! :exit)))
 
 (comment
 

@@ -27,7 +27,6 @@
     (state.core/init-components)
     (migration.core/run-migrations))
 
-
   (pprint integrant.repl.state/config)
   (pprint integrant.repl.state/system)
 

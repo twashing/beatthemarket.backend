@@ -15,7 +15,10 @@
             [clj-http.client :as http]
             [gniazdo.core :as g]
             [expound.alpha :as expound]
+            [datomic.client.api :as d]
             [compute.datomic-client-memdb.core :as memdb]
+            [beatthemarket.iam.authentication :as iam.auth]
+            [beatthemarket.iam.user :as iam.user]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.migration.core :as migration.core]
@@ -128,6 +131,22 @@
         :body
         (json/read-str :key-fn keyword)
         :idToken)))
+
+
+
+  ;; USER
+(defn generate-user [conn]
+
+  (let [id-token               (->id-token)
+        checked-authentication (iam.auth/check-authentication id-token)
+        add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication)]
+    (ffirst
+      (d/q '[:find ?e
+             :in $ ?email
+             :where [?e :user/email ?email]]
+           (d/db conn)
+           (-> checked-authentication
+               :claims (get "email"))))))
 
 
 ;; GraphQL
