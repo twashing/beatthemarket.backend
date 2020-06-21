@@ -1,8 +1,15 @@
 (ns beatthemarket.game.games-test
   (:require [clojure.test :refer :all]
+            [clojure.core.async :as core.async
+             :refer [>!! <!!] #_[go go-loop chan close! timeout alts! >! <! >!!]]
+            [clj-time.core :as t]
+            [clj-time.format :as f]
+            [clj-time.coerce :as c]
+            [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
             [beatthemarket.game.games :as games]
-            [beatthemarket.test-util :as test-util]))
+            [beatthemarket.test-util :as test-util])
+  (:import [java.util UUID]))
 
 
 (use-fixtures :once (partial test-util/component-prep-fixture :test))
@@ -27,49 +34,45 @@
            keys
            sort
            (= expected-game-control-keys)
-           is))))
-
-(comment
+           is)
 
 
-  (require '[beatthemarket.test-util :as test-util]
-           '[beatthemarket.iam.authentication :as iam.auth]
-           '[beatthemarket.iam.user :as iam.user])
+      (testing "Streaming subscription flows through the correct value"
 
-  ;; A
-  (do
+        (let [{:keys [game tick-sleep-ms stocks-with-tick-data
+                      data-subscription-channel control-channel]} game-control
+              close-sink-fn sink-fn]
 
-    (def conn                   (-> repl.state/system :persistence/datomic :conn))
-    (def id-token               (test-util/->id-token))
-    (def checked-authentication (iam.auth/check-authentication id-token))
-    (def add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication))
-    (def result-user-id         (ffirst
-                                  (d/q '[:find ?e
-                                         :in $ ?email
-                                         :where [?e :user/email ?email]]
-                                       (d/db conn)
-                                       (-> checked-authentication
-                                           :claims (get "email")))))
-    (def sink-fn                util/pprint+identity)
-    (def game-control           (create-game! conn result-user-id sink-fn)))
+          (games/stream-subscription! tick-sleep-ms
+                                      data-subscription-channel control-channel
+                                      close-sink-fn sink-fn)
+
+          (games/onto-open-chan
+            ;; core.async/onto-chan
+            data-subscription-channel
+            (games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data))
+
+          (let [[t0-time _ id0] (<!! data-subscription-channel)
+                [t1-time _ id1] (<!! data-subscription-channel)]
+
+            (is (t/after?
+                  (c/from-long (Long/parseLong t1-time))
+                  (c/from-long (Long/parseLong t0-time))))
 
 
-  ;; B
-  (let [{:keys [game stocks-with-tick-data tick-sleep-ms
-                data-subscription-channel control-channel
-                close-sink-fn sink-fn]}
-        game-control]
+            (testing "Two ticks streamed to client, got saved to the DB"
 
-    (stream-subscription! tick-sleep-ms
-                          data-subscription-channel control-channel
-                          close-sink-fn sink-fn)
+              (let [conn (-> repl.state/system :persistence/datomic :conn)
 
-    ;; (def message                (game->new-game-message game result-user-id))
-    ;; (>!! data-subscription-channel message)
+                    tick-id0 (UUID/fromString id0)
+                    tick-id1 (UUID/fromString id1)]
 
-    (core.async/onto-chan
-      data-subscription-channel
-      (data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data)))
-
-  ;; C
-  (-> game-control :control-channel (>!! :exit)))
+                (->> (d/q '[:find ?e
+                            :in $ [?tick-id ...]
+                            :where
+                            [?e :game.stock.tick/id ?tick-id]]
+                          (d/db conn)
+                          [tick-id0 tick-id1])
+                     count
+                     (= 2)
+                     is)))))))))

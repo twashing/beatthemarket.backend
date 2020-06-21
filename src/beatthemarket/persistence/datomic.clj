@@ -53,6 +53,7 @@
   (->datomic-client datomic-opts))
 
 (defmethod ig/halt-key! :persistence/datomic [_ datomic-component-map]
+  (println "Closing database...")
   (close-db-connection! datomic-component-map))
 
 

@@ -19,9 +19,10 @@
             [compute.datomic-client-memdb.core :as memdb]
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.user :as iam.user]
-            [beatthemarket.state.core :as state.core]
-            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.game.game :as game]
             [beatthemarket.migration.core :as migration.core]
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.state.core :as state.core]
             [beatthemarket.util :as util])
   (:import [com.google.firebase.auth FirebaseAuth]))
 
@@ -147,6 +148,24 @@
            (d/db conn)
            (-> checked-authentication
                :claims (get "email"))))))
+
+
+;; DOMAIN
+(defn generate-stocks
+
+  ([conn] (generate-stocks conn 1))
+
+  ([conn no-of-stocks]
+
+   (let [stocks (game/generate-stocks no-of-stocks)]
+
+     (persistence.datomic/transact-entities! conn stocks)
+
+     (d/q '[:find ?e
+            :in $ [?stock-id ...]
+            :where [?e :game.stock/id ?stock-id]]
+          (d/db conn)
+          (map :game.stock/id stocks)))))
 
 
 ;; GraphQL

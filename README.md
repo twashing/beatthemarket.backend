@@ -110,6 +110,12 @@ lein nvd check
   * Buy a stock sell a stock
   * Complete level 1
 
+
+* Need a mechanism to stop data-subscription ticks -> db transact, when Channel or DB is closed
+goo-loop and closed? on core.async channels are not a good enough control mechanism
+async operations take a long time, and can have a closed DB when trying to write
+
+
 * generate specs from example data
   * https://github.com/stathissideris/spec-provider
 

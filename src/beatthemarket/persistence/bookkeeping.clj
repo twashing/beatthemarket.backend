@@ -5,6 +5,8 @@
    [beatthemarket.persistence.datomic :as persistence.datomic]))
 
 
+;; TODO delete namespace until needed
+
 
 #_(defn add-portfolio! [conn portfolio]
   (->> (persistence.datomic/conditionially-wrap-in-sequence portfolio)

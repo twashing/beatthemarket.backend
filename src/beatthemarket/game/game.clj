@@ -12,28 +12,6 @@
   (:import [java.util UUID]))
 
 
-(defn cash-account-by-user
-
-  ([conn user-id]
-   (cash-account-by-user (persistence.user/pull-user conn user-id)))
-
-  ([user-pulled]
-   (->> user-pulled
-        :user/accounts
-        (filter #(= "Equity" (:bookkeeping.account/name %)))
-        first)))
-
-(defn equity-account-by-user
-
-  ([conn user-id]
-   (equity-account-by-user (persistence.user/pull-user conn user-id)))
-
-  ([user-pulled]
-   (->> user-pulled
-        :user/accounts
-        (filter #(= "Cash" (:bookkeeping.account/name %)))
-        first)))
-
 (defn game-user-by-user-id [game result-user-id]
   (select-one [:game/users ALL (pred #(= result-user-id
                                          (-> % :game.user/user :db/id)))]
@@ -216,7 +194,11 @@
        (def stock-pulled))
 
 
-  ;; Create account for stock
+
+  ;; >> ==================================== >>
+
+
+  ;; >> Conditionally Create account for stock <<
   (let [counter-party (select-keys stock-pulled [:db/id])]
 
     (def account (apply bookkeeping/->account
@@ -256,6 +238,10 @@
   (->> (d/pull (d/db conn) '[*] result-tentry-id)
        util/pprint+identity
        (def tentry-pulled))
+
+
+  ;; >> ==================================== >>
+
   )
 
 (comment ;; Game
@@ -295,4 +281,3 @@
                         (d/db conn)))
 
   (d/pull (d/db conn) '[*] (ffirst result-game)))
-

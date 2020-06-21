@@ -3,6 +3,7 @@
             [datomic.client.api :as d]
             [integrant.repl.state :as state]
             [beatthemarket.test-util :as test-util]
+            [beatthemarket.bookkeeping :as bookkeeping]
             [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.game.game :as game]
             [beatthemarket.util :as util])
@@ -39,7 +40,7 @@
         ;; Initialize Game
         game (game/initialize-game conn user-entity)
         result-game-id (-> (d/q '[:find ?e
-                                  :in $ ?game-idre
+                                  :in $ ?game-id
                                   :where [?e :game/id ?game-id]]
                                 (d/db conn)
                                 (:game/id game))
@@ -62,12 +63,39 @@
 
           (is (some (into #{} game-stocks) game-user-subscriptions)))))))
 
-#_(deftest create-entry-test
+(deftest create-entry-test
 
-  (let [result-user-id (test-utils/generate-user conn)]
+  (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
 
-    ))
+        result-user-id (test-util/generate-user conn)
+        result-stock-id (ffirst (test-util/generate-stocks conn 1))
 
+        tentry (bookkeeping/buy-stock! conn result-user-id result-stock-id 5000.47)
+
+        result-tentry-id (ffirst
+                           (d/q '[:find ?e
+                                  :in $ ?tentry-id
+                                  :where [?e :bookkeeping.tentry/id ?tentry-id]]
+                                (d/db conn)
+                                (:bookkeeping.tentry/id tentry)))]
+
+    (is (util/exists? result-tentry-id))
+
+    (let [pulled-tentry (d/pull (d/db conn) '[*] result-tentry-id)]
+
+
+      ;; debit is cash account
+
+      ;; we have new stock account
+
+      ;; credit is stock account
+
+      ;; >> debits + credits balance
+
+      ;; Portfoliio now has value of
+      ;;   +stock account
+      ;;   -cash account
+      )))
 
 (comment ;; TEntry
 

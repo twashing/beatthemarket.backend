@@ -75,7 +75,7 @@
     (>!! data-subscription-channel message)
 
     ;; D  NOTE have a mechanism to stream multiple subscriptions
-    (core.async/onto-chan
+    (games/onto-open-chan ;;core.async/onto-chan
       data-subscription-channel
       (games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data))
 
