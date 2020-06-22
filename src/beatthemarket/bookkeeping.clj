@@ -1,5 +1,6 @@
 (ns beatthemarket.bookkeeping
   (:require [datomic.client.api :as d]
+            [com.rpl.specter :refer [select pred ALL MAP-VALS]]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.util :as util :refer [exists?]])
@@ -43,27 +44,153 @@
      (exists? debits)  (assoc :bookkeeping.tentry/debits debits)
      (exists? credits) (assoc :bookkeeping.tentry/credits credits))))
 
-(defn ->debit
+(defn ->debit [account value price amount]
 
-  ([account value] (->debit account value nil))
+  (cond-> (hash-map
+            :bookkeeping.debit/id (UUID/randomUUID)
+            :bookkeeping.debit/account account
+            :bookkeeping.debit/value value
+            ;; :db/ensure :bookkeeping.debit/validate
+            )
 
-  ([account value amount]
-   (cond-> (hash-map
-             :bookkeeping.debit/id (UUID/randomUUID)
-             :bookkeeping.debit/account account
-             :bookkeeping.debit/value value)
-     (exists? amount) (assoc :bookkeeping.debit/amount amount))))
+    (exists? price) (assoc :bookkeeping.debit/price price)
+    (exists? amount) (assoc :bookkeeping.debit/amount amount)))
 
-(defn ->credit
+(defn ->credit [account value price amount]
 
-  ([account value] (->credit account value nil))
+  (cond-> (hash-map
+            :bookkeeping.credit/id (UUID/randomUUID)
+            :bookkeeping.credit/account account
+            :bookkeeping.credit/value value
+            ;; :db/ensure :bookkeeping.credit/validate
+            )
 
-  ([account value amount]
-   (cond-> (hash-map
-             :bookkeeping.credit/id (UUID/randomUUID)
-             :bookkeeping.credit/account account
-             :bookkeeping.credit/value value)
-     (exists? amount) (assoc :bookkeeping.credit/amount amount))))
+    (exists? price) (assoc :bookkeeping.credit/price price)
+    (exists? amount) (assoc :bookkeeping.credit/amount amount)))
+
+
+(defn tentry-balanced? [tentry]
+
+  (let [{:keys [:bookkeeping.tentry/debits :bookkeeping.tentry/credits]} tentry]
+
+    ;; LHS
+    ;; :bookkeeping.debit/account
+    ;; :bookkeeping.account/orientation
+    ;; :db/ident :bookkeeping.account.orientation/debit
+    ;;
+    ;; :bookkeeping.credit/account
+    ;; :bookkeeping.account/orientation
+    ;; :db/ident :bookkeeping.account.orientation/credit
+
+    ;; RHS
+    ;; :bookkeeping.credit/account
+    ;; :bookkeeping.account/orientation
+    ;; :db/ident :bookkeeping.account.orientation/debit
+    ;;
+    ;; :bookkeeping.debit/account
+    ;; :bookkeeping.account/orientation
+    ;; :db/ident :bookkeeping.account.orientation/credit
+
+    (let [debits+credits (concat debits credits)
+          lhs (filter (fn [debit-or-credit]
+                        (or
+                          (-> debit-or-credit
+                              :bookkeeping.debit/account
+                              :bookkeeping.account/orientation
+                              (#(= :bookkeeping.account.orientation/debit (:db/ident %))))
+                          (-> debit-or-credit
+                              :bookkeeping.credit/account
+                              :bookkeeping.account/orientation
+                              (#(= :bookkeeping.account.orientation/credit (:db/ident %))))))
+                      debits+credits)
+
+          rhs (filter (fn [debit-or-credit]
+
+                        (or
+                          (-> debit-or-credit
+                              :bookkeeping.credit/account
+                              :bookkeeping.account/orientation
+                              (#(= :bookkeeping.account.orientation/debit (:db/ident %))))
+                          (-> debit-or-credit
+                              :bookkeeping.debit/account
+                              :bookkeeping.account/orientation
+                              (#(= :bookkeeping.account.orientation/credit (:db/ident %)))))))]
+
+      :bookkeeping.debit/value
+      :bookkeeping.credit/value
+      )))
+
+(comment
+
+  (def tentry
+
+    {:db/id 17592186045444
+     :bookkeeping.tentry/id #uuid "c0d5052c-84f6-4d2c-921c-d0c41140f2b2"
+
+     :bookkeeping.tentry/debits
+     [{:db/id 17592186045445
+       :bookkeeping.debit/id #uuid "ccd8e77d-7f61-4477-a653-91f19460f404"
+       :bookkeeping.debit/account
+       {:db/id 17592186045437
+        :bookkeeping.account/id #uuid "69ffdf42-5220-409b-8f3e-1aa1f5d02c6e"
+        :bookkeeping.account/name "Cash"
+        :bookkeeping.account/type
+        {:db/id 17592186045428
+         :db/ident :bookkeeping.account.type/asset}
+        :bookkeeping.account/orientation
+        {:db/id 17592186045433
+         :db/ident :bookkeeping.account.orientation/debit}}
+       :bookkeeping.debit/value 5047.0}]
+
+     :bookkeeping.tentry/credits
+     [{:db/id 17592186045446
+       :bookkeeping.credit/id #uuid "12aa40e7-2b88-4468-bca3-90755057d366"
+       :bookkeeping.credit/account
+       {:db/id 17592186045442
+        :bookkeeping.account/id #uuid "1f9ade32-fd02-4322-9a7f-05bed58a4c84"
+        :bookkeeping.account/name "STOCK.Dangerous Quota"
+        :bookkeeping.account/type
+        {:db/id 17592186045428
+         :db/ident :bookkeeping.account.type/asset}
+        :bookkeeping.account/orientation
+        {:db/id 17592186045433
+         :db/ident :bookkeeping.account.orientation/debit}
+        :bookkeeping.account/counter-party
+        {:db/id 17592186045440
+         :game.stock/id #uuid "f8c4c6ca-7d12-4d57-af63-5c3049b42fe0"
+         :game.stock/name "Dangerous Quota"
+         :game.stock/symbol "DANG"}}
+       :bookkeeping.credit/value 5047.0
+       :bookkeeping.credit/price 50.47
+       :bookkeeping.credit/amount 100}]
+
+     })
+
+  (pprint tentry)
+  (pprint (tentry-balanced? tentry))
+
+
+  #_{:db/id 17592186045437
+     :bookkeeping.account/id
+     #uuid "69ffdf42-5220-409b-8f3e-1aa1f5d02c6e"
+     :bookkeeping.account/name "Cash"
+     :bookkeeping.account/type
+     #:db{:id 17592186045428 :ident :bookkeeping.account.type/asset}
+     :bookkeeping.account/orientation
+     #:db{:id 17592186045433
+          :ident :bookkeeping.account.orientation/debit}}
+
+  :bookkeeping.debit/account
+  :bookkeeping.debit/value
+  :bookkeeping.debit/price
+  :bookkeeping.debit/amount
+
+  :bookkeeping.credit/account
+  :bookkeeping.credit/value
+  :bookkeeping.credit/price
+  :bookkeeping.credit/amount
+
+  )
 
 
 (defn cash-account-by-user
@@ -97,13 +224,15 @@
                               :bookkeeping.account.orientation/debit
                               counter-party])]
 
-    (persistence.datomic/transact-entities! conn account)
-    (ffirst
+    (as-> account obj
+      (persistence.datomic/transact-entities! conn obj)
+      (:db-after obj)
       (d/q '[:find ?e
              :in $ ?account-id
              :where [?e :bookkeeping.account/id ?account-id]]
-           (d/db conn)
-           (-> account :bookkeeping.account/id)))))
+           obj
+           (-> account :bookkeeping.account/id))
+      (ffirst obj))))
 
 (defn conditionally-create-stock-account! [conn stock-entity]
 
@@ -118,22 +247,23 @@
       (ffirst stock-account-result-set)
       (create-stock-account! conn stock-entity))))
 
-
-(defn buy-stock! [conn user-id stock-id stock-value]
+(defn buy-stock! [conn user-id stock-id stock-amount stock-price]
 
   (let [user-pulled      (d/pull (d/db conn) '[*] user-id)
         stock-pulled     (d/pull (d/db conn) '[*] stock-id)
         stock-account-id (conditionally-create-stock-account! conn stock-pulled)]
 
 
-    (let [cash-account (:db/id (cash-account-by-user user-pulled))
-          debit-value  stock-value
+    (let [cash-account   (:db/id (cash-account-by-user user-pulled))
+
+          stock-value    (* stock-amount stock-price)
+          debit-value    stock-value
 
           credit-account {:db/id stock-account-id}
           credit-value   stock-value
 
-          debits+credits [(->debit cash-account debit-value)
-                          (->credit credit-account credit-value)]
+          debits+credits [(->debit cash-account debit-value nil nil)
+                          (->credit credit-account credit-value stock-price stock-amount)]
 
           tentry (apply ->tentry debits+credits)]
 

@@ -70,7 +70,10 @@
         result-user-id (test-util/generate-user conn)
         result-stock-id (ffirst (test-util/generate-stocks conn 1))
 
-        tentry (bookkeeping/buy-stock! conn result-user-id result-stock-id 5000.47)
+        stock-amount 100
+        stock-price 50.47
+
+        tentry (bookkeeping/buy-stock! conn result-user-id result-stock-id stock-amount stock-price)
 
         result-tentry-id (ffirst
                            (d/q '[:find ?e
@@ -81,16 +84,39 @@
 
     (is (util/exists? result-tentry-id))
 
-    (let [pulled-tentry (d/pull (d/db conn) '[*] result-tentry-id)]
+    (let [pulled-tentry (util/pprint+identity (d/pull (d/db conn) '[*] result-tentry-id))
+          pulled-stock (util/pprint+identity (d/pull (d/db conn) '[*] result-stock-id))
+          expected-stock-account-name (format "STOCK.%s" (:game.stock/name pulled-stock))]
 
+      (testing "debit is cash account"
+        (->> pulled-tentry
+            :bookkeeping.tentry/debits
+            first
+            :bookkeeping.debit/account
+            :bookkeeping.account/name
+            (= "Cash")
+            is))
 
-      ;; debit is cash account
+      (testing "credit is stock account"
+        (->> pulled-tentry
+            :bookkeeping.tentry/credits
+            first
+            :bookkeeping.credit/account
+            :bookkeeping.account/name
+            (= expected-stock-account-name)
+            is))
 
-      ;; we have new stock account
+      (testing "We have new stock account"
+        (-> (d/q '[:find ?e
+                   :in $ ?stock-aacount-name
+                   :where [?e :bookkeeping.account/name ?stock-aacount-name]]
+                 (d/db conn)
+                 expected-stock-account-name)
+            first
+            util/exists?
+            is))
 
-      ;; credit is stock account
-
-      ;; >> debits + credits balance
+      ;; debits + credits balance
 
       ;; Portfoliio now has value of
       ;;   +stock account
