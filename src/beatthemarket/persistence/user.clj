@@ -1,5 +1,6 @@
 (ns beatthemarket.persistence.user
   (:require [datomic.client.api :as d]
+            [integrant.repl.state :as repl.state]
             [beatthemarket.bookkeeping :as bookkeeping]
             [beatthemarket.persistence.datomic :as persistence.datomic]))
 
@@ -14,14 +15,13 @@
 
     (d/q user-q db email)))
 
-(defn pull-user [conn user-id]
-  (d/pull (d/db conn) '[*] user-id))
-
 (defn add-user! [conn {:keys [email name uid]}]
 
   ;; Default set of accounts (:book)
-  (let [accounts (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit]
-                       ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit]]
+  (let [starting-balance (-> repl.state/system :game/game :starting-balance)
+        counter-party nil
+        accounts (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit starting-balance counter-party]
+                       ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit starting-balance counter-party]]
                       (map #(apply bookkeeping/->account %)))]
 
     (->> {:user/email        email

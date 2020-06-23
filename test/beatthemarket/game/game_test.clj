@@ -1,11 +1,13 @@
 (ns beatthemarket.game.game-test
   (:require [clojure.test :refer :all]
             [datomic.client.api :as d]
-            [integrant.repl.state :as state]
+            [integrant.repl.state :as repl.state]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.bookkeeping :as bookkeeping]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.game.game :as game]
+            [beatthemarket.game.games :as games]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
 
@@ -16,9 +18,9 @@
   test-util/migration-fixture)
 
 
-(deftest initialize-game-test
+(deftest initialize-game!-test
 
-  (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
+  (let [conn (-> repl.state/system :persistence/datomic :conn)
 
         email "foo@bar.com"
         checked-authentication
@@ -38,7 +40,7 @@
         user-entity (hash-map :db/id result-user-id)
 
         ;; Initialize Game
-        game (game/initialize-game conn user-entity)
+        game (game/initialize-game! conn user-entity)
         result-game-id (-> (d/q '[:find ?e
                                   :in $ ?game-id
                                   :where [?e :game/id ?game-id]]
@@ -63,65 +65,107 @@
 
           (is (some (into #{} game-stocks) game-user-subscriptions)))))))
 
-(deftest create-entry-test
+(deftest buy-stock!-test
 
-  (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
-
-        result-user-id (test-util/generate-user conn)
-        result-stock-id (ffirst (test-util/generate-stocks conn 1))
-
+  (let [conn         (-> repl.state/system :persistence/datomic :conn)
         stock-amount 100
-        stock-price 50.47
+        stock-price  50.47
 
-        tentry (bookkeeping/buy-stock! conn result-user-id result-stock-id stock-amount stock-price)
+        game-id  nil
+        user-id  nil
+        stock-id nil]
 
-        result-tentry-id (ffirst
-                           (d/q '[:find ?e
-                                  :in $ ?tentry-id
-                                  :where [?e :bookkeeping.tentry/id ?tentry-id]]
-                                (d/db conn)
-                                (:bookkeeping.tentry/id tentry)))]
+    (testing "Cannot buy stock with having created a game"
 
-    (is (util/exists? result-tentry-id))
+      (is (thrown? AssertionError (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price)))
 
-    (let [pulled-tentry (util/pprint+identity (d/pull (d/db conn) '[*] result-tentry-id))
-          pulled-stock (util/pprint+identity (d/pull (d/db conn) '[*] result-stock-id))
-          expected-stock-account-name (format "STOCK.%s" (:game.stock/name pulled-stock))]
+      (testing "Cannot buy stock without having a user"
 
-      (testing "debit is cash account"
-        (->> pulled-tentry
-            :bookkeeping.tentry/debits
-            first
-            :bookkeeping.debit/account
-            :bookkeeping.account/name
-            (= "Cash")
-            is))
+        (let [user-id                  (test-util/generate-user conn)
+              sink-fn                  identity
+              {{game-id :db/id} :game} (games/create-game! conn user-id sink-fn)
+              stock-id                 (ffirst (test-util/generate-stocks conn 1))]
 
-      (testing "credit is stock account"
-        (->> pulled-tentry
-            :bookkeeping.tentry/credits
-            first
-            :bookkeeping.credit/account
-            :bookkeeping.account/name
-            (= expected-stock-account-name)
-            is))
+          (testing "Buying a stsock creates a tentry"
 
-      (testing "We have new stock account"
-        (-> (d/q '[:find ?e
-                   :in $ ?stock-aacount-name
-                   :where [?e :bookkeeping.account/name ?stock-aacount-name]]
-                 (d/db conn)
-                 expected-stock-account-name)
-            first
-            util/exists?
-            is))
+            (let [{tentry-id :db/id} (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price)]
 
-      ;; debits + credits balance
+              (is (util/exists? tentry-id))
 
-      ;; Portfoliio now has value of
-      ;;   +stock account
-      ;;   -cash account
-      )))
+              (let [pulled-tentry               (persistence.core/pull-entity conn tentry-id)
+                    pulled-stock                (persistence.core/pull-entity conn stock-id)
+                    expected-stock-account-name (format "STOCK.%s" (:game.stock/name pulled-stock))
+                    new-stock-account           (-> pulled-tentry
+                                                    :bookkeeping.tentry/credits first
+                                                    :bookkeeping.credit/account)]
+
+                (testing "debit is cash account"
+                  (->> pulled-tentry
+                       :bookkeeping.tentry/debits first
+                       :bookkeeping.debit/account
+                       :bookkeeping.account/name
+                       (= "Cash")
+                       is))
+
+                (testing "credit is stock account"
+                  (->> new-stock-account
+                       :bookkeeping.account/name
+                       (= expected-stock-account-name)
+                       is))
+
+                (testing "We have new stock account"
+                  (-> (d/q '[:find ?e
+                             :in $ ?stock-aacount-name
+                             :where [?e :bookkeeping.account/name ?stock-aacount-name]]
+                           (d/db conn)
+                           expected-stock-account-name)
+                      first
+                      util/exists?
+                      is))
+
+                (testing "Debits + Credits balance"
+
+                  (is (bookkeeping/tentry-balanced? pulled-tentry))
+                  (is (bookkeeping/value-equals-price-times-amount? pulled-tentry)))
+
+                (testing "Stock account is bound to the game.user's set of accounts"
+
+                  (let [game-pulled (persistence.core/pull-entity conn game-id)]
+
+                    (->> game-pulled
+                         :game/users first
+                         :game.user/user
+                         :user/accounts
+                         (map :bookkeeping.account/id)
+                         (some #{(:bookkeeping.account/id new-stock-account)})
+                         is)
+
+                    (testing "Portfolio now has value of
+                                +stock account
+                                -cash account"
+
+                      (let [cash-starting-balance (-> repl.state/system :game/game :starting-balance)
+                            stock-starting-balance 0.0
+                            value-change (Double. (format "%.2f" (* stock-amount stock-price)))
+
+                            game-user-accounts (->> game-pulled
+                                                    :game/users first
+                                                    :game.user/user
+                                                    :user/accounts)]
+
+                        (->> game-user-accounts
+                             (filter #(= "Cash" (:bookkeeping.account/name %)))
+                             first
+                             :bookkeeping.account/balance
+                             (= (- cash-starting-balance value-change))
+                             is)
+
+                        (->> game-user-accounts
+                             (filter #(clojure.string/starts-with? (:bookkeeping.account/name %) "STOCK."))
+                             first
+                             :bookkeeping.account/balance
+                             (= (+ stock-starting-balance value-change))
+                             is)))))))))))))
 
 (comment ;; TEntry
 
@@ -150,7 +194,7 @@
 
   ;; ACCOUNT
   (do
-    (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
+    (def conn (-> repl.state/system :persistence/datomic :conn))
     (->> (d/pull (d/db conn) '[*] result-user-id)
          util/pprint+identity
          (def user-pulled)))
@@ -180,7 +224,8 @@
 
 
   ;; Create account for stock
-  (let [counter-party (select-keys stock-pulled [:db/id])]
+  (let [satrting-balance 0.0
+        counter-party (select-keys stock-pulled [:db/id])]
 
     (def account (apply bookkeeping/->account
                         [(->> stock-pulled :game.stock/name (format "STOCK.%s"))
@@ -211,11 +256,11 @@
     (persistence.datomic/transact-entities! conn tentry))
 
   (def result-tentry-id (ffirst
-                         (d/q '[:find ?e
-                                :in $ ?tentry-id
-                                :where [?e :bookkeeping.tentry/id ?tentry-id]]
-                              (d/db conn)
-                              (:bookkeeping.tentry/id tentry))))
+                          (d/q '[:find ?e
+                                 :in $ ?tentry-id
+                                 :where [?e :bookkeeping.tentry/id ?tentry-id]]
+                               (d/db conn)
+                               (:bookkeeping.tentry/id tentry))))
   (->> (d/pull (d/db conn) '[*] result-tentry-id)
        util/pprint+identity
        (def tentry-pulled))

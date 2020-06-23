@@ -2,7 +2,7 @@
   (:require [datomic.client.api :as d]
             [com.rpl.specter :refer [select pred ALL MAP-VALS]]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.util :as util :refer [exists?]])
   (:import [java.util UUID]))
 
@@ -25,14 +25,15 @@
 
 (defn ->account
 
-  ([name type orientation] (->account name type orientation nil))
+  ([name type orientation] (->account name type orientation 0.0 nil))
 
-  ([name type orientation counter-party]
+  ([name type orientation balance counter-party]
 
    (cond-> (hash-map
              :bookkeeping.account/id (UUID/randomUUID)
              :bookkeeping.account/name name
              :bookkeeping.account/type type
+             :bookkeeping.account/balance balance
              :bookkeeping.account/orientation orientation)
      (exists? counter-party) (assoc :bookkeeping.account/counter-party counter-party))))
 
@@ -68,57 +69,200 @@
     (exists? price) (assoc :bookkeeping.credit/price price)
     (exists? amount) (assoc :bookkeeping.credit/amount amount)))
 
+;; TODO Make a user-accounts-balanced? function
+(defn tentry-balanced?
 
-(defn tentry-balanced? [tentry]
+  "LHS
+   :bookkeeping.debit/account
+   :bookkeeping.account/orientation
+   :db/ident :bookkeeping.account.orientation/debit
 
-  (let [{:keys [:bookkeeping.tentry/debits :bookkeeping.tentry/credits]} tentry]
+   :bookkeeping.credit/account
+   :bookkeeping.account/orientation
+   :db/ident :bookkeeping.account.orientation/credit
 
-    ;; LHS
-    ;; :bookkeeping.debit/account
-    ;; :bookkeeping.account/orientation
-    ;; :db/ident :bookkeeping.account.orientation/debit
-    ;;
-    ;; :bookkeeping.credit/account
-    ;; :bookkeeping.account/orientation
-    ;; :db/ident :bookkeeping.account.orientation/credit
+   RHS
+   :bookkeeping.credit/account
+   :bookkeeping.account/orientation
+   :db/ident :bookkeeping.account.orientation/debit
 
-    ;; RHS
-    ;; :bookkeeping.credit/account
-    ;; :bookkeeping.account/orientation
-    ;; :db/ident :bookkeeping.account.orientation/debit
-    ;;
-    ;; :bookkeeping.debit/account
-    ;; :bookkeeping.account/orientation
-    ;; :db/ident :bookkeeping.account.orientation/credit
+   :bookkeeping.debit/account
+   :bookkeeping.account/orientation
+   :db/ident :bookkeeping.account.orientation/credit"
+  [tentry]
 
-    (let [debits+credits (concat debits credits)
-          lhs (filter (fn [debit-or-credit]
-                        (or
-                          (-> debit-or-credit
-                              :bookkeeping.debit/account
-                              :bookkeeping.account/orientation
-                              (#(= :bookkeeping.account.orientation/debit (:db/ident %))))
-                          (-> debit-or-credit
-                              :bookkeeping.credit/account
-                              :bookkeeping.account/orientation
-                              (#(= :bookkeeping.account.orientation/credit (:db/ident %))))))
-                      debits+credits)
+  (let [{:keys [:bookkeeping.tentry/debits :bookkeeping.tentry/credits]} tentry
 
-          rhs (filter (fn [debit-or-credit]
+        lhs-debit-values  (->> debits
+                               (filter (fn [debit]
+                                         (-> debit
+                                             :bookkeeping.debit/account
+                                             :bookkeeping.account/orientation
+                                             (#(= :bookkeeping.account.orientation/debit (:db/ident %))))))
+                               (map :bookkeeping.debit/value))
+        lhs-credit-values (->> credits
+                               (filter (fn [credit]
+                                         (-> credit
+                                             :bookkeeping.credit/account
+                                             :bookkeeping.account/orientation
+                                             (#(= :bookkeeping.account.orientation/credit (:db/ident %))))))
+                               (map :bookkeeping.credit/value))
+        lhs               (apply + (concat lhs-debit-values lhs-credit-values))
 
-                        (or
-                          (-> debit-or-credit
-                              :bookkeeping.credit/account
-                              :bookkeeping.account/orientation
-                              (#(= :bookkeeping.account.orientation/debit (:db/ident %))))
-                          (-> debit-or-credit
-                              :bookkeeping.debit/account
-                              :bookkeeping.account/orientation
-                              (#(= :bookkeeping.account.orientation/credit (:db/ident %)))))))]
 
-      :bookkeeping.debit/value
-      :bookkeeping.credit/value
-      )))
+        rhs-debit-values  (->> debits
+                               (filter (fn [debit]
+                                         (-> debit
+                                             :bookkeeping.debit/account
+                                             :bookkeeping.account/orientation
+                                             (#(= :bookkeeping.account.orientation/credit (:db/ident %))))))
+                               (map :bookkeeping.debit/value))
+        rhs-credit-values (->> credits
+                               (filter (fn [credit]
+                                         (-> credit
+                                             :bookkeeping.credit/account
+                                             :bookkeeping.account/orientation
+                                             (#(= :bookkeeping.account.orientation/debit (:db/ident %))))))
+                               (map :bookkeeping.credit/value))
+        rhs               (apply + (concat rhs-debit-values rhs-credit-values))]
+
+    (= lhs rhs)))
+
+(defn value-equals-price-times-amount? [tentry]
+
+  (let [{:keys [:bookkeeping.tentry/debits :bookkeeping.tentry/credits]} tentry
+
+        value-equals-price-times-amount-debit?
+        #(if (or (:bookkeeping.debit/price %)
+                 (:bookkeeping.debit/amount %))
+
+           (and (and (:bookkeeping.debit/price %)
+                     (:bookkeeping.debit/amount %))
+
+                (= (:bookkeeping.debit/value %)
+                   (* (:bookkeeping.debit/price %)
+                      (:bookkeeping.debit/amount %))))
+           true)
+
+        value-equals-price-times-amount-credit?
+        #(if (or (:bookkeeping.credit/price %)
+                 (:bookkeeping.credit/amount %))
+
+           (and (and (:bookkeeping.credit/price %)
+                     (:bookkeeping.credit/amount %))
+
+                (= (:bookkeeping.credit/value %)
+                   (Double. (format "%.2f" (* (:bookkeeping.credit/price %)
+                                              (:bookkeeping.credit/amount %))))))
+           true)]
+
+    (and (every? value-equals-price-times-amount-debit? debits)
+         (every? value-equals-price-times-amount-credit? credits))))
+
+(defn cash-account-by-user
+
+  ([conn user-id]
+   (cash-account-by-user (persistence.core/pull-entity conn user-id)))
+
+  ([user-pulled]
+   (->> user-pulled
+        :user/accounts
+        (filter #(= "Cash" (:bookkeeping.account/name %)))
+        first)))
+
+(defn equity-account-by-user
+
+  ([conn user-id]
+   (equity-account-by-user (persistence.core/pull-entity conn user-id)))
+
+  ([user-pulled]
+   (->> user-pulled
+        :user/accounts
+        (filter #(= "Equity" (:bookkeeping.account/name %)))
+        first)))
+
+(defn create-stock-account! [conn user-entity stock-entity]
+
+  (let [starting-balance         0.0
+        counter-party            (select-keys stock-entity [:db/id])
+        account                  (persistence.core/bind-temporary-id
+                                   (apply ->account
+                                          [(->> stock-entity :game.stock/name (format "STOCK.%s"))
+                                           :bookkeeping.account.type/asset
+                                           :bookkeeping.account.orientation/debit
+                                           starting-balance
+                                           counter-party]))
+        user-entity-with-account (assoc user-entity :user/accounts account)
+        entities                 [account user-entity-with-account]]
+
+    (as-> entities ent
+      (persistence.datomic/transact-entities! conn ent)
+      (:db-after ent)
+      (d/q '[:find ?e
+             :in $ ?account-id
+             :where [?e :bookkeeping.account/id ?account-id]]
+           ent
+           (-> account :bookkeeping.account/id))
+      (ffirst ent)
+      (persistence.core/pull-entity conn ent))))
+
+(defn conditionally-create-stock-account! [conn user-entity stock-entity]
+
+  (let [stock-account-result-set
+        (d/q '[:find ?e
+               :in $ ?counter-party
+               :where [?e :bookkeeping.account/counter-party ?counter-party]]
+             (d/db conn)
+             (:db/id stock-entity))]
+
+    (if (exists? stock-account-result-set)
+      {:db/id (ffirst stock-account-result-set)}
+      (create-stock-account! conn user-entity stock-entity))))
+
+(defn buy-stock! [conn game-id user-id stock-id stock-amount stock-price]
+  {:pre [(exists? (persistence.core/pull-entity conn game-id))
+         (exists? (persistence.core/pull-entity conn user-id))
+         (exists? (persistence.core/pull-entity conn stock-id))]}
+
+  ;; TODO
+  ;; game exists
+  ;; user exists
+  ;; stock exists
+  ;;
+  ;; user is bound to game
+  ;; stock is bound to game
+  (let [user-pulled   (persistence.core/pull-entity conn user-id)
+        stock-pulled  (persistence.core/pull-entity conn stock-id)
+        stock-account (conditionally-create-stock-account! conn user-pulled stock-pulled)
+        debit-value   (* stock-amount stock-price)
+        credit-value  debit-value
+
+        ;; ACCOUNT BALANCE UPDATES
+        updated-debit-account  (update-in (cash-account-by-user user-pulled) [:bookkeeping.account/balance] - debit-value)
+        updated-credit-account (update-in stock-account [:bookkeeping.account/balance] + credit-value)
+
+        ;; T-ENTRY + JOURNAL ENTRIES
+        debits+credits          [(->debit updated-debit-account debit-value nil nil)
+                                 (->credit updated-credit-account credit-value stock-price stock-amount)]
+        tentry                  (apply ->tentry debits+credits)
+        updated-journal-entries (-> (persistence.core/pull-entity conn game-id)
+                                    :game/users first
+                                    :game.user/portfolio
+                                    :bookkeeping.portfolio/journals first
+                                    (assoc :bookkeeping.journal/entries tentry))
+
+        entities [tentry updated-journal-entries #_updated-debit-account #_updated-credit-account]]
+
+    (as-> entities ent
+      (persistence.datomic/transact-entities! conn ent)
+      (:db-after ent)
+      (d/q '[:find ?e
+             :in $ ?entry-id
+             :where [?e :bookkeeping.tentry/id ?entry-id]]
+           ent
+           (-> tentry :bookkeeping.tentry/id))
+      (ffirst ent)
+      (persistence.core/pull-entity conn ent))))
 
 (comment
 
@@ -162,110 +306,7 @@
          :game.stock/symbol "DANG"}}
        :bookkeeping.credit/value 5047.0
        :bookkeeping.credit/price 50.47
-       :bookkeeping.credit/amount 100}]
-
-     })
+       :bookkeeping.credit/amount 100}]})
 
   (pprint tentry)
-  (pprint (tentry-balanced? tentry))
-
-
-  #_{:db/id 17592186045437
-     :bookkeeping.account/id
-     #uuid "69ffdf42-5220-409b-8f3e-1aa1f5d02c6e"
-     :bookkeeping.account/name "Cash"
-     :bookkeeping.account/type
-     #:db{:id 17592186045428 :ident :bookkeeping.account.type/asset}
-     :bookkeeping.account/orientation
-     #:db{:id 17592186045433
-          :ident :bookkeeping.account.orientation/debit}}
-
-  :bookkeeping.debit/account
-  :bookkeeping.debit/value
-  :bookkeeping.debit/price
-  :bookkeeping.debit/amount
-
-  :bookkeeping.credit/account
-  :bookkeeping.credit/value
-  :bookkeeping.credit/price
-  :bookkeeping.credit/amount
-
-  )
-
-
-(defn cash-account-by-user
-
-  ([conn user-id]
-   (cash-account-by-user (persistence.user/pull-user conn user-id)))
-
-  ([user-pulled]
-   (->> user-pulled
-        :user/accounts
-        (filter #(= "Cash" (:bookkeeping.account/name %)))
-        first)))
-
-(defn equity-account-by-user
-
-  ([conn user-id]
-   (equity-account-by-user (persistence.user/pull-user conn user-id)))
-
-  ([user-pulled]
-   (->> user-pulled
-        :user/accounts
-        (filter #(= "Equity" (:bookkeeping.account/name %)))
-        first)))
-
-(defn create-stock-account! [conn stock-entity]
-
-  (let [counter-party (select-keys stock-entity [:db/id])
-        account       (apply ->account
-                             [(->> stock-entity :game.stock/name (format "STOCK.%s"))
-                              :bookkeeping.account.type/asset
-                              :bookkeeping.account.orientation/debit
-                              counter-party])]
-
-    (as-> account obj
-      (persistence.datomic/transact-entities! conn obj)
-      (:db-after obj)
-      (d/q '[:find ?e
-             :in $ ?account-id
-             :where [?e :bookkeeping.account/id ?account-id]]
-           obj
-           (-> account :bookkeeping.account/id))
-      (ffirst obj))))
-
-(defn conditionally-create-stock-account! [conn stock-entity]
-
-  (let [stock-account-result-set
-        (d/q '[:find ?e
-               :in $ ?counter-party
-               :where [?e :bookkeeping.account/counter-party ?counter-party]]
-             (d/db conn)
-             (:db/id stock-entity))]
-
-    (if (exists? stock-account-result-set)
-      (ffirst stock-account-result-set)
-      (create-stock-account! conn stock-entity))))
-
-(defn buy-stock! [conn user-id stock-id stock-amount stock-price]
-
-  (let [user-pulled      (d/pull (d/db conn) '[*] user-id)
-        stock-pulled     (d/pull (d/db conn) '[*] stock-id)
-        stock-account-id (conditionally-create-stock-account! conn stock-pulled)]
-
-
-    (let [cash-account   (:db/id (cash-account-by-user user-pulled))
-
-          stock-value    (* stock-amount stock-price)
-          debit-value    stock-value
-
-          credit-account {:db/id stock-account-id}
-          credit-value   stock-value
-
-          debits+credits [(->debit cash-account debit-value nil nil)
-                          (->credit credit-account credit-value stock-price stock-amount)]
-
-          tentry (apply ->tentry debits+credits)]
-
-      (persistence.datomic/transact-entities! conn tentry)
-      tentry)))
+  (pprint (tentry-balanced? tentry)))

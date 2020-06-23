@@ -30,7 +30,8 @@
                :server/server                 {:service #ig/ref :service/service}
                :firebase/firebase             #ref [:secrets :firebase]
                :persistence/datomic           #ref [:secrets :production :persistence/datomic]
-               :game/games                    {:datomic #ig/ref :persistence/datomic}
+               :game/games                    {:datomic #ig/ref :persistence/datomic }
+               :game/game                     {:starting-balance 100000.00}
                :nrepl/nrepl                   {:port 7000}
                :logging/logging               #ref [:logging]
                :name-generator/name-generator {}}
@@ -43,6 +44,7 @@
                 :persistence/datomic           {:db-name "beaththemarket"
                                                 :config  {}}
                 :game/games                    {:datomic #ig/ref :persistence/datomic}
+                :game/game                     {:starting-balance 100000.00}
                 :nrepl/nrepl                   {:port 7000}
                 :logging/logging               #ref [:logging]
                 :name-generator/name-generator {}}
@@ -55,6 +57,7 @@
          :persistence/datomic           {:db-name "beaththemarket"
                                          :config  {}}
          :game/games                    {:datomic #ig/ref :persistence/datomic}
+         :game/game                     {:starting-balance 100000.00}
          :nrepl/nrepl                   {:port 7001}
          :logging/logging               #ref [:logging]
          :name-generator/name-generator {}}}}

@@ -98,7 +98,7 @@
   (swap! (:game/games repl.state/system)
          assoc (:game/id game) game-control))
 
-(defn initialize-game [conn user-entity sink-fn]
+(defn initialize-game! [conn user-entity sink-fn]
 
   (let [bind-data-sequence    (fn [a]
                                 (->> (datasource/->combined-data-sequence
@@ -108,7 +108,7 @@
                                      (assoc a :data-sequence)))
         stocks                (game/generate-stocks 4)
         stocks-with-tick-data (map bind-data-sequence stocks)
-        game                  (game/initialize-game conn user-entity stocks)
+        game                  (game/initialize-game! conn user-entity stocks)
 
         game-control              {:game                      game
                                    :tick-sleep-ms             500
@@ -124,7 +124,7 @@
 
 (defn create-game! [conn user-id sink-fn]
   (let [user-entity (hash-map :db/id user-id)]
-    (initialize-game conn user-entity sink-fn)))
+    (initialize-game! conn user-entity sink-fn)))
 
 (defn game->new-game-message [game user-id]
 
@@ -166,7 +166,7 @@
 (comment
 
 
-  (initialize-game)
+  (initialize-game!)
   (def result *1)
 
 

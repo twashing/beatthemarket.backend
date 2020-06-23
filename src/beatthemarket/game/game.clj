@@ -2,23 +2,24 @@
   (:require [clj-time.core :as t]
             [clj-time.coerce :as c]
             [com.rpl.specter :refer [select-one  pred ALL]]
+            [integrant.core :as ig]
             [beatthemarket.bookkeeping :as bookkeeping]
             [beatthemarket.datasource.name-generator :as name-generator]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.persistence.bookkeeping :as persistence.bookkeeping]
+            [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.util :as util]
             [datomic.client.api :as d])
   (:import [java.util UUID]))
 
 
+(defmethod ig/init-key :game/game [_ {starting-balance :starting-balance}]
+  {:starting-balance starting-balance})
+
 (defn game-user-by-user-id [game result-user-id]
   (select-one [:game/users ALL (pred #(= result-user-id
                                          (-> % :game.user/user :db/id)))]
               game))
-
-(defn bind-temporary-id [entity]
-  (assoc entity :db/id (str (UUID/randomUUID))))
 
 (defn ->game [game-level stocks user]
 
@@ -30,7 +31,7 @@
                          :game.user/user user
                          :game.user/subscriptions subscriptions
                          :game.user/portfolio portfolio-with-journal)
-                       bind-temporary-id
+                       persistence.core/bind-temporary-id
                        list)]
 
     (hash-map
@@ -54,24 +55,31 @@
   (->> (name-generator/generate-names no-of-stocks)
        (map (juxt :stock-name :stock-symbol))
        (map #(apply ->stock %))
-       (map bind-temporary-id)))
+       (map persistence.core/bind-temporary-id)))
 
-(defn initialize-game
+(defn initialize-game!
 
   ([conn user-entity]
 
-   (initialize-game conn user-entity (->> (name-generator/generate-names 4)
-                                          (map (juxt :stock-name :stock-symbol))
-                                          (map #(apply ->stock %))
-                                          (map bind-temporary-id))))
-
+   (initialize-game! conn user-entity (->> (name-generator/generate-names 4)
+                                           (map (juxt :stock-name :stock-symbol))
+                                           (map #(apply ->stock %))
+                                           (map persistence.core/bind-temporary-id))))
   ([conn user-entity stocks]
 
    (let [game-level :game-level/one
          game (->game game-level stocks user-entity)]
 
-     (persistence.datomic/transact-entities! conn game)
-     game)))
+     (as-> game gm
+       (persistence.datomic/transact-entities! conn gm)
+       (:db-after gm)
+       (d/q '[:find ?e
+              :in $ ?id
+              :where [?e :game/id ?id]]
+            gm
+            (:game/id game))
+       (ffirst gm)
+       (persistence.core/pull-entity conn gm)))))
 
 
 (comment ;; Portfolio
@@ -85,18 +93,18 @@
 
   (def journal
     (->> (beatthemarket.bookkeeping/->journal)
-         (beatthemarket.persistence.bookkeeping/add-journal! conn)))
+         (persistence.datomic/transact-entities! conn)))
 
 
   (def portfolio
     (->> (beatthemarket.bookkeeping/->portfolio)
-         (beatthemarket.persistence.bookkeeping/add-portfolio! conn)))
+         (persistence.datomic/transact-entities! conn)))
 
 
   (def composite-portfolio
     (->> (beatthemarket.bookkeeping/->journal)
          beatthemarket.bookkeeping/->portfolio
-         (beatthemarket.persistence.bookkeeping/add-portfolio! conn)))
+         (persistence.datomic/transact-entities! conn)))
 
 
   (def result-portfolio (d/q '[:find ?e ?id
@@ -230,11 +238,11 @@
     (persistence.datomic/transact-entities! conn tentry))
 
   (def result-tentry-id (ffirst
-                         (d/q '[:find ?e
-                                :in $ ?tentry-id
-                                :where [?e :bookkeeping.tentry/id ?tentry-id]]
-                              (d/db conn)
-                              (:bookkeeping.tentry/id tentry))))
+                          (d/q '[:find ?e
+                                 :in $ ?tentry-id
+                                 :where [?e :bookkeeping.tentry/id ?tentry-id]]
+                               (d/db conn)
+                               (:bookkeeping.tentry/id tentry))))
   (->> (d/pull (d/db conn) '[*] result-tentry-id)
        util/pprint+identity
        (def tentry-pulled))
@@ -255,7 +263,7 @@
                      ["Miles Davis Inc" "MILD"]
                      ["John Coltrane Inc" "JONC"]]
                     (map #(apply ->stock %))
-                    (map bind-temporary-id))
+                    (map persistence.core/bind-temporary-id))
         subscriptions (take 1 stocks)
 
         game-level :game-level/one]
@@ -270,7 +278,7 @@
   (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
         user nil]
 
-    (initialize-game conn user))
+    (initialize-game! conn user))
 
   (def result *1)
 
