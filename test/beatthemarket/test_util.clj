@@ -21,6 +21,7 @@
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.game :as game]
             [beatthemarket.migration.core :as migration.core]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.util :as util])
@@ -139,15 +140,19 @@
 (defn generate-user [conn]
 
   (let [id-token               (->id-token)
-        checked-authentication (iam.auth/check-authentication id-token)
-        add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication)]
-    (ffirst
+        checked-authentication (iam.auth/check-authentication id-token)]
+
+    (as-> checked-authentication obj
+      (iam.user/conditionally-add-new-user! conn obj)
+      (:db-after obj)
       (d/q '[:find ?e
              :in $ ?email
              :where [?e :user/email ?email]]
-           (d/db conn)
+           obj
            (-> checked-authentication
-               :claims (get "email"))))))
+               :claims (get "email")))
+      (ffirst obj)
+      (persistence.core/pull-entity conn obj))))
 
 
 ;; DOMAIN

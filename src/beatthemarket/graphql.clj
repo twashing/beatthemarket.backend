@@ -19,8 +19,9 @@
 (defn resolve-login
   [context _ _]
 
-  (let [{{checked-authentication :checked-authentication} :request} context
-        conn (-> repl.state/system :persistence/datomic :conn)
+  (let [{{checked-authentication :checked-authentication}
+         :request}                                   context
+        conn                                         (-> repl.state/system :persistence/datomic :conn)
         {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
 
     (if (util/truthy? (and db-before db-after tx-data tempids))
@@ -40,11 +41,19 @@
 ;;   verify buy price is most recent
 ;;   tentry verify balanced
 
+(defn resolve-buy-stock [context args _]
 
-(defn resolve-buy-stock [context a b]
+  (println "resolve-buy-stock CALLED /" args)
 
-  (println "resolve-buy-stock CALLED / " a b)
-  {:message "Ack"})
+  ;; resolve-buy-stock CALLED / {:input {:gameId zxcv, :stockId qwerty, :tickId asdf, :tickTime 3456, :tickPrice 1234.45}} nil
+
+  (let [{{{userId :uid} :checked-authentication} :request}    context
+        conn                                               (-> repl.state/system :persistence/datomic :conn)
+        {{:keys [gameId stockId tickId tickPrice]} :input} args]
+
+    (games/buy-stock! conn userId gameId stockId tickId tickPrice)
+
+    {:message "Ack"}))
 
 (defn stream-new-game
   [context _ source-stream]
@@ -60,9 +69,9 @@
         sink-fn                                             source-stream
 
         ;; A
-        {:keys [game stocks-with-tick-data tick-sleep-ms
-                data-subscription-channel control-channel
-                close-sink-fn sink-fn] :as game-control} (games/create-game! conn result-user-id sink-fn)
+        {:keys                         [game stocks-with-tick-data tick-sleep-ms
+                                        data-subscription-channel control-channel
+                                        close-sink-fn sink-fn] :as game-control} (games/create-game! conn result-user-id sink-fn)
 
         ;; B
         message (games/game->new-game-message game result-user-id)]
@@ -93,15 +102,15 @@
   (swap! *ping-subscribes inc)
   (reset! *ping-context context)
   (let [{:keys [message count]} args
-        runnable ^Runnable (fn []
-                             (dotimes [i count]
+        runnable                ^Runnable (fn []
+                                            (dotimes [i count]
 
-                               ;; (println "Sanity check / stream-ping / " [i count])
-                               (source-stream {:message (str message " #" (inc i))
-                                               :timestamp (System/currentTimeMillis)})
-                               (Thread/sleep 50))
+                                              ;; (println "Sanity check / stream-ping / " [i count])
+                                              (source-stream {:message   (str message " #" (inc i))
+                                                              :timestamp (System/currentTimeMillis)})
+                                              (Thread/sleep 50))
 
-                             (source-stream nil))]
+                                            (source-stream nil))]
     (.start (Thread. runnable "stream-ping-thread")))
   ;; Return a cleanup fn:
   #(swap! *ping-cleanups inc))

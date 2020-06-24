@@ -218,13 +218,13 @@
                                    }
                                  }"
 
-
-                         :variables {:input {:stockId "qwerty"
+                         :variables {:input {:gameId "zxcv"
+                                             :stockId "qwerty"
                                              :tickId "asdf"
                                              :tickTime 3456
                                              :tickPrice 1234.45}}}})
 
-  (let [ack (trace (test-util/<message!! 1000))]
+  (let [ack (test-util/<message!! 1000)]
 
     (is (= {:type "data" :id 987 :payload {:data {:buyStock {:message "Ack"}}}}
            ack))

@@ -152,7 +152,7 @@
                      (:bookkeeping.credit/amount %))
 
                 (= (:bookkeeping.credit/value %)
-                   (Double. (format "%.2f" (* (:bookkeeping.credit/price %)
+                   (Float. (format "%.2f" (* (:bookkeeping.credit/price %)
                                               (:bookkeeping.credit/amount %))))))
            true)]
 

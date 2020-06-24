@@ -26,7 +26,8 @@
  {:BuyStock
   {:description "An event to buy a stock"
    :fields
-   {:stockId {:type (non-null String)}
+   {:gameId {:type (non-null String)}
+    :stockId {:type (non-null String)}
     :tickId {:type (non-null String)}
     :tickTime {:type (non-null Int)}
     :tickPrice {:type (non-null Float)}}}}

@@ -13,7 +13,9 @@
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.game :as game]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.persistence.user :as persistence.user]
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.bookkeeping :as bookkeeping])
@@ -33,7 +35,6 @@
           (close! control-channel))
         (-> games deref vals)))
 
-
 (defn onto-open-chan
   "Clone of clojure.core.async. But only puts to open channels.
 
@@ -47,7 +48,7 @@
   ([ch coll close?]
    (go-loop [vs (seq coll)]
 
-     (println "Channel open? " (not (clojure.core.async.impl.protocols/closed? ch)))
+     ;; (println "Channel open? " (not (clojure.core.async.impl.protocols/closed? ch)))
      (if (and vs
               (not (clojure.core.async.impl.protocols/closed? ch))
               (>! ch (first vs)))
@@ -55,19 +56,61 @@
        (when close?
          (close! ch))))))
 
+(defn game-iscurrent-and-belongsto-user? [conn gameId userId]
 
-;; C.
-;; Calculate Profit / Loss
+  (util/exists?
+    (d/q '[:find (pull ?e [*])
+           :in $ ?game-id ?user-id
+           :where
+           [?e :game/id ?game-id]
+           [?e :game/start-time]
+           [(missing? $ ?e :game/end-time)]
+           [?e :game/users ?us]
 
-;; D.
-;; Complete a Level
+           [?us :game.user/user ?u]
+           [?u :user/external-uid ?user-id]]
+         (d/db conn)
+         gameId userId)))
 
-;; E.
-;; Win a Game
-;; Lose a Game
+(defn buy-stock! [conn userId gameId stockId stockAmount tickId tickPrice]
+  {:pre [(game-iscurrent-and-belongsto-user? conn gameId userId)]}
 
-;; F.
-;; Pause | Resume a Game
+  (let [{tick-price :game.stock.tick/close :as tick}
+        (ffirst
+          (d/q '[:find (pull ?e [*])
+                 :in $ ?tick-id
+                 :where
+                 [?e :game.stock.tick/id ?tick-id]]
+               (d/db conn)
+               tickId))]
+
+    (when-not (= tickPrice tick-price)
+      (let [message (format "Submitted price [%s] does not match price from tickId" tickPrice)]
+        (throw (AssertionError. message (ex-info message tick)))))
+
+
+    (let [{tick-history :game.stock/price-history :as stock}
+          (ffirst
+            (d/q '[:find (pull ?e [*])
+                   :in $ ?stock-id
+                   :where
+                   [?e :game.stock/id ?stock-id]]
+                 (d/db conn)
+                 stockId))
+
+          tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)]
+
+      (when-not (= tickId (-> tick-history-sorted first :game.stock.tick/id))
+        (let [message (format "Submitted tick [%s] is no the latest" tickId)]
+          (throw (AssertionError. message (ex-info message {:tick-history-sorted
+                                                            (take 5 tick-history-sorted)})))))))
+
+  (let [extract-id (comp :db/id ffirst)
+        user-db-id (extract-id (persistence.user/user-by-external-uid conn userId))
+        game-db-id (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+        stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
+
+    (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))
 
 (defn stream-subscription! [tick-sleep-ms
                             data-subscription-channel
@@ -85,6 +128,21 @@
         (do
           (let [vv (<! data-subscription-channel)]
 
+            ;; TODO Calculations
+
+            ;; C.
+            ;; Calculate Profit / Loss
+
+            ;; D.
+            ;; Complete a Level
+
+            ;; E.
+            ;; Win a Game
+            ;; Lose a Game
+
+            ;; F.
+            ;; Pause | Resume a Game
+
             ;; TODO calculate game position
             ;; (println (format "Sink value / %s" vv))
             (sink-fn vv))
@@ -100,27 +158,27 @@
 
 (defn initialize-game! [conn user-entity sink-fn]
 
-  (let [bind-data-sequence    (fn [a]
-                                (->> (datasource/->combined-data-sequence
-                                       datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
-                                     (datasource/combined-data-sequence-with-datetime (t/now))
-                                     (map #(conj % (UUID/randomUUID)))
-                                     (assoc a :data-sequence)))
-        stocks                (game/generate-stocks 4)
-        stocks-with-tick-data (map bind-data-sequence stocks)
-        game                  (game/initialize-game! conn user-entity stocks)
+  (let [bind-data-sequence (fn [a]
+                             (->> (datasource/->combined-data-sequence
+                                    datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
+                                  (datasource/combined-data-sequence-with-datetime (t/now))
+                                  (map #(conj % (UUID/randomUUID)))
+                                  (assoc a :data-sequence)))
+        stocks             (game/generate-stocks 4)
+        game               (game/initialize-game! conn user-entity stocks)
 
-        game-control              {:game                      game
-                                   :tick-sleep-ms             500
-                                   :stocks-with-tick-data     stocks-with-tick-data
-                                   :data-subscription-channel (chan)
-                                   :control-channel           (chan)
-                                   :close-sink-fn             (partial sink-fn nil)
-                                   :sink-fn                   #(sink-fn {:message (json/write-str %)})}]
+        stocks                (:game/stocks game)
+        stocks-with-tick-data (map bind-data-sequence stocks)
+        game-control          {:game                      game
+                               :tick-sleep-ms             500
+                               :stocks-with-tick-data     stocks-with-tick-data
+                               :data-subscription-channel (chan)
+                               :control-channel           (chan)
+                               :close-sink-fn             (partial sink-fn nil)
+                               :sink-fn                   #(sink-fn {:message (json/write-str %)})}]
 
     (register-game-control! game game-control)
     game-control))
-
 
 (defn create-game! [conn user-id sink-fn]
   (let [user-entity (hash-map :db/id user-id)]
@@ -143,22 +201,28 @@
              :game.user/subscriptions
              (map :game.stock/id)
              (into #{})
-             (narrow-stocks-by-game-user-subscription stocks-with-tick-data))]
+             (narrow-stocks-by-game-user-subscription stocks-with-tick-data)
+             first)]
 
-    (->> data-subscription-stock first :data-sequence
+    (->> data-subscription-stock :data-sequence
          (map (fn [[m v t]]
 
                 (let [moment  (str m)
                       value   v
-                      tick-id (str t)]
+                      tick-id (str t)
+                      tick    (persistence.core/bind-temporary-id
+                                (hash-map
+                                  :game.stock.tick/trade-time m
+                                  :game.stock.tick/close value
+                                  :game.stock.tick/id t))
+
+                      stock-with-appended-price-history (-> data-subscription-stock
+                                                            (dissoc :data-sequence)
+                                                            (assoc :game.stock/price-history tick))
+                      entities                          [tick stock-with-appended-price-history]]
 
                   ;; i
-                  (persistence.datomic/transact-entities!
-                    conn
-                    (hash-map
-                      :game.stock.tick/trade-time m
-                      :game.stock.tick/close value
-                      :game.stock.tick/id t))
+                  (persistence.datomic/transact-entities! conn entities)
 
                   ;; ii
                   [moment value tick-id]))))))

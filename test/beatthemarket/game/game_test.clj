@@ -81,7 +81,7 @@
 
       (testing "Cannot buy stock without having a user"
 
-        (let [user-id                  (test-util/generate-user conn)
+        (let [user-id                  (:db/id (test-util/generate-user conn))
               sink-fn                  identity
               {{game-id :db/id} :game} (games/create-game! conn user-id sink-fn)
               stock-id                 (ffirst (test-util/generate-stocks conn 1))]
@@ -146,7 +146,7 @@
 
                       (let [cash-starting-balance (-> repl.state/system :game/game :starting-balance)
                             stock-starting-balance 0.0
-                            value-change (Double. (format "%.2f" (* stock-amount stock-price)))
+                            value-change (Float. (format "%.2f" (* stock-amount stock-price)))
 
                             game-user-accounts (->> game-pulled
                                                     :game/users first

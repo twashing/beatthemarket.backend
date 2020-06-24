@@ -36,7 +36,6 @@
      (apply (partial ->combined-data-sequence beta-configurations) named-sequences)))
 
   ([beta-configurations & named-sequences]
-
    (->> (->data-sequences beta-configurations)
         ((apply juxt named-sequences))
         (apply combine-data-sequences))))
@@ -48,7 +47,7 @@
    (let [time-seq (iterate #(t/plus % (t/seconds 1)) start-time)]
      (map (fn [t y]
             [(c/to-long t)
-             (+ y-offset y)])
+             (Float. (format "%.2f" (+ y-offset y)))])
           time-seq
           combined-data-sequence))))
 
@@ -334,16 +333,16 @@
              (csv/write-csv polynomial-writer)))
 
       #_(let [xaxis (->> (iterate #(+ % 1/10) 0)
-                       (map float))
-            yaxis (->> (iterate #(+ % 1/10) 0)
-                       (map #(/ % 10))
-                       (map polynomial-redux) ;; polynomial-xintercept ;; generate-polynomial-sequence
-                       (take length))]
+                         (map float))
+              yaxis (->> (iterate #(+ % 1/10) 0)
+                         (map #(/ % 10))
+                         (map polynomial-redux) ;; polynomial-xintercept ;; generate-polynomial-sequence
+                         (take length))]
 
-        (->> (interleave xaxis yaxis)
-             (partition 2)
-             (take length)
-             (csv/write-csv polynomial-writer)))
+          (->> (interleave xaxis yaxis)
+               (partition 2)
+               (take length)
+               (csv/write-csv polynomial-writer)))
 
       ;; sin t + cos (sqrt(3)t)
       (let [xaxis (range -10 10)

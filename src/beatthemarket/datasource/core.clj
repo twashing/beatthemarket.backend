@@ -69,7 +69,7 @@
   (if (= dirn +) - +))
 
 (defn effectively-zero? [xval]
-  (= 0.0 (Double. (format "%.7f" xval))))
+  (= 0.0 (Float. (format "%.7f" xval))))
 
 (defn find-xintercept [direction mfn]
 
