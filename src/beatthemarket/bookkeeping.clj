@@ -1,6 +1,7 @@
 (ns beatthemarket.bookkeeping
   (:require [datomic.client.api :as d]
             [com.rpl.specter :refer [select pred ALL MAP-VALS]]
+            [rop.core :as rop]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.util :as util :refer [exists?]])
@@ -219,50 +220,76 @@
       {:db/id (ffirst stock-account-result-set)}
       (create-stock-account! conn user-entity stock-entity))))
 
+(defn- game-exists? [{:keys [conn game-id] :as inputs}]
+  (let [game-pulled (try (persistence.core/pull-entity conn game-id)
+                         (catch Throwable e nil))]
+    (if (exists? game-pulled)
+      (rop/succeed (assoc inputs :game-pulled game-pulled))
+      (rop/fail (ex-info "No game bound to id" inputs)))))
+
+(defn- user-exists? [{:keys [conn user-id] :as inputs}]
+  (let [user-pulled (try (persistence.core/pull-entity conn user-id)
+                         (catch Throwable e nil))]
+    (if (exists? user-pulled)
+      (rop/succeed (assoc inputs :user-pulled user-pulled))
+      (rop/fail (ex-info "No user bound to id" inputs)))))
+
+(defn- stock-exists? [{:keys [conn stock-id] :as inputs}]
+  (let [stock-pulled (try (persistence.core/pull-entity conn stock-id)
+                          (catch Throwable e nil))]
+    (if (exists? stock-pulled)
+      (rop/succeed (assoc inputs :stock-pulled stock-pulled))
+      (rop/fail (ex-info "No stock bound to id" inputs)))))
+
 (defn buy-stock! [conn game-id user-id stock-id stock-amount stock-price]
-  {:pre [(exists? (persistence.core/pull-entity conn game-id))
-         (exists? (persistence.core/pull-entity conn user-id))
-         (exists? (persistence.core/pull-entity conn stock-id))]}
 
-  ;; TODO
-  ;; game exists
-  ;; user exists
-  ;; stock exists
-  ;;
-  ;; user is bound to game
-  ;; stock is bound to game
-  (let [user-pulled   (persistence.core/pull-entity conn user-id)
-        stock-pulled  (persistence.core/pull-entity conn stock-id)
-        stock-account (conditionally-create-stock-account! conn user-pulled stock-pulled)
-        debit-value   (Float. (format "%.2f" (* stock-amount stock-price)))
-        credit-value  debit-value
+  (let [validation-inputs {:conn conn
+                           :game-id game-id
+                           :user-id user-id
+                           :stock-id stock-id
+                           :stock-amount stock-amount
+                           :stock-price stock-price}
 
-        ;; ACCOUNT BALANCE UPDATES
-        updated-debit-account  (update-in (cash-account-by-user user-pulled) [:bookkeeping.account/balance] - debit-value)
-        updated-credit-account (update-in stock-account [:bookkeeping.account/balance] + credit-value)
+        result (rop/>>= validation-inputs
+                        game-exists?
+                        user-exists?
+                        stock-exists?)]
 
-        ;; T-ENTRY + JOURNAL ENTRIES
-        debits+credits          [(->debit updated-debit-account debit-value nil nil)
-                                 (->credit updated-credit-account credit-value stock-price stock-amount)]
-        tentry                  (apply ->tentry debits+credits)
-        updated-journal-entries (-> (persistence.core/pull-entity conn game-id)
-                                    :game/users first
-                                    :game.user/portfolio
-                                    :bookkeeping.portfolio/journals first
-                                    (assoc :bookkeeping.journal/entries tentry))
+    (if (= clojure.lang.ExceptionInfo (type result))
 
-        entities [tentry updated-journal-entries]]
+      (throw result)
 
-    (as-> entities ent
-      (persistence.datomic/transact-entities! conn ent)
-      (:db-after ent)
-      (d/q '[:find ?e
-             :in $ ?entry-id
-             :where [?e :bookkeeping.tentry/id ?entry-id]]
-           ent
-           (-> tentry :bookkeeping.tentry/id))
-      (ffirst ent)
-      (persistence.core/pull-entity conn ent))))
+      (let [{:keys [user-pulled stock-pulled]} result
+            stock-account                      (conditionally-create-stock-account! conn user-pulled stock-pulled)
+            debit-value                        (Float. (format "%.2f" (* stock-amount stock-price)))
+            credit-value                       debit-value
+
+            ;; ACCOUNT BALANCE UPDATES
+            updated-debit-account  (update-in (cash-account-by-user user-pulled) [:bookkeeping.account/balance] - debit-value)
+            updated-credit-account (update-in stock-account [:bookkeeping.account/balance] + credit-value)
+
+            ;; T-ENTRY + JOURNAL ENTRIES
+            debits+credits          [(->debit updated-debit-account debit-value nil nil)
+                                     (->credit updated-credit-account credit-value stock-price stock-amount)]
+            tentry                  (apply ->tentry debits+credits)
+            updated-journal-entries (-> (persistence.core/pull-entity conn game-id)
+                                        :game/users first
+                                        :game.user/portfolio
+                                        :bookkeeping.portfolio/journals first
+                                        (assoc :bookkeeping.journal/entries tentry))
+
+            entities [tentry updated-journal-entries]]
+
+        (as-> entities ent
+          (persistence.datomic/transact-entities! conn ent)
+          (:db-after ent)
+          (d/q '[:find ?e
+                 :in $ ?entry-id
+                 :where [?e :bookkeeping.tentry/id ?entry-id]]
+               ent
+               (-> tentry :bookkeeping.tentry/id))
+          (ffirst ent)
+          (persistence.core/pull-entity conn ent))))))
 
 (comment
 

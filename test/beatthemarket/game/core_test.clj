@@ -9,7 +9,8 @@
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
             [beatthemarket.util :as util])
-  (:import [java.util UUID]))
+  (:import [java.util UUID]
+           [clojure.lang ExceptionInfo]))
 
 
 (use-fixtures :once (partial test-util/component-prep-fixture :test))
@@ -77,7 +78,7 @@
 
     (testing "Cannot buy stock without having created a game"
 
-      (is (thrown? AssertionError (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price)))
+      (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price)))
 
       (testing "Cannot buy stock without having a user"
 
@@ -86,7 +87,7 @@
               {{game-id :db/id} :game} (game.games/create-game! conn user-id sink-fn)
               {stock-id :db/id}        (ffirst (test-util/generate-stocks! conn 1))]
 
-          (testing "Buying a stsock creates a tentry"
+          (testing "Buying a stock creates a tentry"
 
             (let [{tentry-id :db/id} (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price)]
 

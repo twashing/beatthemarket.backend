@@ -57,100 +57,106 @@
        (when close?
          (close! ch))))))
 
-(defn game-iscurrent-and-belongsto-user? [conn gameId userId]
-  (util/exists?
-    (d/q '[:find (pull ?e [*])
-           :in $ ?game-id ?user-id
-           :where
-           [?e :game/id ?game-id]
-           [?e :game/start-time]
-           [(missing? $ ?e :game/end-time)]
-           [?e :game/users ?us]
-           [?us :game.user/user ?u]
-           [?u :user/external-uid ?user-id]]
-         (d/db conn)
-         gameId userId)))
+(defn- game-iscurrent-and-belongsto-user? [{:keys [conn gameId userId] :as inputs}]
+  (if (util/exists?
+        (d/q '[:find (pull ?e [*])
+               :in $ ?game-id ?user-id
+               :where
+               [?e :game/id ?game-id]
+               [?e :game/start-time]
+               [(missing? $ ?e :game/end-time)]
+               [?e :game/users ?us]
+               [?us :game.user/user ?u]
+               [?u :user/external-uid ?user-id]]
+             (d/db conn)
+             gameId userId))
+    (rop/succeed inputs)
+    (rop/fail (ex-info "Game isn't current or doesn't belong to user" inputs))))
+
+(defn- submitted-price-matches-tick? [{:keys [conn tickId tickPrice] :as inputs}]
+  (let [{tick-price :game.stock.tick/close :as tick}
+        (ffirst
+          (d/q '[:find (pull ?e [*])
+                 :in $ ?tick-id
+                 :where
+                 [?e :game.stock.tick/id ?tick-id]]
+               (d/db conn)
+               tickId))]
+
+    (if (= tickPrice tick-price)
+      (rop/succeed inputs)
+      (let [message (format "Submitted price [%s] does not match price from tickId" tickPrice)]
+        (rop/fail (ex-info message tick))))))
+
+(defn- latest-tick? [{:keys [conn tickId stockId] :as inputs}]
+  (let [{tick-history :game.stock/price-history :as stock}
+        (ffirst
+          (d/q '[:find (pull ?e [*])
+                 :in $ ?stock-id
+                 :where
+                 [?e :game.stock/id ?stock-id]]
+               (d/db conn)
+               stockId))
+
+        tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)]
+
+    (if (= tickId (-> tick-history-sorted first :game.stock.tick/id))
+      (rop/succeed inputs)
+      (let [message (format "Submitted tick [%s] is not the latest" tickId)]
+        (rop/fail (ex-info message {:tick-history-sorted
+                                    (take 5 tick-history-sorted)}))))))
 
 (defn buy-stock! [conn userId gameId stockId stockAmount tickId tickPrice]
-  {:pre [(game-iscurrent-and-belongsto-user? conn gameId userId)]}
 
-  ;; TODO User railway style validation
-  (let [{tick-price :game.stock.tick/close :as tick}
-        (ffirst
-          (d/q '[:find (pull ?e [*])
-                 :in $ ?tick-id
-                 :where
-                 [?e :game.stock.tick/id ?tick-id]]
-               (d/db conn)
-               tickId))]
+  (let [validation-inputs {:conn conn
+                           :userId userId
+                           :gameId gameId
+                           :stockId stockId
+                           :stockAmount stockAmount
+                           :tickId tickId
+                           :tickPrice tickPrice}
 
-    (when-not (= tickPrice tick-price)
-      (let [message (format "Submitted price [%s] does not match price from tickId" tickPrice)]
-        (throw (AssertionError. message (ex-info message tick)))))
+        result (rop/>>= validation-inputs
+                        game-iscurrent-and-belongsto-user?
+                        submitted-price-matches-tick?
+                        latest-tick?)]
 
+    (if (= clojure.lang.ExceptionInfo (type result))
 
-    (let [{tick-history :game.stock/price-history :as stock}
-          (ffirst
-            (d/q '[:find (pull ?e [*])
-                   :in $ ?stock-id
-                   :where
-                   [?e :game.stock/id ?stock-id]]
-                 (d/db conn)
-                 stockId))
+      (throw result)
 
-          tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)]
+      (let [extract-id  (comp :db/id ffirst)
+            user-db-id  (extract-id (persistence.user/user-by-external-uid conn userId))
+            game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+            stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
-      (when-not (= tickId (-> tick-history-sorted first :game.stock.tick/id))
-        (let [message (format "Submitted tick [%s] is no the latest" tickId)]
-          (throw (AssertionError. message (ex-info message {:tick-history-sorted
-                                                            (take 5 tick-history-sorted)})))))))
+        (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))))
 
-  (let [extract-id  (comp :db/id ffirst)
-        user-db-id  (extract-id (persistence.user/user-by-external-uid conn userId))
-        game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-        stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
+(defn sell-stock! [conn userId gameId stockId stockAmount tickId tickPrice]
 
-    (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))
+  (let [validation-inputs {:conn conn
+                           :userId userId
+                           :gameId gameId
+                           :stockId stockId
+                           :stockAmount stockAmount
+                           :tickId tickId
+                           :tickPrice tickPrice}
 
-#_(defn buy-stock! [conn userId gameId stockId stockAmount tickId tickPrice]
-  {:pre [(game-iscurrent-and-belongsto-user? conn gameId userId)]}
+        result (rop/>>= validation-inputs
+                        game-iscurrent-and-belongsto-user?
+                        submitted-price-matches-tick?
+                        latest-tick?)]
 
-  (let [{tick-price :game.stock.tick/close :as tick}
-        (ffirst
-          (d/q '[:find (pull ?e [*])
-                 :in $ ?tick-id
-                 :where
-                 [?e :game.stock.tick/id ?tick-id]]
-               (d/db conn)
-               tickId))]
+    (if (= clojure.lang.ExceptionInfo (type result))
 
-    (when-not (= tickPrice tick-price)
-      (let [message (format "Submitted price [%s] does not match price from tickId" tickPrice)]
-        (throw (AssertionError. message (ex-info message tick)))))
+      (throw result)
 
+      (let [extract-id  (comp :db/id ffirst)
+            user-db-id  (extract-id (persistence.user/user-by-external-uid conn userId))
+            game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+            stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
-    (let [{tick-history :game.stock/price-history :as stock}
-          (ffirst
-            (d/q '[:find (pull ?e [*])
-                   :in $ ?stock-id
-                   :where
-                   [?e :game.stock/id ?stock-id]]
-                 (d/db conn)
-                 stockId))
-
-          tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)]
-
-      (when-not (= tickId (-> tick-history-sorted first :game.stock.tick/id))
-        (let [message (format "Submitted tick [%s] is no the latest" tickId)]
-          (throw (AssertionError. message (ex-info message {:tick-history-sorted
-                                                            (take 5 tick-history-sorted)})))))))
-
-  (let [extract-id  (comp :db/id ffirst)
-        user-db-id  (extract-id (persistence.user/user-by-external-uid conn userId))
-        game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-        stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
-
-    (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))
+        (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))))
 
 (defn stream-subscription! [tick-sleep-ms
                             data-subscription-channel

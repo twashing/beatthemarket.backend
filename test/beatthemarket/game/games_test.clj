@@ -10,7 +10,8 @@
             [beatthemarket.game.games :as game.games]
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util])
-  (:import [java.util UUID]))
+  (:import [java.util UUID]
+           [clojure.lang ExceptionInfo]))
 
 
 (use-fixtures :once (partial test-util/component-prep-fixture :test))
@@ -102,13 +103,13 @@
         tickId1                (UUID/fromString tickId1)]
 
     (testing "We are checking game is current and belongs to the user"
-      (is (thrown? AssertionError (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
+      (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
 
     (testing "Error is thrown when submitted price does not match price from tickId"
-      (is (thrown? AssertionError (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
+      (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
 
     (testing "Error is thrown when submitted tick is no the latest"
-      (is (thrown? AssertionError (game.games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
+      (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
 
     (testing "Returned Tentry matches what was submitted"
       (let [expected-credit-value        (Float. (format "%.2f" (* stockAmount tickPrice1)))
@@ -122,6 +123,75 @@
             expected-debit-account-name "Cash"
 
             result-tentry (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
+
+            {debit-account-name :bookkeeping.account/name
+             debit-value        :bookkeeping.account/balance}
+            (-> result-tentry
+                :bookkeeping.tentry/debits first
+                :bookkeeping.debit/account
+                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))
+
+            {credit-account-name :bookkeeping.account/name
+             credit-value        :bookkeeping.account/balance}
+            (-> result-tentry
+                :bookkeeping.tentry/credits first
+                :bookkeeping.credit/account
+                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
+
+        (are [x y] (= x y)
+          expected-credit-value        credit-value
+          expected-credit-account-name credit-account-name
+          expected-debit-value         debit-value
+          expected-debit-account-name  debit-account-name)))))
+
+#_(deftest sell-stock!-test
+
+  (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid}                 (test-util/generate-user! conn)
+        sink-fn                                             identity
+        {{gameId :game/id :as game} :game
+         data-subscription-channel  :data-subscription-channel
+         stocks-with-tick-data      :stocks-with-tick-data} (game.games/create-game! conn result-user-id sink-fn)
+
+        _ (game.games/onto-open-chan
+            data-subscription-channel
+            (take 2 (game.games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data)))
+
+        stockId     (-> game
+                        :game/users first
+                        :game.user/subscriptions first
+                        :game.stock/id)
+        stockAmount 100
+
+        [_ tickPrice0 tickId0] (<!! data-subscription-channel)
+        [_ tickPrice1 tickId1] (<!! data-subscription-channel)
+        tickId0                (UUID/fromString tickId0)
+        tickId1                (UUID/fromString tickId1)]
+
+    (testing "We are checking game is current and belongs to the user"
+      (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
+
+    (testing "Error is thrown when submitted price does not match price from tickId"
+      (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
+
+    (testing "Error is thrown when submitted tick is no the latest"
+      (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
+
+    ;; TODO User has that amount of stock on hand
+
+    (testing "Returned Tentry matches what was submitted"
+      (let [expected-debit-value        (Float. (format "%.2f" (* stockAmount tickPrice1)))
+            expected-debit-account-name (->> game
+                                              :game/users first
+                                              :game.user/subscriptions first
+                                              :game.stock/name
+                                              (format "STOCK.%s"))
+
+            expected-credit-value        (+ (-> repl.state/system :game/game :starting-balance) expected-debit-value)
+            expected-credit-account-name "Cash"
+
+            result-tentry (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
 
             {debit-account-name :bookkeeping.account/name
              debit-value        :bookkeeping.account/balance}
