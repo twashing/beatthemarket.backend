@@ -54,7 +54,7 @@
             ;; :db/ensure :bookkeeping.debit/validate
             )
 
-    (exists? price) (assoc :bookkeeping.debit/price price)
+    (exists? price)  (assoc :bookkeeping.debit/price price)
     (exists? amount) (assoc :bookkeeping.debit/amount amount)))
 
 (defn ->credit [account value price amount]
@@ -66,7 +66,7 @@
             ;; :db/ensure :bookkeeping.credit/validate
             )
 
-    (exists? price) (assoc :bookkeeping.credit/price price)
+    (exists? price)  (assoc :bookkeeping.credit/price price)
     (exists? amount) (assoc :bookkeeping.credit/amount amount)))
 
 ;; TODO Make a user-accounts-balanced? function
@@ -153,7 +153,7 @@
 
                 (= (:bookkeeping.credit/value %)
                    (Float. (format "%.2f" (* (:bookkeeping.credit/price %)
-                                              (:bookkeeping.credit/amount %))))))
+                                             (:bookkeeping.credit/amount %))))))
            true)]
 
     (and (every? value-equals-price-times-amount-debit? debits)
@@ -234,7 +234,7 @@
   (let [user-pulled   (persistence.core/pull-entity conn user-id)
         stock-pulled  (persistence.core/pull-entity conn stock-id)
         stock-account (conditionally-create-stock-account! conn user-pulled stock-pulled)
-        debit-value   (* stock-amount stock-price)
+        debit-value   (Float. (format "%.2f" (* stock-amount stock-price)))
         credit-value  debit-value
 
         ;; ACCOUNT BALANCE UPDATES
@@ -251,7 +251,7 @@
                                     :bookkeeping.portfolio/journals first
                                     (assoc :bookkeeping.journal/entries tentry))
 
-        entities [tentry updated-journal-entries #_updated-debit-account #_updated-credit-account]]
+        entities [tentry updated-journal-entries]]
 
     (as-> entities ent
       (persistence.datomic/transact-entities! conn ent)
@@ -268,44 +268,44 @@
 
   (def tentry
 
-    {:db/id 17592186045444
+    {:db/id                 17592186045444
      :bookkeeping.tentry/id #uuid "c0d5052c-84f6-4d2c-921c-d0c41140f2b2"
 
      :bookkeeping.tentry/debits
-     [{:db/id 17592186045445
-       :bookkeeping.debit/id #uuid "ccd8e77d-7f61-4477-a653-91f19460f404"
+     [{:db/id                   17592186045445
+       :bookkeeping.debit/id    #uuid "ccd8e77d-7f61-4477-a653-91f19460f404"
        :bookkeeping.debit/account
-       {:db/id 17592186045437
-        :bookkeeping.account/id #uuid "69ffdf42-5220-409b-8f3e-1aa1f5d02c6e"
+       {:db/id                    17592186045437
+        :bookkeeping.account/id   #uuid "69ffdf42-5220-409b-8f3e-1aa1f5d02c6e"
         :bookkeeping.account/name "Cash"
         :bookkeeping.account/type
-        {:db/id 17592186045428
+        {:db/id    17592186045428
          :db/ident :bookkeeping.account.type/asset}
         :bookkeeping.account/orientation
-        {:db/id 17592186045433
+        {:db/id    17592186045433
          :db/ident :bookkeeping.account.orientation/debit}}
        :bookkeeping.debit/value 5047.0}]
 
      :bookkeeping.tentry/credits
-     [{:db/id 17592186045446
-       :bookkeeping.credit/id #uuid "12aa40e7-2b88-4468-bca3-90755057d366"
+     [{:db/id                     17592186045446
+       :bookkeeping.credit/id     #uuid "12aa40e7-2b88-4468-bca3-90755057d366"
        :bookkeeping.credit/account
-       {:db/id 17592186045442
-        :bookkeeping.account/id #uuid "1f9ade32-fd02-4322-9a7f-05bed58a4c84"
+       {:db/id                    17592186045442
+        :bookkeeping.account/id   #uuid "1f9ade32-fd02-4322-9a7f-05bed58a4c84"
         :bookkeeping.account/name "STOCK.Dangerous Quota"
         :bookkeeping.account/type
-        {:db/id 17592186045428
+        {:db/id    17592186045428
          :db/ident :bookkeeping.account.type/asset}
         :bookkeeping.account/orientation
-        {:db/id 17592186045433
+        {:db/id    17592186045433
          :db/ident :bookkeeping.account.orientation/debit}
         :bookkeeping.account/counter-party
-        {:db/id 17592186045440
-         :game.stock/id #uuid "f8c4c6ca-7d12-4d57-af63-5c3049b42fe0"
-         :game.stock/name "Dangerous Quota"
+        {:db/id             17592186045440
+         :game.stock/id     #uuid "f8c4c6ca-7d12-4d57-af63-5c3049b42fe0"
+         :game.stock/name   "Dangerous Quota"
          :game.stock/symbol "DANG"}}
-       :bookkeeping.credit/value 5047.0
-       :bookkeeping.credit/price 50.47
+       :bookkeeping.credit/value  5047.0
+       :bookkeeping.credit/price  50.47
        :bookkeeping.credit/amount 100}]})
 
   (pprint tentry)

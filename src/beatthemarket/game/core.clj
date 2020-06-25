@@ -1,4 +1,4 @@
-(ns beatthemarket.game.game
+(ns beatthemarket.game.core
   (:require [clj-time.core :as t]
             [clj-time.coerce :as c]
             [com.rpl.specter :refer [select-one  pred ALL]]
@@ -51,7 +51,7 @@
              :game.stock/symbol symbol)
      (util/exists? price-history) (assoc :game.stock/price-history price-history))))
 
-(defn generate-stocks [no-of-stocks]
+(defn generate-stocks! [no-of-stocks]
   (->> (name-generator/generate-names no-of-stocks)
        (map (juxt :stock-name :stock-symbol))
        (map #(apply ->stock %))
@@ -68,7 +68,7 @@
   ([conn user-entity stocks]
 
    (let [game-level :game-level/one
-         game (->game game-level stocks user-entity)]
+         game       (->game game-level stocks user-entity)]
 
      (as-> game gm
        (persistence.datomic/transact-entities! conn gm)
@@ -182,14 +182,14 @@
   ;; (equity-account-by-user user-pulled)
 
   ;; TODO Input
-  #_{:stockId 1234
-     :tickId "asdf"
-     :tickTime 3456
+  #_{:stockId   1234
+     :tickId    "asdf"
+     :tickTime  3456
      :tickPrice 1234.45}
 
 
   ;; STOCK
-  (def stocks (generate-stocks 1))
+  (def stocks (generate-stocks! 1))
   (persistence.datomic/transact-entities! conn stocks)
   (def result-stock-id (ffirst
                          (d/q '[:find ?e
@@ -225,10 +225,10 @@
 
   ;; TENTRY
   (let [cash-account (:db/id (cash-account-by-user user-pulled))
-        debit-value 1234.45
+        debit-value  1234.45
 
         credit-account {:db/id stock-account-id}
-        credit-value 1234.45
+        credit-value   1234.45
 
         debits+credits [(bookkeeping/->debit cash-account debit-value)
                         (bookkeeping/->credit credit-account credit-value)]]
@@ -259,11 +259,11 @@
                                beatthemarket.bookkeeping/->portfolio)
 
         ;; Generate stocks + first subscription
-        stocks (->> [["Sun Ra Inc" "SUN"]
-                     ["Miles Davis Inc" "MILD"]
-                     ["John Coltrane Inc" "JONC"]]
-                    (map #(apply ->stock %))
-                    (map persistence.core/bind-temporary-id))
+        stocks        (->> [["Sun Ra Inc" "SUN"]
+                            ["Miles Davis Inc" "MILD"]
+                            ["John Coltrane Inc" "JONC"]]
+                           (map #(apply ->stock %))
+                           (map persistence.core/bind-temporary-id))
         subscriptions (take 1 stocks)
 
         game-level :game-level/one]

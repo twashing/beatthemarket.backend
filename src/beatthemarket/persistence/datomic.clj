@@ -18,7 +18,7 @@
 
 (defn ->datomic-client-local [{:keys [db-name config env]}]
 
-  (let [url (format "datomic:mem://%s" db-name)
+  (let [url    (format "datomic:mem://%s" db-name)
         client (memdb/client config)]
 
     (d/create-database client {:db-name url})
@@ -61,7 +61,6 @@
 (defn transact! [conn data]
   (d/transact conn {:tx-data data}))
 
-
 (comment
 
 
@@ -100,37 +99,37 @@
   ;; B add data
 
   ;; BAD
-  (->> [{:user/email "twashing@gmail.com"
-         :user/name "Timothy Washington"
+  (->> [{:user/email                 "twashing@gmail.com"
+         :user/name                  "Timothy Washington"
          :user/identity-provider-uid "adb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "twashing@gmail.com"
-         :user/name "Timothy Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "twashing@gmail.com"
+         :user/name                  "Timothy Washington"
          :user/identity-provider-uid "adb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "swashing@gmail.com"
-         :user/name "Samuel Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "swashing@gmail.com"
+         :user/name                  "Samuel Washington"
          :user/identity-provider-uid "bdb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "mwashing@gmail.com"
-         :user/name "Michelle Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "mwashing@gmail.com"
+         :user/name                  "Michelle Washington"
          :user/identity-provider-uid "cdb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}]
+         :user/identity-provider     "Google"}]
        (transact! conn))
 
   ;; GOOD
-  (->> [{:user/email "twashing@gmail.com"
-         :user/name "Timothy Washington"
+  (->> [{:user/email                 "twashing@gmail.com"
+         :user/name                  "Timothy Washington"
          :user/identity-provider-uid "adb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "swashing@gmail.com"
-         :user/name "Samuel Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "swashing@gmail.com"
+         :user/name                  "Samuel Washington"
          :user/identity-provider-uid "bdb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "mwashing@gmail.com"
-         :user/name "Michelle Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "mwashing@gmail.com"
+         :user/name                  "Michelle Washington"
          :user/identity-provider-uid "cdb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}]
+         :user/identity-provider     "Google"}]
        (transact! conn))
 
   (def result-users *1)

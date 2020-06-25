@@ -152,7 +152,7 @@
         user-exists? (fn [{id-token :id-token :as input}]
 
                        (let [decoded-token (second (iam.auth/decode-token id-token))
-                             email (get decoded-token "email")
+                             email         (get decoded-token "email")
 
                              conn (-> repl.state/system :persistence/datomic :conn)]
 
@@ -224,10 +224,10 @@
 
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
-      (util/attach-resolvers {:resolve-hello graphql/resolve-hello
-                              :resolve-login graphql/resolve-login
+      (util/attach-resolvers {:resolve-hello     graphql/resolve-hello
+                              :resolve-login     graphql/resolve-login
                               :resolve-buy-stock graphql/resolve-buy-stock})
-      (util/attach-streamers {:stream-ping graphql/stream-ping
+      (util/attach-streamers {:stream-ping     graphql/stream-ping
                               :stream-new-game graphql/stream-new-game})
       schema/compile))
 

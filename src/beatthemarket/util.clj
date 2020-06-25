@@ -6,9 +6,9 @@
 
 (defn exists? [a]
   (cond
-    (nil? a) false
+    (nil? a)     false
     (seqable? a) ((comp not empty?) a)
-    :else true))
+    :else        true))
 
 (defn truthy?
   "Based on Clojure truthiness

@@ -9,12 +9,12 @@
    https://en.wikipedia.org/wiki/Beta_distribution"
 
   {:bigswings {:alpha 0.5 :beta 0.5}
-   :midpoint {:alpha 2.0 :beta 2.0}
+   :midpoint  {:alpha 2.0 :beta 2.0}
 
    :left-leaning {:alpha 2.0 :beta 5.0}
 
    :highend {:alpha 3.0 :beta 1.0}
-   :lowend {:alpha 1.0 :beta 3.0}
+   :lowend  {:alpha 1.0 :beta 3.0}
 
    :alternating-price-changes {:alpha 3.0 :beta 2.65}})
 
@@ -35,20 +35,20 @@
 ;; >> ================================ >>
 
 #_(defn randomize-vertical-dilation
-  "vertical dilation (or amplitude)
+    "vertical dilation (or amplitude)
      polynomial: 2 - 0.5
      sine: 0.5 - 2.7"
-  [mathfn min' max']
-  (let [a (random-double-in-range min' max')]
-    (partial mathfn a)))
+    [mathfn min' max']
+    (let [a (random-double-in-range min' max')]
+      (partial mathfn a)))
 
 #_(defn randomize-horizontal-dilation
-  "horizontal dilation
+    "horizontal dilation
      polynomial: between 2 - 0.5 (larger b yields a narrower curve)
      sine: 2.7 - 0.3"
-  [mathfn-curried min' max']
-  (let [b (random-double-in-range min' max')]
-    (partial mathfn-curried b)))
+    [mathfn-curried min' max']
+    (let [b (random-double-in-range min' max')]
+      (partial mathfn-curried b)))
 
 ;; >> ================================ >>
 

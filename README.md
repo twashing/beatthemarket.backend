@@ -162,6 +162,29 @@ async operations take a long time, and can have a closed DB when trying to write
 ? Why aren't subscription / WS paths available
 
 
+* Name journals, entries, etc
+
+
+* GraphQL - multiple concurrent connections?
+  ticks
+  updates on portfolio positions, profits, etc
+
+
+* Screens
+  Finish level screen
+  Finish game screen
+
+
+* buy as many shares as you want, until level 5
+* start to restrict shares starting at level 5
+* Lose a game @ losing 10% of your money
+
+
+* UI library 
+  how to keep just a certain amount of ticks in view
+  how to scroll pane up / down to keep data in view
+
+
 
 License
 -------

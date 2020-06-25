@@ -6,13 +6,14 @@
             [clojure.data.json :as json]
             [datomic.client.api :as d]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [rop.core :as rop]
             [integrant.core :as ig]
             [integrant.repl.state :as repl.state]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.iam.user :as iam.user]
-            [beatthemarket.game.game :as game]
+            [beatthemarket.game.core :as game.core]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.user :as persistence.user]
@@ -57,7 +58,6 @@
          (close! ch))))))
 
 (defn game-iscurrent-and-belongsto-user? [conn gameId userId]
-
   (util/exists?
     (d/q '[:find (pull ?e [*])
            :in $ ?game-id ?user-id
@@ -66,13 +66,53 @@
            [?e :game/start-time]
            [(missing? $ ?e :game/end-time)]
            [?e :game/users ?us]
-
            [?us :game.user/user ?u]
            [?u :user/external-uid ?user-id]]
          (d/db conn)
          gameId userId)))
 
 (defn buy-stock! [conn userId gameId stockId stockAmount tickId tickPrice]
+  {:pre [(game-iscurrent-and-belongsto-user? conn gameId userId)]}
+
+  ;; TODO User railway style validation
+  (let [{tick-price :game.stock.tick/close :as tick}
+        (ffirst
+          (d/q '[:find (pull ?e [*])
+                 :in $ ?tick-id
+                 :where
+                 [?e :game.stock.tick/id ?tick-id]]
+               (d/db conn)
+               tickId))]
+
+    (when-not (= tickPrice tick-price)
+      (let [message (format "Submitted price [%s] does not match price from tickId" tickPrice)]
+        (throw (AssertionError. message (ex-info message tick)))))
+
+
+    (let [{tick-history :game.stock/price-history :as stock}
+          (ffirst
+            (d/q '[:find (pull ?e [*])
+                   :in $ ?stock-id
+                   :where
+                   [?e :game.stock/id ?stock-id]]
+                 (d/db conn)
+                 stockId))
+
+          tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)]
+
+      (when-not (= tickId (-> tick-history-sorted first :game.stock.tick/id))
+        (let [message (format "Submitted tick [%s] is no the latest" tickId)]
+          (throw (AssertionError. message (ex-info message {:tick-history-sorted
+                                                            (take 5 tick-history-sorted)})))))))
+
+  (let [extract-id  (comp :db/id ffirst)
+        user-db-id  (extract-id (persistence.user/user-by-external-uid conn userId))
+        game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+        stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
+
+    (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))
+
+#_(defn buy-stock! [conn userId gameId stockId stockAmount tickId tickPrice]
   {:pre [(game-iscurrent-and-belongsto-user? conn gameId userId)]}
 
   (let [{tick-price :game.stock.tick/close :as tick}
@@ -105,9 +145,9 @@
           (throw (AssertionError. message (ex-info message {:tick-history-sorted
                                                             (take 5 tick-history-sorted)})))))))
 
-  (let [extract-id (comp :db/id ffirst)
-        user-db-id (extract-id (persistence.user/user-by-external-uid conn userId))
-        game-db-id (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+  (let [extract-id  (comp :db/id ffirst)
+        user-db-id  (extract-id (persistence.user/user-by-external-uid conn userId))
+        game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
         stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
     (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))
@@ -164,8 +204,8 @@
                                   (datasource/combined-data-sequence-with-datetime (t/now))
                                   (map #(conj % (UUID/randomUUID)))
                                   (assoc a :data-sequence)))
-        stocks             (game/generate-stocks 4)
-        game               (game/initialize-game! conn user-entity stocks)
+        stocks             (game.core/generate-stocks! 4)
+        game               (game.core/initialize-game! conn user-entity stocks)
 
         stocks                (:game/stocks game)
         stocks-with-tick-data (map bind-data-sequence stocks)
@@ -187,7 +227,7 @@
 (defn game->new-game-message [game user-id]
 
   (let [game-stocks        (:game/stocks game)
-        game-subscriptions (:game.user/subscriptions (game/game-user-by-user-id game user-id))]
+        game-subscriptions (:game.user/subscriptions (game.core/game-user-by-user-id game user-id))]
 
     (-> (transform [MAP-VALS ALL :game.stock/id] str
                    {:stocks        game-stocks
@@ -197,7 +237,7 @@
 (defn data-subscription-stock-sequence [conn game user-id stocks-with-tick-data]
 
   (let [data-subscription-stock
-        (->> (game/game-user-by-user-id game user-id)
+        (->> (game.core/game-user-by-user-id game user-id)
              :game.user/subscriptions
              (map :game.stock/id)
              (into #{})

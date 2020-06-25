@@ -1,4 +1,4 @@
-(ns beatthemarket.game.game-test
+(ns beatthemarket.game.core-test
   (:require [clojure.test :refer :all]
             [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
@@ -6,8 +6,8 @@
             [beatthemarket.bookkeeping :as bookkeeping]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.user :as persistence.user]
-            [beatthemarket.game.game :as game]
-            [beatthemarket.game.games :as games]
+            [beatthemarket.game.core :as game.core]
+            [beatthemarket.game.games :as game.games]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
 
@@ -40,7 +40,7 @@
         user-entity (hash-map :db/id result-user-id)
 
         ;; Initialize Game
-        game (game/initialize-game! conn user-entity)
+        game (game.core/initialize-game! conn user-entity)
         result-game-id (-> (d/q '[:find ?e
                                   :in $ ?game-id
                                   :where [?e :game/id ?game-id]]
@@ -75,16 +75,16 @@
         user-id  nil
         stock-id nil]
 
-    (testing "Cannot buy stock with having created a game"
+    (testing "Cannot buy stock without having created a game"
 
       (is (thrown? AssertionError (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price)))
 
       (testing "Cannot buy stock without having a user"
 
-        (let [user-id                  (:db/id (test-util/generate-user conn))
+        (let [user-id                  (:db/id (test-util/generate-user! conn))
               sink-fn                  identity
-              {{game-id :db/id} :game} (games/create-game! conn user-id sink-fn)
-              stock-id                 (ffirst (test-util/generate-stocks conn 1))]
+              {{game-id :db/id} :game} (game.games/create-game! conn user-id sink-fn)
+              {stock-id :db/id}        (ffirst (test-util/generate-stocks! conn 1))]
 
           (testing "Buying a stsock creates a tentry"
 
@@ -144,9 +144,9 @@
                                 +stock account
                                 -cash account"
 
-                      (let [cash-starting-balance (-> repl.state/system :game/game :starting-balance)
+                      (let [cash-starting-balance  (-> repl.state/system :game/game :starting-balance)
                             stock-starting-balance 0.0
-                            value-change (Float. (format "%.2f" (* stock-amount stock-price)))
+                            value-change           (Float. (format "%.2f" (* stock-amount stock-price)))
 
                             game-user-accounts (->> game-pulled
                                                     :game/users first
@@ -210,7 +210,7 @@
 
 
   ;; STOCK
-  (def stocks (generate-stocks 1))
+  (def stocks (generate-stocks! 1))
   (persistence.datomic/transact-entities! conn stocks)
   (def result-stock-id (ffirst
                          (d/q '[:find ?e

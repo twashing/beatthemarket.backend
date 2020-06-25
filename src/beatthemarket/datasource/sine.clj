@@ -33,7 +33,7 @@
         ;; xinterc-sine-right (datasource.core/find-xintercept + sine-xintercept)
 
         granularityS 0.1 ;; (datasource.core/random-double-in-range 0.1 1)
-        xsequenceS (iterate (partial + granularityS) xinterc-sine-left)]
+        xsequenceS   (iterate (partial + granularityS) xinterc-sine-left)]
 
     (map sine-partial xsequenceS)))
 
@@ -47,8 +47,8 @@
 
 (defn generate-cosine-sequence []
   (let [xinterc-cosine-left (datasource.core/find-xintercept - cosine-xintercept)
-        granularityS 0.1
-        xsequenceS (iterate (partial + granularityS) xinterc-cosine-left)]
+        granularityS        0.1
+        xsequenceS          (iterate (partial + granularityS) xinterc-cosine-left)]
     (map cosine xsequenceS)))
 
 (defn sine+cosine [x]
@@ -58,5 +58,5 @@
           x))))
 
 #_(defn generate-sine+cosine-sequence []
-  (->> (range)
-       (map sine+cosine)))
+    (->> (range)
+         (map sine+cosine)))

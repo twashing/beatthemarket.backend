@@ -18,7 +18,7 @@
 
 (defn ->data-sequences [beta-configurations]
   (let [yintercept (datasource.core/random-double-in-range 50 120)]
-    {:datasource.sine/generate-sine-sequence (datasource.sine/generate-sine-sequence 1.5 2.7 yintercept)
+    {:datasource.sine/generate-sine-sequence   (datasource.sine/generate-sine-sequence 1.5 2.7 yintercept)
      :datasource.sine/generate-cosine-sequence (datasource.sine/generate-cosine-sequence)
      :datasource.oscillating/generate-oscillating-sequence
      (datasource.oscillating/generate-oscillating-sequence beta-configurations)}))
@@ -101,11 +101,11 @@
 
   (let [length 128]
 
-    (with-open [sine-writer (io/writer "out.sine.csv")
-                cosine-writer (io/writer "out.cosine.csv")
+    (with-open [sine-writer        (io/writer "out.sine.csv")
+                cosine-writer      (io/writer "out.cosine.csv")
                 sine+cosine-writer (io/writer "out.sine+cosine.csv")
                 oscillating-writer (io/writer "out.oscillating.csv")
-                combined-writer (io/writer "out.combined.csv")]
+                combined-writer    (io/writer "out.combined.csv")]
 
       ;; Sine
       (let [xaxis (range)
@@ -163,16 +163,16 @@
 
   (with-open [output-writer (io/writer "out.combined.csv")]
     (let [length 128
-          xaxis (range)
+          xaxis  (range)
 
-          ysines (generate-sine-sequence)
-          yconsines (generate-cosine-sequence)
+          ysines        (generate-sine-sequence)
+          yconsines     (generate-cosine-sequence)
           yoscillatings (generate-oscillating-sequence)
-          yaxis (map (fn [& args]
-                       (apply + args))
-                     ysines
-                     yconsines
-                     yoscillatings)]
+          yaxis         (map (fn [& args]
+                               (apply + args))
+                             ysines
+                             yconsines
+                             yoscillatings)]
 
       (->> (interleave xaxis yaxis)
            (partition 2)
@@ -218,28 +218,28 @@
   (require '[clojure.data.csv :as csv]
            '[clojure.java.io :as io])
 
-  (with-open [writer-midpoint (io/writer "out.beta-midpoint.csv")
+  (with-open [writer-midpoint  (io/writer "out.beta-midpoint.csv")
               writer-bigswings (io/writer "out.beta-bigswings.csv")
-              writer-highend (io/writer "out.beta-highend.csv")
-              writer-lowend-a (io/writer "out.beta-lowend-a.csv")
-              writer-lowend-b (io/writer "out.beta-lowend-b.csv")]
+              writer-highend   (io/writer "out.beta-highend.csv")
+              writer-lowend-a  (io/writer "out.beta-lowend-a.csv")
+              writer-lowend-b  (io/writer "out.beta-lowend-b.csv")]
     (let [length 128
-          xaxis (range)
+          xaxis  (range)
 
           beta-midpoint (BetaDistribution. 2.0 2.0)
-          yaxis (repeatedly #(.sample beta-midpoint))
+          yaxis         (repeatedly #(.sample beta-midpoint))
 
           beta-bigswings (BetaDistribution. 0.5 0.5)
-          ybigswings (repeatedly #(.sample beta-bigswings))
+          ybigswings     (repeatedly #(.sample beta-bigswings))
 
           beta-highend (BetaDistribution. 3 1)
-          yhighend (repeatedly #(.sample beta-highend))
+          yhighend     (repeatedly #(.sample beta-highend))
 
           beta-loend-a (BetaDistribution. 1 3)
-          ylowend-a (repeatedly #(.sample beta-loend-a))
+          ylowend-a    (repeatedly #(.sample beta-loend-a))
 
           beta-lowend-b (BetaDistribution. 1 5)
-          ylowend-b (repeatedly #(.sample beta-lowend-b))]
+          ylowend-b     (repeatedly #(.sample beta-lowend-b))]
 
       (->> (interleave xaxis yaxis)
            (partition 2)
@@ -306,11 +306,11 @@
 
   (let [length 128]
 
-    (with-open [sine-writer (io/writer "out.sine.csv")
-                polynomial-writer (io/writer "out.polynomial.csv")
+    (with-open [sine-writer             (io/writer "out.sine.csv")
+                polynomial-writer       (io/writer "out.polynomial.csv")
                 polynomial-prime-writer (io/writer "out.polynomial.prime.csv")
-                sine+cosine-writer (io/writer "out.sine+cosine.csv")
-                oscillating-writer (io/writer "out.oscillating.csv")]
+                sine+cosine-writer      (io/writer "out.sine+cosine.csv")
+                oscillating-writer      (io/writer "out.oscillating.csv")]
 
       ;; Sine
       (let [xaxis (range)
@@ -419,21 +419,21 @@
            '[clojure.java.io :as io])
 
   (with-open [writer-highend (io/writer "out.beta-highend.csv")
-              writer-lowend (io/writer "out.beta-lowend.csv")]
+              writer-lowend  (io/writer "out.beta-lowend.csv")]
     (let [length 128
-          xaxis (range)
+          xaxis  (range)
 
           beta-midpoint (BetaDistribution. 2.0 2.0)
-          yaxis (repeatedly #(.sample beta-midpoint))
+          yaxis         (repeatedly #(.sample beta-midpoint))
 
           beta-bigswings (BetaDistribution. 0.5 0.5)
-          ybigswings (repeatedly #(.sample beta-bigswings))
+          ybigswings     (repeatedly #(.sample beta-bigswings))
 
           beta-highend (BetaDistribution. 3 1)
-          yhighend (repeatedly #(.sample beta-highend))
+          yhighend     (repeatedly #(.sample beta-highend))
 
           beta-lowend (BetaDistribution. 1 3)
-          ylowend (repeatedly #(.sample beta-lowend))]
+          ylowend     (repeatedly #(.sample beta-lowend))]
 
       (->> (interleave xaxis yaxis)
            (partition 2)

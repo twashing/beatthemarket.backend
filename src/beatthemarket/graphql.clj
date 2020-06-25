@@ -7,9 +7,10 @@
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.game.game :as game]
-            [beatthemarket.game.games :as games]
-            [clojure.data.json :as json]))
+            [beatthemarket.game.core :as game.core]
+            [beatthemarket.game.games :as game.games]
+            [clojure.data.json :as json])
+  (:import [java.util UUID]))
 
 
 (defn resolve-hello
@@ -43,15 +44,16 @@
 
 (defn resolve-buy-stock [context args _]
 
-  (println "resolve-buy-stock CALLED /" args)
-
-  ;; resolve-buy-stock CALLED / {:input {:gameId zxcv, :stockId qwerty, :tickId asdf, :tickTime 3456, :tickPrice 1234.45}} nil
-
-  (let [{{{userId :uid} :checked-authentication} :request}    context
+  ;; (println "resolve-buy-stock CALLED /" args)
+  (let [{{{userId :uid} :checked-authentication} :request} context
         conn                                               (-> repl.state/system :persistence/datomic :conn)
-        {{:keys [gameId stockId tickId tickPrice]} :input} args]
+        {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
+        gameId (UUID/fromString gameId)]
 
-    (games/buy-stock! conn userId gameId stockId tickId tickPrice)
+    (try
+      (game.games/buy-stock! conn userId gameId stockId stockAmount tickId tickPrice)
+      (catch Throwable e
+        {:message (ex-data e)}))
 
     {:message "Ack"}))
 
@@ -69,24 +71,24 @@
         sink-fn                                             source-stream
 
         ;; A
-        {:keys                         [game stocks-with-tick-data tick-sleep-ms
-                                        data-subscription-channel control-channel
-                                        close-sink-fn sink-fn] :as game-control} (games/create-game! conn result-user-id sink-fn)
+        {:keys [game stocks-with-tick-data tick-sleep-ms
+                data-subscription-channel control-channel
+                close-sink-fn sink-fn] :as game-control}   (game.games/create-game! conn result-user-id sink-fn)
 
         ;; B
-        message (games/game->new-game-message game result-user-id)]
+        message (game.games/game->new-game-message game result-user-id)]
 
     ;; C
-    (games/stream-subscription! tick-sleep-ms
+    (game.games/stream-subscription! tick-sleep-ms
                                 data-subscription-channel control-channel
                                 close-sink-fn sink-fn)
 
     (>!! data-subscription-channel message)
 
     ;; D  NOTE have a mechanism to stream multiple subscriptions
-    (games/onto-open-chan ;;core.async/onto-chan
+    (game.games/onto-open-chan ;;core.async/onto-chan
       data-subscription-channel
-      (games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data))
+      (game.games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data))
 
     ;; Return a cleanup fn
     (constantly nil)))
@@ -99,6 +101,7 @@
 
 (defn stream-ping
   [context args source-stream]
+
   (swap! *ping-subscribes inc)
   (reset! *ping-context context)
   (let [{:keys [message count]} args
@@ -106,8 +109,8 @@
                                             (dotimes [i count]
 
                                               ;; (println "Sanity check / stream-ping / " [i count])
-                                              (source-stream {:message   (str message " #" (inc i))
-                                                              :timestamp (System/currentTimeMillis)})
+                                              (source-stream (util/pprint+identity {:message   (str message " #" (inc i))
+                                                                                    :timestamp (System/currentTimeMillis)}))
                                               (Thread/sleep 50))
 
                                             (source-stream nil))]

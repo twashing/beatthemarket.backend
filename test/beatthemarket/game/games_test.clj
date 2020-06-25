@@ -7,7 +7,7 @@
             [clj-time.coerce :as c]
             [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
-            [beatthemarket.game.games :as games]
+            [beatthemarket.game.games :as game.games]
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util])
   (:import [java.util UUID]))
@@ -24,9 +24,9 @@
   (testing "We get an expected game-control struct"
 
     (let [conn           (-> repl.state/system :persistence/datomic :conn)
-          result-user-id (:db/id (test-util/generate-user conn))
+          result-user-id (:db/id (test-util/generate-user! conn))
           sink-fn        identity
-          game-control   (games/create-game! conn result-user-id sink-fn)
+          game-control   (game.games/create-game! conn result-user-id sink-fn)
 
           expected-game-control-keys
           (sort '(:game :stocks-with-tick-data :tick-sleep-ms :data-subscription-channel :control-channel :close-sink-fn :sink-fn))]
@@ -43,14 +43,14 @@
                       data-subscription-channel control-channel]} game-control
               close-sink-fn sink-fn]
 
-          (games/stream-subscription! tick-sleep-ms
-                                      data-subscription-channel control-channel
-                                      close-sink-fn sink-fn)
+          (game.games/stream-subscription! tick-sleep-ms
+                                           data-subscription-channel control-channel
+                                           close-sink-fn sink-fn)
 
-          (games/onto-open-chan
+          (game.games/onto-open-chan
             ;; core.async/onto-chan
             data-subscription-channel
-            (games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data))
+            (game.games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data))
 
           (let [[t0-time _ id0] (<!! data-subscription-channel)
                 [t1-time _ id1] (<!! data-subscription-channel)]
@@ -80,15 +80,15 @@
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
         {result-user-id :db/id
-         userId         :user/external-uid}                 (test-util/generate-user conn)
+         userId         :user/external-uid}                 (test-util/generate-user! conn)
         sink-fn                                             identity
         {{gameId :game/id :as game} :game
          data-subscription-channel  :data-subscription-channel
-         stocks-with-tick-data      :stocks-with-tick-data} (games/create-game! conn result-user-id sink-fn)
+         stocks-with-tick-data      :stocks-with-tick-data} (game.games/create-game! conn result-user-id sink-fn)
 
-        _ (games/onto-open-chan
+        _ (game.games/onto-open-chan
             data-subscription-channel
-            (take 2 (games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data)))
+            (take 2 (game.games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data)))
 
         stockId     (-> game
                         :game/users first
@@ -102,13 +102,13 @@
         tickId1                (UUID/fromString tickId1)]
 
     (testing "We are checking game is current and belongs to the user"
-      (is (thrown? AssertionError (games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
+      (is (thrown? AssertionError (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
 
     (testing "Error is thrown when submitted price does not match price from tickId"
-      (is (thrown? AssertionError (games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
+      (is (thrown? AssertionError (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
 
     (testing "Error is thrown when submitted tick is no the latest"
-      (is (thrown? AssertionError (games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
+      (is (thrown? AssertionError (game.games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
 
     (testing "Returned Tentry matches what was submitted"
       (let [expected-credit-value        (Float. (format "%.2f" (* stockAmount tickPrice1)))
@@ -121,23 +121,21 @@
             expected-debit-value        (- (-> repl.state/system :game/game :starting-balance) expected-credit-value)
             expected-debit-account-name "Cash"
 
-            result-tentry (games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
+            result-tentry (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
 
             {debit-account-name :bookkeeping.account/name
              debit-value        :bookkeeping.account/balance}
             (-> result-tentry
                 :bookkeeping.tentry/debits first
                 :bookkeeping.debit/account
-                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance])
-                trace)
+                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))
 
             {credit-account-name :bookkeeping.account/name
              credit-value        :bookkeeping.account/balance}
             (-> result-tentry
                 :bookkeeping.tentry/credits first
                 :bookkeeping.credit/account
-                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance])
-                trace)]
+                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
 
         (are [x y] (= x y)
           expected-credit-value        credit-value

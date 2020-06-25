@@ -28,6 +28,7 @@
    :fields
    {:gameId {:type (non-null String)}
     :stockId {:type (non-null String)}
+    :stockAmount {:type (non-null Int)}
     :tickId {:type (non-null String)}
     :tickTime {:type (non-null Int)}
     :tickPrice {:type (non-null Float)}}}}

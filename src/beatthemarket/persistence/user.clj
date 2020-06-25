@@ -6,25 +6,25 @@
 
 
 (defn user-by-email [conn email]
-  (let [db (d/db conn)
-        user-q '[:find ?e
-                 :in $ ?email
-                 :where
-                 [?e :user/email ?email]]]
-    (d/q user-q db email)))
+  (d/q '[:find (pull ?e [*])
+         :in $ ?email
+         :where
+         [?e :user/email ?email]]
+       (d/db conn)
+       email))
 
 (defn user-by-external-uid [conn external-uid]
-  (let [db (d/db conn)
-        user-q '[:find (pull ?e [*])
-                 :in $ ?external-uid
-                 :where
-                 [?e :user/external-uid ?external-uid]]]
-    (d/q user-q db external-uid)))
+  (d/q '[:find (pull ?e [*])
+         :in $ ?external-uid
+         :where
+         [?e :user/external-uid ?external-uid]]
+       (d/db conn)
+       external-uid))
 
 (defn add-user! [conn {:keys [email name uid]}]
 
   (let [starting-balance (-> repl.state/system :game/game :starting-balance)
-        counter-party nil
+        counter-party    nil
         accounts
         (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit starting-balance counter-party]
               ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit starting-balance counter-party]]

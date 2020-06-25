@@ -19,7 +19,7 @@
             [compute.datomic-client-memdb.core :as memdb]
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.user :as iam.user]
-            [beatthemarket.game.game :as game]
+            [beatthemarket.game.core :as game.core]
             [beatthemarket.migration.core :as migration.core]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
@@ -137,7 +137,7 @@
 
 
   ;; USER
-(defn generate-user [conn]
+(defn generate-user! [conn]
 
   (let [id-token               (->id-token)
         checked-authentication (iam.auth/check-authentication id-token)]
@@ -156,17 +156,17 @@
 
 
 ;; DOMAIN
-(defn generate-stocks
+(defn generate-stocks!
 
-  ([conn] (generate-stocks conn 1))
+  ([conn] (generate-stocks! conn 1))
 
   ([conn no-of-stocks]
 
-   (let [stocks (game/generate-stocks no-of-stocks)]
+   (let [stocks (game.core/generate-stocks! no-of-stocks)]
 
      (persistence.datomic/transact-entities! conn stocks)
 
-     (d/q '[:find ?e
+     (d/q '[:find (pull ?e [*])
             :in $ [?stock-id ...]
             :where [?e :game.stock/id ?stock-id]]
           (d/db conn)

@@ -8,8 +8,8 @@
             [integrant.repl]
             [aero.core :as aero]
             [beatthemarket.state.core :as state.core]
-            [beatthemarket.handler.authentication :as auth]))
-
+            [beatthemarket.handler.authentication :as auth]
+            [beatthemarket.util :as util]))
 
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
