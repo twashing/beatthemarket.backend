@@ -29,19 +29,6 @@
       "user-added"
       "user-exists")))
 
-
-;; TODO
-;; Buy Stock
-
-;;   ? pause subscription stream
-;;     custom onto-chan (pause, inject vals)
-
-;;   db/q game stock
-;;   verify tick id
-;;   verify tick price
-;;   verify buy price is most recent
-;;   tentry verify balanced
-
 (defn resolve-buy-stock [context args _]
 
   ;; (println "resolve-buy-stock CALLED /" args)

@@ -13,8 +13,8 @@
   (:import [java.util UUID]))
 
 
-(defmethod ig/init-key :game/game [_ {starting-balance :starting-balance}]
-  {:starting-balance starting-balance})
+(defmethod ig/init-key :game/game [_ config]
+  config)
 
 (defn game-user-by-user-id [game result-user-id]
   (select-one [:game/users ALL (pred #(= result-user-id

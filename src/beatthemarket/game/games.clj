@@ -174,22 +174,44 @@
         (do
           (let [vv (<! data-subscription-channel)]
 
+            ;; TODO
+            ;; Just get from integrant.repl.state/config, :game/game :starting-balance
+
             ;; TODO Calculations
 
-            ;; C.
+            ;; >
             ;; Calculate Profit / Loss
 
-            ;; D.
+            ;; ...
+            ;;    ((stock-amount * current-price) across all stock accounts) +
+            ;;    current-cash-balance
+
+            ;; >
             ;; Complete a Level
+            ;; ... (-> repl.state/system :game/game :levels xxx :profit-threshold)
+            ;; ... user has a time-limit at each level
 
-            ;; E.
-            ;; Win a Game
-            ;; Lose a Game
 
-            ;; F.
-            ;; Pause | Resume a Game
+            ;; >
+            ;; ... All stocks are running at the same time
+            ;;   ... data-subscription-channel -> (all) stock-stream-channel
+            ;;   ... all stock-streams save to the database
+            ;; ... User can switch their subscription at any time
 
-            ;; TODO calculate game position
+
+            ;; >
+            ;; ... ? Game pauses between levels (Pause | Resume a Game)
+            ;; ... ? beta distributions change on new levels (regenerate data sequences)
+
+
+            ;; > Win a Game
+            ;; ... if a user has completed level 9
+
+
+            ;; > Lose a Game
+            ;; ... if a user has either i. loses 10% of his money or ii. run out of time
+
+
             ;; (println (format "Sink value / %s" vv))
             (sink-fn vv))
           (recur))))))

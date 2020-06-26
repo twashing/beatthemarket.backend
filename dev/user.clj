@@ -31,6 +31,9 @@
   (pprint integrant.repl.state/system)
 
 
+  (-> integrant.repl.state/system :game/game pprint)
+
+
   ;; Individual
   (prep)
   (ig/init integrant.repl.state/config [:service/service])

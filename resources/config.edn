@@ -3,11 +3,27 @@
 
 
  ;; COMPONENTS
- ;; :service {:join?    false
- ;;           :hostname "0.0.0.0"
- ;;           :port     8080}
- ;;
- ;; :nrepl {:port 7000}
+ :game {:starting-balance 100000.00
+        :levels           {;; thousands
+                           1 {:profit-threshold 1000
+
+                              ;; TODO stock behaviours for this level
+                              :beta-distributions 1
+                              :time-limit 1}
+
+                           2 {:profit-threshold 10000}
+                           3 {:profit-threshold 20000}
+                           4 {:profit-threshold 50000}
+                           5 {:profit-threshold 100000}
+
+                           ;; millions
+                           6 {:profit-threshold 10000000}
+                           7 {:profit-threshold 50000000}
+                           8 {:profit-threshold 100000000}
+
+                           ;; billion
+                           9 {:profit-threshold 1000000000}}}
+
 
  :logging {:config {:level     :info
                     :console   true
@@ -31,7 +47,7 @@
                :firebase/firebase             #ref [:secrets :firebase]
                :persistence/datomic           #ref [:secrets :production :persistence/datomic]
                :game/games                    {:datomic #ig/ref :persistence/datomic }
-               :game/game                     {:starting-balance 100000.00}
+               :game/game                     #ref[:game]
                :nrepl/nrepl                   {:port 7000}
                :logging/logging               #ref [:logging]
                :name-generator/name-generator {}}
@@ -44,7 +60,7 @@
                 :persistence/datomic           {:db-name "beaththemarket"
                                                 :config  {}}
                 :game/games                    {:datomic #ig/ref :persistence/datomic}
-                :game/game                     {:starting-balance 100000.00}
+                :game/game                     #ref[:game]
                 :nrepl/nrepl                   {:port 7000}
                 :logging/logging               #ref [:logging]
                 :name-generator/name-generator {}}
@@ -57,7 +73,7 @@
          :persistence/datomic           {:db-name "beaththemarket"
                                          :config  {}}
          :game/games                    {:datomic #ig/ref :persistence/datomic}
-         :game/game                     {:starting-balance 100000.00}
+         :game/game                     #ref[:game]
          :nrepl/nrepl                   {:port 7001}
          :logging/logging               #ref [:logging]
          :name-generator/name-generator {}}}}

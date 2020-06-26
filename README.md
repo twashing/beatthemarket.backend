@@ -131,7 +131,7 @@ async operations take a long time, and can have a closed DB when trying to write
 * Replace clj-time with juxt/tick (https://github.com/juxt/tick)
 
 
-* ? Stream two games at the same time
+* ? Stream two games (Separate Users) at the same time
 * Have a mechanism to simultaneously stream multiple subscriptions (beatthemarket.graphql/stream-new-game)
 
 * Move code in `comment` blocks, to tests
