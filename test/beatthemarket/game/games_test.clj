@@ -144,7 +144,7 @@
           expected-debit-value         debit-value
           expected-debit-account-name  debit-account-name)))))
 
-#_(deftest sell-stock!-test
+(deftest sell-stock!-test
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
         {result-user-id :db/id
@@ -178,37 +178,43 @@
     (testing "Error is thrown when submitted tick is no the latest"
       (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
 
-    ;; TODO User has that amount of stock on hand
+    (testing "Ensure we have the stock on hand before selling"
 
-    (testing "Returned Tentry matches what was submitted"
-      (let [expected-debit-value        (Float. (format "%.2f" (* stockAmount tickPrice1)))
-            expected-debit-account-name (->> game
-                                              :game/users first
-                                              :game.user/subscriptions first
-                                              :game.stock/name
-                                              (format "STOCK.%s"))
+      (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
 
-            expected-credit-value        (+ (-> repl.state/system :game/game :starting-balance) expected-debit-value)
-            expected-credit-account-name "Cash"
+      (testing "Returned Tentry matches what was submitted"
 
-            result-tentry (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
+        (let [initial-debit-value         0.0
+              debit-value-change          (Float. (format "%.2f" (* stockAmount tickPrice1)))
+              expected-debit-value        (- (+ initial-debit-value debit-value-change) debit-value-change)
+              expected-debit-account-name (->> game
+                                               :game/users first
+                                               :game.user/subscriptions first
+                                               :game.stock/name
+                                               (format "STOCK.%s"))
 
-            {debit-account-name :bookkeeping.account/name
-             debit-value        :bookkeeping.account/balance}
-            (-> result-tentry
-                :bookkeeping.tentry/debits first
-                :bookkeeping.debit/account
-                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))
+              expected-credit-value        (- (+ (-> repl.state/system :game/game :starting-balance) debit-value-change)
+                                              debit-value-change)
+              expected-credit-account-name "Cash"
 
-            {credit-account-name :bookkeeping.account/name
-             credit-value        :bookkeeping.account/balance}
-            (-> result-tentry
-                :bookkeeping.tentry/credits first
-                :bookkeeping.credit/account
-                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
+              result-tentry (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
 
-        (are [x y] (= x y)
-          expected-credit-value        credit-value
-          expected-credit-account-name credit-account-name
-          expected-debit-value         debit-value
-          expected-debit-account-name  debit-account-name)))))
+              {debit-account-name :bookkeeping.account/name
+               debit-value        :bookkeeping.account/balance}
+              (-> result-tentry
+                  :bookkeeping.tentry/debits first
+                  :bookkeeping.debit/account
+                  (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))
+
+              {credit-account-name :bookkeeping.account/name
+               credit-value        :bookkeeping.account/balance}
+              (-> result-tentry
+                  :bookkeeping.tentry/credits first
+                  :bookkeeping.credit/account
+                  (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
+
+          (are [x y] (= x y)
+            expected-debit-value         debit-value
+            expected-debit-account-name  debit-account-name
+            expected-credit-value        credit-value
+            expected-credit-account-name credit-account-name))))))

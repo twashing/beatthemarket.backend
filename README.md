@@ -115,6 +115,11 @@ lein nvd check
 goo-loop and closed? on core.async channels are not a good enough control mechanism
 async operations take a long time, and can have a closed DB when trying to write
 
+* These values should match against aggregated tentries
+:bookkeeping.account/balance
+:bookkeeping.account/amount
+
+* ! Ensure we're only creating stock accounts on a per user / game basis
 
 * generate specs from example data
   * https://github.com/stathissideris/spec-provider

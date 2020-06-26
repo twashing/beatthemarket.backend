@@ -26,15 +26,16 @@
 
 (defn ->account
 
-  ([name type orientation] (->account name type orientation 0.0 nil))
+  ([name type orientation] (->account name type orientation 0.0 0 nil))
 
-  ([name type orientation balance counter-party]
+  ([name type orientation balance amount counter-party]
 
    (cond-> (hash-map
              :bookkeeping.account/id (UUID/randomUUID)
              :bookkeeping.account/name name
              :bookkeeping.account/type type
              :bookkeeping.account/balance balance
+             :bookkeeping.account/amount amount
              :bookkeeping.account/orientation orientation)
      (exists? counter-party) (assoc :bookkeeping.account/counter-party counter-party))))
 
@@ -71,6 +72,7 @@
     (exists? amount) (assoc :bookkeeping.credit/amount amount)))
 
 ;; TODO Make a user-accounts-balanced? function
+;; TODO ensure tentry transactions can't put accounts into negative balance
 (defn tentry-balanced?
 
   "LHS
@@ -141,8 +143,8 @@
                      (:bookkeeping.debit/amount %))
 
                 (= (:bookkeeping.debit/value %)
-                   (* (:bookkeeping.debit/price %)
-                      (:bookkeeping.debit/amount %))))
+                   (Float. (format "%.2f" (* (:bookkeeping.debit/price %)
+                                             (:bookkeeping.debit/amount %))))))
            true)
 
         value-equals-price-times-amount-credit?
@@ -185,6 +187,7 @@
 (defn create-stock-account! [conn user-entity stock-entity]
 
   (let [starting-balance         0.0
+        starting-amount          0
         counter-party            (select-keys stock-entity [:db/id])
         account                  (persistence.core/bind-temporary-id
                                    (apply ->account
@@ -192,6 +195,7 @@
                                            :bookkeeping.account.type/asset
                                            :bookkeeping.account.orientation/debit
                                            starting-balance
+                                           starting-amount
                                            counter-party]))
         user-entity-with-account (assoc user-entity :user/accounts account)
         entities                 [account user-entity-with-account]]
@@ -243,17 +247,30 @@
 
 (defn buy-stock! [conn game-id user-id stock-id stock-amount stock-price]
 
-  (let [validation-inputs {:conn conn
-                           :game-id game-id
-                           :user-id user-id
-                           :stock-id stock-id
+  (let [validation-inputs {:conn         conn
+                           :game-id      game-id
+                           :user-id      user-id
+                           :stock-id     stock-id
                            :stock-amount stock-amount
-                           :stock-price stock-price}
+                           :stock-price  stock-price}
+
+        debit-value                        (Float. (format "%.2f" (* stock-amount stock-price)))
+        cash-account-has-sufficient-funds? (fn [{user-pulled :user-pulled :as inputs}]
+                                             (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
+                                                   (cash-account-by-user user-pulled)]
+
+                                               (if (> cash-account-starting-balance debit-value)
+                                                 (rop/succeed inputs)
+                                                 (rop/fail (ex-info (format "Insufficient funds [%s] for purchase value [%s]"
+                                                                            cash-account-starting-balance
+                                                                            debit-value)
+                                                                    inputs)))))
 
         result (rop/>>= validation-inputs
                         game-exists?
                         user-exists?
-                        stock-exists?)]
+                        stock-exists?
+                        cash-account-has-sufficient-funds?)]
 
     (if (= clojure.lang.ExceptionInfo (type result))
 
@@ -261,12 +278,13 @@
 
       (let [{:keys [user-pulled stock-pulled]} result
             stock-account                      (conditionally-create-stock-account! conn user-pulled stock-pulled)
-            debit-value                        (Float. (format "%.2f" (* stock-amount stock-price)))
             credit-value                       debit-value
 
             ;; ACCOUNT BALANCE UPDATES
             updated-debit-account  (update-in (cash-account-by-user user-pulled) [:bookkeeping.account/balance] - debit-value)
-            updated-credit-account (update-in stock-account [:bookkeeping.account/balance] + credit-value)
+            updated-credit-account (-> stock-account
+                                       (update-in [:bookkeeping.account/balance] + credit-value)
+                                       (update-in [:bookkeeping.account/amount] + stock-amount))
 
             ;; T-ENTRY + JOURNAL ENTRIES
             debits+credits          [(->debit updated-debit-account debit-value nil nil)
@@ -283,13 +301,96 @@
         (as-> entities ent
           (persistence.datomic/transact-entities! conn ent)
           (:db-after ent)
-          (d/q '[:find ?e
+          (d/q '[:find (pull ?e [*])
                  :in $ ?entry-id
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                ent
                (-> tentry :bookkeeping.tentry/id))
-          (ffirst ent)
-          (persistence.core/pull-entity conn ent))))))
+          (ffirst ent))))))
+
+(defn sell-stock! [conn game-id user-id stock-id stock-amount stock-price]
+
+  (let [validation-inputs {:conn         conn
+                           :game-id      game-id
+                           :user-id      user-id
+                           :stock-id     stock-id
+                           :stock-amount stock-amount
+                           :stock-price  stock-price}
+
+        stock-account-exists? (fn [{stock-id :stock-id :as inputs}]
+                                (try
+                                  (if-let [stock-account
+                                           (ffirst (d/q '[:find (pull ?stock-id
+                                                                      [:game.stock/id
+                                                                       {:bookkeeping.account/_counter-party [*]}])
+                                                          :in $ ?stock-id
+                                                          :where
+                                                          [?stock-id]]
+                                                        (d/db conn)
+                                                        stock-id))]
+                                    (rop/succeed (assoc inputs :stock-account stock-account)))
+                                  (catch Throwable e (rop/fail (ex-info (format "No stock entity [%s]" stock-id)
+                                                                        inputs)))))
+
+        stock-account-has-sufficient-shares? (fn [{:keys [conn stock-id stock-amount stock-account] :as inputs}]
+
+                                               (if-let [initial-account-amount
+                                                        (-> stock-account
+                                                            :bookkeeping.account/_counter-party
+                                                            :bookkeeping.account/amount)]
+
+                                                 (if (>= initial-account-amount stock-amount)
+                                                   (rop/succeed inputs)
+                                                   (rop/fail
+                                                     (ex-info (format "Insufficient amount of stock [%s] to sell" initial-account-amount)
+                                                              inputs)))
+
+                                                 (rop/fail
+                                                   (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
+                                                            inputs))))
+        result (rop/>>= validation-inputs
+                        stock-account-exists?
+                        game-exists?
+                        user-exists?
+                        stock-exists?
+                        stock-account-has-sufficient-shares?)]
+
+    (if (= clojure.lang.ExceptionInfo (type result))
+
+      (throw result)
+
+      (let [{:keys [user-pulled stock-pulled stock-account]} result
+            debit-value                                      (Float. (format "%.2f" (* stock-amount stock-price)))
+            credit-value                                     debit-value
+
+            ;; ACCOUNT BALANCE UPDATES
+            updated-debit-account  (-> stock-account
+                                       :bookkeeping.account/_counter-party
+                                       (update-in [:bookkeeping.account/balance] - credit-value)
+                                       (update-in [:bookkeeping.account/amount] - stock-amount))
+            updated-credit-account (update-in (cash-account-by-user user-pulled) [:bookkeeping.account/balance] + debit-value)
+
+            ;; T-ENTRY + JOURNAL ENTRIES
+            debits+credits          [(->debit updated-debit-account debit-value stock-price stock-amount)
+                                     (->credit updated-credit-account credit-value nil nil)]
+            tentry                  (apply ->tentry debits+credits)
+            updated-journal-entries (-> (persistence.core/pull-entity conn game-id)
+                                        :game/users first
+                                        :game.user/portfolio
+                                        :bookkeeping.portfolio/journals first
+                                        (assoc :bookkeeping.journal/entries tentry))
+
+            entities [tentry updated-journal-entries]]
+
+        (as-> entities ent
+          (persistence.datomic/transact-entities! conn ent)
+          (:db-after ent)
+          (d/q '[:find (pull ?e [*])
+                 :in $ ?entry-id
+                 :where [?e :bookkeeping.tentry/id ?entry-id]]
+               ent
+               (-> tentry :bookkeeping.tentry/id))
+          (ffirst ent))))))
 
 (comment
 

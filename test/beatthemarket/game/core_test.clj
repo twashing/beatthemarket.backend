@@ -168,6 +168,136 @@
                              (= (+ stock-starting-balance value-change))
                              is)))))))))))))
 
+(deftest buy-stock!-insufficient-funds-test
+
+  (testing "Cannot buy stock with insufficient funds"
+
+    (let [conn                     (-> repl.state/system :persistence/datomic :conn)
+          stock-amount             100
+          stock-price              50.47
+          starting-cash-balance    0.0
+          user-id                  (:db/id (test-util/generate-user! conn starting-cash-balance))
+          sink-fn                  identity
+          {{game-id :db/id} :game} (game.games/create-game! conn user-id sink-fn)
+          {stock-id :db/id}        (ffirst (test-util/generate-stocks! conn 1))]
+
+      (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price))))))
+
+(deftest sell-stock!-test
+
+  (let [conn         (-> repl.state/system :persistence/datomic :conn)
+        stock-amount 100
+        stock-price  50.47
+
+        game-id  nil
+        user-id  nil
+        stock-id nil]
+
+    (testing "Cannot sell stock without having created a game"
+
+      (is (thrown? ExceptionInfo (bookkeeping/sell-stock! conn game-id user-id stock-id stock-amount stock-price)))
+
+      (testing "Cannot sell stock without having a user"
+
+        (let [user-id                  (:db/id (test-util/generate-user! conn))
+              sink-fn                  identity
+              {{game-id :db/id} :game :as game} (game.games/create-game! conn user-id sink-fn)
+              {stock-id :db/id}        (ffirst (test-util/generate-stocks! conn 1))]
+
+          (testing "Cannot sell stock if you have insufficient shares"
+
+            (is (thrown? ExceptionInfo (bookkeeping/sell-stock! conn game-id user-id stock-id stock-amount stock-price))))
+
+          (testing "Initial Stock BUY"
+
+            (let [buy-stock-amount 100
+                  sell-stock-amount 50]
+
+              (bookkeeping/buy-stock! conn game-id user-id stock-id buy-stock-amount stock-price)
+
+
+              (testing "Selling a stock creates a tentry"
+
+                (let [{tentry-id :db/id} (bookkeeping/sell-stock! conn game-id user-id stock-id sell-stock-amount stock-price)]
+
+                  (is (util/exists? tentry-id))
+
+                  (let [pulled-tentry               (persistence.core/pull-entity conn tentry-id)
+                        pulled-stock                (persistence.core/pull-entity conn stock-id)
+                        expected-stock-account-name (format "STOCK.%s" (:game.stock/name pulled-stock))
+                        new-stock-account           (-> pulled-tentry
+                                                        :bookkeeping.tentry/credits first
+                                                        :bookkeeping.credit/account)]
+
+                    (testing "debit is cash account"
+                      (->> pulled-tentry
+                           :bookkeeping.tentry/debits first
+                           :bookkeeping.debit/account
+                           :bookkeeping.account/name
+                           (= expected-stock-account-name)
+                           is))
+
+                    (testing "credit is stock account"
+                      (->> new-stock-account
+                           :bookkeeping.account/name
+                           (= "Cash")
+                           is))
+
+                    (testing "We have new stock account"
+                      (-> (d/q '[:find ?e
+                                 :in $ ?stock-aacount-name
+                                 :where [?e :bookkeeping.account/name ?stock-aacount-name]]
+                               (d/db conn)
+                               expected-stock-account-name)
+                          first
+                          util/exists?
+                          is))
+
+                    (testing "Debits + Credits balance"
+
+                      (is (bookkeeping/tentry-balanced? pulled-tentry))
+                      (is (bookkeeping/value-equals-price-times-amount? pulled-tentry)))
+
+                    (testing "Stock account is bound to the game.user's set of accounts"
+
+                      (let [game-pulled (persistence.core/pull-entity conn game-id)]
+
+                        (->> game-pulled
+                             :game/users first
+                             :game.user/user
+                             :user/accounts
+                             (map :bookkeeping.account/id)
+                             (some #{(:bookkeeping.account/id new-stock-account)})
+                             is)
+
+                        (testing "Portfolio now has value of
+                                +stock account
+                                -cash account"
+
+                          (let [cash-starting-balance  (-> repl.state/system :game/game :starting-balance)
+                                stock-starting-balance 0.0
+                                buy-value-change       (Float. (format "%.2f" (* buy-stock-amount stock-price)))
+                                sell-value-change      (Float. (format "%.2f" (* sell-stock-amount stock-price)))
+
+                                game-user-accounts (->> game-pulled
+                                                        :game/users first
+                                                        :game.user/user
+                                                        :user/accounts)]
+
+                            (->> game-user-accounts
+                                 (filter #(= "Cash" (:bookkeeping.account/name %)))
+                                 first
+                                 :bookkeeping.account/balance
+                                 (= (+ (- cash-starting-balance buy-value-change) sell-value-change))
+                                 is)
+
+                            (->> game-user-accounts
+                                 (filter #(clojure.string/starts-with? (:bookkeeping.account/name %) "STOCK."))
+                                 first
+                                 :bookkeeping.account/balance
+                                 (= (- (+ stock-starting-balance buy-value-change) sell-value-change))
+                                 is)))))))))))))))
+
 (comment ;; TEntry
 
 

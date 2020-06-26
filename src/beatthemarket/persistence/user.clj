@@ -21,17 +21,21 @@
        (d/db conn)
        external-uid))
 
-(defn add-user! [conn {:keys [email name uid]}]
+(defn add-user!
 
-  (let [starting-balance (-> repl.state/system :game/game :starting-balance)
-        counter-party    nil
-        accounts
-        (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit starting-balance counter-party]
-              ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit starting-balance counter-party]]
-             (map #(apply bookkeeping/->account %)))]
+  ([conn checked-authentication] (add-user! conn checked-authentication (-> repl.state/system :game/game :starting-balance)))
 
-    (->> {:user/email        email
-          :user/name         name
-          :user/external-uid uid
-          :user/accounts     accounts}
-         (persistence.datomic/transact-entities! conn))))
+  ([conn {:keys [email name uid]} starting-balance]
+
+   (let [starting-amount 0
+         counter-party   nil
+         accounts
+         (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit starting-balance starting-amount counter-party]
+               ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit starting-balance starting-amount counter-party]]
+              (map #(apply bookkeeping/->account %)))]
+
+     (->> {:user/email        email
+           :user/name         name
+           :user/external-uid uid
+           :user/accounts     accounts}
+          (persistence.datomic/transact-entities! conn)))))

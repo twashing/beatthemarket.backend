@@ -191,6 +191,10 @@
   :db/doc         "The account's current balance value, which must
                    i. correspond with all tentries against it and
                    ii. balance out with all other accounts for the user"}
+ {:db/ident       :bookkeeping.account/amount
+  :db/valueType   :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/doc         "This records the counter-party unit amount"}
  {:db/ident       :bookkeeping.account/orientation
   :db/valueType   :db.type/ref ;; List of :bookkeeping.account.orientation
   :db/cardinality :db.cardinality/one
