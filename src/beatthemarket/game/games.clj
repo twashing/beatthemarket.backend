@@ -174,8 +174,6 @@
         (do
           (let [vv (<! data-subscription-channel)]
 
-            ;; TODO
-            ;; Just get from integrant.repl.state/config, :game/game :starting-balance
 
             ;; TODO Calculations
 

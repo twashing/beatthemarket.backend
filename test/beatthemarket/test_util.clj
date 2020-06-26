@@ -139,7 +139,7 @@
   ;; USER
 (defn generate-user!
 
-  ([conn] (generate-user! conn (-> repl.state/system :game/game :starting-balance)))
+  ([conn] (generate-user! conn (-> repl.state/config :game/game :starting-balance)))
 
   ([conn starting-balance]
 

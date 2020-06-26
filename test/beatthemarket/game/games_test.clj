@@ -119,7 +119,7 @@
                                               :game.stock/name
                                               (format "STOCK.%s"))
 
-            expected-debit-value        (- (-> repl.state/system :game/game :starting-balance) expected-credit-value)
+            expected-debit-value        (- (-> repl.state/config :game/game :starting-balance) expected-credit-value)
             expected-debit-account-name "Cash"
 
             result-tentry (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
@@ -193,7 +193,7 @@
                                                :game.stock/name
                                                (format "STOCK.%s"))
 
-              expected-credit-value        (- (+ (-> repl.state/system :game/game :starting-balance) debit-value-change)
+              expected-credit-value        (- (+ (-> repl.state/config :game/game :starting-balance) debit-value-change)
                                               debit-value-change)
               expected-credit-account-name "Cash"
 

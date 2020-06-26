@@ -23,7 +23,7 @@
 
 (defn add-user!
 
-  ([conn checked-authentication] (add-user! conn checked-authentication (-> repl.state/system :game/game :starting-balance)))
+  ([conn checked-authentication] (add-user! conn checked-authentication (-> repl.state/config :game/game :starting-balance)))
 
   ([conn {:keys [email name uid]} starting-balance]
 

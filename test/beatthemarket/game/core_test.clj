@@ -145,7 +145,7 @@
                                 +stock account
                                 -cash account"
 
-                      (let [cash-starting-balance  (-> repl.state/system :game/game :starting-balance)
+                      (let [cash-starting-balance  (-> repl.state/config :game/game :starting-balance)
                             stock-starting-balance 0.0
                             value-change           (Float. (format "%.2f" (* stock-amount stock-price)))
 
@@ -274,7 +274,7 @@
                                 +stock account
                                 -cash account"
 
-                          (let [cash-starting-balance  (-> repl.state/system :game/game :starting-balance)
+                          (let [cash-starting-balance  (-> repl.state/config :game/game :starting-balance)
                                 stock-starting-balance 0.0
                                 buy-value-change       (Float. (format "%.2f" (* buy-stock-amount stock-price)))
                                 sell-value-change      (Float. (format "%.2f" (* sell-stock-amount stock-price)))

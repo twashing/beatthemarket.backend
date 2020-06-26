@@ -30,6 +30,7 @@
   (pprint integrant.repl.state/config)
   (pprint integrant.repl.state/system)
 
+  (-> integrant.repl.state/config :game/game :starting-balance)
 
   (-> integrant.repl.state/system :game/game pprint)
 

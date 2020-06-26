@@ -13,7 +13,7 @@
 (defn conditionally-add-new-user!
 
   ([conn checked-authentication]
-   (conditionally-add-new-user! conn checked-authentication (-> repl.state/system :game/game :starting-balance)))
+   (conditionally-add-new-user! conn checked-authentication (-> repl.state/config :game/game :starting-balance)))
 
   ([conn {email :email :as checked-authentication} starting-balance]
    (if-not (user-exists? (persistence.user/user-by-email conn email))
