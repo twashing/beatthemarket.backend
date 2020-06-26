@@ -55,27 +55,26 @@
                                                                      :where [?e :user/email ?email]]
                                                                    (d/db conn)
                                                                    email))
-        sink-fn                                             source-stream
 
         ;; A
         {:keys [game stocks-with-tick-data tick-sleep-ms
-                data-subscription-channel control-channel
-                close-sink-fn sink-fn] :as game-control}   (game.games/create-game! conn result-user-id sink-fn)
+                stock-stream-channel control-channel
+                close-sink-fn sink-fn] :as game-control}   (game.games/create-game! conn result-user-id source-stream)
 
         ;; B
         message (game.games/game->new-game-message game result-user-id)]
 
     ;; C
     (game.games/stream-subscription! tick-sleep-ms
-                                data-subscription-channel control-channel
+                                stock-stream-channel control-channel
                                 close-sink-fn sink-fn)
 
-    (>!! data-subscription-channel message)
+    (>!! stock-stream-channel message)
 
-    ;; D  NOTE have a mechanism to stream multiple subscriptions
+    ;; D
     (game.games/onto-open-chan ;;core.async/onto-chan
-      data-subscription-channel
-      (game.games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data))
+      stock-stream-channel
+      (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data))
 
     ;; Return a cleanup fn
     (constantly nil)))

@@ -158,7 +158,7 @@
 
         (let [game-id (UUID/fromString id)
               expected-component-game-keys
-              (sort '(:game :stocks-with-tick-data :tick-sleep-ms :data-subscription-channel :control-channel :close-sink-fn :sink-fn))]
+              (sort '(:game :stocks-with-tick-data :tick-sleep-ms :stock-stream-channel :control-channel :close-sink-fn :sink-fn))]
 
           (-> state/system :game/games deref (get game-id) keys sort
               (= expected-component-game-keys)

@@ -30,7 +30,7 @@
           game-control   (game.games/create-game! conn result-user-id sink-fn)
 
           expected-game-control-keys
-          (sort '(:game :stocks-with-tick-data :tick-sleep-ms :data-subscription-channel :control-channel :close-sink-fn :sink-fn))]
+          (sort '(:game :stocks-with-tick-data :tick-sleep-ms :stock-stream-channel :control-channel :close-sink-fn :sink-fn))]
 
       (->> game-control
            keys
@@ -41,20 +41,20 @@
       (testing "Streaming subscription flows through the correct value"
 
         (let [{:keys [game tick-sleep-ms stocks-with-tick-data
-                      data-subscription-channel control-channel]} game-control
+                      stock-stream-channel control-channel]} game-control
               close-sink-fn sink-fn]
 
           (game.games/stream-subscription! tick-sleep-ms
-                                           data-subscription-channel control-channel
+                                           stock-stream-channel control-channel
                                            close-sink-fn sink-fn)
 
           (game.games/onto-open-chan
             ;; core.async/onto-chan
-            data-subscription-channel
-            (game.games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data))
+            stock-stream-channel
+            (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data))
 
-          (let [[t0-time _ id0] (<!! data-subscription-channel)
-                [t1-time _ id1] (<!! data-subscription-channel)]
+          (let [[t0-time _ id0] (<!! stock-stream-channel)
+                [t1-time _ id1] (<!! stock-stream-channel)]
 
             (is (t/after?
                   (c/from-long (Long/parseLong t1-time))
@@ -84,12 +84,12 @@
          userId         :user/external-uid}                 (test-util/generate-user! conn)
         sink-fn                                             identity
         {{gameId :game/id :as game} :game
-         data-subscription-channel  :data-subscription-channel
+         stock-stream-channel  :stock-stream-channel
          stocks-with-tick-data      :stocks-with-tick-data} (game.games/create-game! conn result-user-id sink-fn)
 
         _ (game.games/onto-open-chan
-            data-subscription-channel
-            (take 2 (game.games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data)))
+            stock-stream-channel
+            (take 2 (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data)))
 
         stockId     (-> game
                         :game/users first
@@ -97,8 +97,8 @@
                         :game.stock/id)
         stockAmount 100
 
-        [_ tickPrice0 tickId0] (<!! data-subscription-channel)
-        [_ tickPrice1 tickId1] (<!! data-subscription-channel)
+        [_ tickPrice0 tickId0] (<!! stock-stream-channel)
+        [_ tickPrice1 tickId1] (<!! stock-stream-channel)
         tickId0                (UUID/fromString tickId0)
         tickId1                (UUID/fromString tickId1)]
 
@@ -151,12 +151,12 @@
          userId         :user/external-uid}                 (test-util/generate-user! conn)
         sink-fn                                             identity
         {{gameId :game/id :as game} :game
-         data-subscription-channel  :data-subscription-channel
+         stock-stream-channel  :stock-stream-channel
          stocks-with-tick-data      :stocks-with-tick-data} (game.games/create-game! conn result-user-id sink-fn)
 
         _ (game.games/onto-open-chan
-            data-subscription-channel
-            (take 2 (game.games/data-subscription-stock-sequence conn game result-user-id stocks-with-tick-data)))
+            stock-stream-channel
+            (take 2 (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data)))
 
         stockId     (-> game
                         :game/users first
@@ -164,8 +164,8 @@
                         :game.stock/id)
         stockAmount 100
 
-        [_ tickPrice0 tickId0] (<!! data-subscription-channel)
-        [_ tickPrice1 tickId1] (<!! data-subscription-channel)
+        [_ tickPrice0 tickId0] (<!! stock-stream-channel)
+        [_ tickPrice1 tickId1] (<!! stock-stream-channel)
         tickId0                (UUID/fromString tickId0)
         tickId1                (UUID/fromString tickId1)]
 
