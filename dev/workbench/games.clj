@@ -99,31 +99,6 @@
           (close! control-channel))
         (-> repl.state/system :game/games deref vals)))
 
-;;
-(defn chain-stock-sequence-controls! [conn
-                                      {:keys [game stocks-with-tick-data tick-sleep-ms
-                                              stock-stream-channel control-channel
-                                              close-sink-fn sink-fn] :as game-control}
-                                      input-chan]
-
-  (let [concurrent        10
-        blocking-transact (fn [entities]
-                            (println "Sanity /" (persistence.datomic/transact-entities! conn entities))
-                            entities)
-        mix-chan          (chan)]
-
-    ;; A. transact-entities
-    (pipeline-blocking concurrent
-                       mix-chan
-                       (map blocking-transact)
-                       input-chan)
-
-    ;; B. controls to pause , resume
-    (let [mixer (core.async/mix stock-stream-channel)]
-
-      (core.async/admix mixer mix-chan)
-      (assoc game-control :mixer mixer :mix-chan mix-chan))))
-
 (comment ;; Create Game + Stream Stock Subscription
 
 
@@ -146,12 +121,9 @@
 
 
   ;; B.i
-  (let [{:keys [game stocks-with-tick-data]} game-control]
-    (def input-chan (to-chan (games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data))))
-
-
-  ;; B.ii
-  (let [{:keys [mixer mix-chan stock-stream-channel]} (chain-stock-sequence-controls! conn game-control input-chan)]
+  (let [{:keys [game stocks-with-tick-data]}          game-control
+        input-seq                                     (games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data)
+        {:keys [mixer mix-chan stock-stream-channel]} (games/chain-stock-sequence-controls! conn game-control input-seq)]
 
     (def mixer mixer)
     (def mix-chan mix-chan)
@@ -162,14 +134,9 @@
       (recur)))
 
 
-  ;; B.iii
-  ;; (core.async/<!! output-chan)
-  ;; (core.async/<!! output-chan)
   (core.async/toggle mixer { mix-chan { :pause true } })
   (core.async/toggle mixer { mix-chan { :pause false} })
 
 
   ;; C
-  (-> game-control :control-channel (>!! :exit))
-
-  )
+  (-> game-control :control-channel (>!! :exit)))

@@ -24,10 +24,11 @@
 
   (testing "We get an expected game-control struct"
 
-    (let [conn           (-> repl.state/system :persistence/datomic :conn)
-          result-user-id (:db/id (test-util/generate-user! conn))
-          sink-fn        identity
-          game-control   (game.games/create-game! conn result-user-id sink-fn)
+    (let [conn               (-> repl.state/system :persistence/datomic :conn)
+          result-user-id     (:db/id (test-util/generate-user! conn))
+          sink-fn            identity
+          {:keys [tick-sleep-ms control-channel]
+           :as   game-control} (game.games/create-game! conn result-user-id sink-fn)
 
           expected-game-control-keys
           (sort '(:game :stocks-with-tick-data :tick-sleep-ms :stock-stream-channel :control-channel :close-sink-fn :sink-fn))]
@@ -40,44 +41,66 @@
 
       (testing "Streaming subscription flows through the correct value"
 
-        (let [{:keys [game tick-sleep-ms stocks-with-tick-data
-                      stock-stream-channel control-channel]} game-control
-              close-sink-fn sink-fn]
+        (let [output-chan  (core.async/chan)
+              game-loop-fn (fn [a]
+                             (core.async/>!! output-chan a))]
 
-          (game.games/stream-subscription! tick-sleep-ms
-                                           stock-stream-channel control-channel
-                                           close-sink-fn sink-fn)
+          ;; A
+          (game.games/start-game! conn result-user-id game-control game-loop-fn)
+          (pprint (-> integrant.repl.state/system :games/games))
 
-          (game.games/onto-open-chan
-            ;; core.async/onto-chan
-            stock-stream-channel
-            (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data))
+          ;; B
+          (core.async/go-loop []
+            (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
+                                            output-chan])]
 
-          (let [[t0-time _ id0] (<!! stock-stream-channel)
-                [t1-time _ id1] (<!! stock-stream-channel)]
+              (println (format "TEST go-loop / value / %s" v))
+              (when-not (nil? v)
+                (recur))))
 
-            (is (t/after?
-                  (c/from-long (Long/parseLong t1-time))
-                  (c/from-long (Long/parseLong t0-time))))
+          ;; C
+          ;; (core.async/>!! control-channel :exit)
+          )
 
-            (testing "Two ticks streamed to client, got saved to the DB"
 
-              (let [conn (-> repl.state/system :persistence/datomic :conn)
+        #_(let [{:keys [game tick-sleep-ms stocks-with-tick-data
+                        stock-stream-channel control-channel]} game-control
+                close-sink-fn                                  sink-fn]
 
-                    tick-id0 (UUID/fromString id0)
-                    tick-id1 (UUID/fromString id1)]
+            (game.games/stream-subscription! tick-sleep-ms
+                                             stock-stream-channel control-channel
+                                             close-sink-fn sink-fn)
 
-                (->> (d/q '[:find ?e
-                            :in $ [?tick-id ...]
-                            :where
-                            [?e :game.stock.tick/id ?tick-id]]
-                          (d/db conn)
-                          [tick-id0 tick-id1])
-                     count
-                     (= 2)
-                     is)))))))))
+            (game.games/onto-open-chan
+              ;; core.async/onto-chan
+              stock-stream-channel
+              (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data))
 
-(deftest buy-stock!-test
+            (let [[t0-time _ id0] (<!! stock-stream-channel)
+                  [t1-time _ id1] (<!! stock-stream-channel)]
+
+              (is (t/after?
+                    (c/from-long (Long/parseLong t1-time))
+                    (c/from-long (Long/parseLong t0-time))))
+
+              (testing "Two ticks streamed to client, got saved to the DB"
+
+                (let [conn (-> repl.state/system :persistence/datomic :conn)
+
+                      tick-id0 (UUID/fromString id0)
+                      tick-id1 (UUID/fromString id1)]
+
+                  (->> (d/q '[:find ?e
+                              :in $ [?tick-id ...]
+                              :where
+                              [?e :game.stock.tick/id ?tick-id]]
+                            (d/db conn)
+                            [tick-id0 tick-id1])
+                       count
+                       (= 2)
+                       is)))))))))
+
+#_(deftest buy-stock!-test
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
         {result-user-id :db/id
@@ -144,7 +167,7 @@
           expected-debit-value         debit-value
           expected-debit-account-name  debit-account-name)))))
 
-(deftest sell-stock!-test
+#_(deftest sell-stock!-test
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
         {result-user-id :db/id

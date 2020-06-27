@@ -36,27 +36,7 @@
           (close! control-channel))
         (-> games deref vals)))
 
-(defn onto-open-chan
-  "Clone of clojure.core.async. But only puts to open channels.
-
-   Puts the contents of coll into the supplied channel.
-
-   By default the channel will be closed after the items are copied,
-   but can be determined by the close? parameter.
-
-   Returns a channel which will close after the items are copied."
-  ([ch coll] (onto-open-chan ch coll true))
-  ([ch coll close?]
-   (go-loop [vs (seq coll)]
-
-     ;; (println "Channel open? " (not (clojure.core.async.impl.protocols/closed? ch)))
-     (if (and vs
-              (not (clojure.core.async.impl.protocols/closed? ch))
-              (>! ch (first vs)))
-       (recur (next vs))
-       (when close?
-         (close! ch))))))
-
+;; BUY | SELL
 (defn- game-iscurrent-and-belongsto-user? [{:keys [conn gameId userId] :as inputs}]
   (if (util/exists?
         (d/q '[:find (pull ?e [*])
@@ -158,6 +138,7 @@
 
         (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))))
 
+;; CREATE
 (defn register-game-control! [game game-control]
   (swap! (:game/games repl.state/system)
          assoc (:game/id game) game-control))
@@ -177,7 +158,7 @@
         stocks                (:game/stocks game)
         stocks-with-tick-data (map bind-data-sequence stocks)
         game-control          {:game                  game
-                               :tick-sleep-ms         500
+                               :tick-sleep-ms         (-> integrant.repl.state/config :game/game :tick-sleep-ms)
                                :stocks-with-tick-data stocks-with-tick-data
                                :stock-stream-channel  (chan)
                                :control-channel       (chan)
@@ -191,6 +172,28 @@
   (let [user-entity (hash-map :db/id user-id)]
     (initialize-game! conn user-entity sink-fn)))
 
+;; START
+(defn onto-open-chan
+  "Clone of clojure.core.async. But only puts to open channels.
+
+   Puts the contents of coll into the supplied channel.
+
+   By default the channel will be closed after the items are copied,
+   but can be determined by the close? parameter.
+
+   Returns a channel which will close after the items are copied."
+  ([ch coll] (onto-open-chan ch coll true))
+  ([ch coll close?]
+   (go-loop [vs (seq coll)]
+
+     ;; (println "Channel open? " (not (clojure.core.async.impl.protocols/closed? ch)))
+     (if (and vs
+              (not (clojure.core.async.impl.protocols/closed? ch))
+              (>! ch (first vs)))
+       (recur (next vs))
+       (when close?
+         (close! ch))))))
+
 (defn game->new-game-message [game user-id]
 
   (let [game-stocks        (:game/stocks game)
@@ -201,61 +204,76 @@
                     :subscriptions game-subscriptions})
         (assoc :game/id (str (:game/id game))))))
 
-(defn stream-subscription! [tick-sleep-ms
-                            stock-stream-channel control-channel
-                            close-sink-fn sink-fn]
+(defn stream-stocks! [{:keys [tick-sleep-ms stock-stream-channel] :as game-control}
+                      {:keys [control-channel pause-chan mixer mix-chan] :as channel-controls}
+                      {:keys [close-sink-fn sink-fn] :as output-fns}
+                      game-loop-fn]
 
   (go-loop []
     (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
                                     control-channel])]
 
-      ;; (println (format "go-loop / value / %s" v))
-      (if (= :exit v)
-        (close-sink-fn)
-        (do
-          (let [vv (<! stock-stream-channel)]
+      (println (format "go-loop / value / %s" v))
+      (case v
+        :exit (close-sink-fn)
+        :pause (core.async/toggle mixer { mix-chan { :pause true } })
+        :resume (core.async/toggle mixer { mix-chan { :pause false} })
+        (let [v (<! stock-stream-channel)]
 
 
-            ;; TODO Calculations
-
-            ;; >
-            ;; Calculate Profit / Loss
-
-            ;; ...
-            ;;    ((stock-amount * current-price) across all stock accounts) +
-            ;;    current-cash-balance
-
-            ;; >
-            ;; Complete a Level
-            ;; ... (-> repl.state/system :game/game :levels xxx :profit-threshold)
-            ;; ... user has a time-limit at each level
+          ;; TODO >> narrow to subscription <<
 
 
-            ;; >
-            ;; ... All stocks are running at the same time
-            ;;   ... stock-stream-channel -> (all) stock-stream-channel
-            ;;   ... all stock-streams save to the database
-            ;; ... User can switch their subscription at any time
+          ;; TODO Calculations
+
+          ;; >
+          ;; Calculate Profit / Loss
+
+          ;; ...
+          ;;    ((stock-amount * current-price) across all stock accounts) +
+          ;;    current-cash-balance
+
+          ;; >
+          ;; Complete a Level
+          ;; ... (-> repl.state/system :game/game :levels xxx :profit-threshold)
+          ;; ... user has a time-limit at each level
 
 
-            ;; >
-            ;; ... ? Game pauses between levels (Pause | Resume a Game)
-            ;; ... ? beta distributions change on new levels (regenerate data sequences)
+          ;; >
+          ;; ... All stocks are running at the same time
+          ;;   ... stock-stream-channel -> (all) stock-stream-channel
+          ;;   ... all stock-streams save to the database
+          ;; ... User can switch their subscription at any time
 
 
-            ;; > Win a Game
-            ;; ... if a user has completed level 9
+          ;; >
+          ;; ... ? Game pauses between levels (Pause | Resume a Game)
+          ;; ... ? beta distributions change on new levels (regenerate data sequences)
 
 
-            ;; > Lose a Game
-            ;; ... if a user has either i. loses 10% of his money or ii. run out of time
+          ;; > Win a Game
+          ;; ... if a user has completed level 9
 
 
-            ;; (println (format "Sink value / %s" vv))
-            (sink-fn vv))
+          ;; > Lose a Game
+          ;; ... if a user has either i. loses 10% of his money or ii. run out of time
+
+
+          ;; (println (format "Sink value / %s" v))
+          (game-loop-fn v)
+          (sink-fn v)
           (recur))))))
 
-(defn narrow-stocks-by-game-user-subscription [stocks subscription-id-set]
+(defn stream-subscription!
+
+  ([game-control channel-controls output-fns]
+   (let [game-loop-fn identity]
+     (stream-subscription! game-control channel-controls output-fns game-loop-fn)))
+
+  ([game-control channel-controls output-fns game-loop-fn]
+   (stream-stocks! game-control channel-controls output-fns game-loop-fn)))
+
+#_(defn narrow-stocks-by-game-user-subscription [stocks subscription-id-set]
   (filter #(some subscription-id-set [(:game.stock/id %)])
           stocks))
 
@@ -402,45 +420,60 @@
        (apply concat)))
 
 (defn stocks->stock-sequences [conn game user-id stocks-with-tick-data]
-
   (->> stocks-with-tick-data
        stocks->partitioned-entities
-       (map partitioned-entities->transaction-entities))
+       (map partitioned-entities->transaction-entities)))
 
-  #_(let [data-subscription-stock
-          (->> (game.core/game-user-by-user-id game user-id)
-               :game.user/subscriptions
-               (map :game.stock/id)
-               (into #{})
-               (narrow-stocks-by-game-user-subscription stocks-with-tick-data)
-               first)]
+(defn chain-stock-sequence-controls! [conn
+                                      {:keys [game stocks-with-tick-data tick-sleep-ms
+                                              stock-stream-channel control-channel
+                                              close-sink-fn sink-fn] :as game-control}
+                                      input-seq]
 
-      ;; TODO put all stocks onto channel
-      (->> data-subscription-stock :data-sequence
-           (map (fn [[m v t]]
+  (let [concurrent        10
+        blocking-transact (fn [entities]
+                            (persistence.datomic/transact-entities! conn entities)
+                            entities)
+        input-chan        (core.async/to-chan input-seq)
+        mix-chan          (chan)]
 
-                  (let [moment  (str m)
-                        value   v
-                        tick-id (str t)
-                        tick    (persistence.core/bind-temporary-id
-                                  (hash-map
-                                    :game.stock.tick/trade-time m
-                                    :game.stock.tick/close value
-                                    :game.stock.tick/id t))
+    ;; A. transact-entities
+    (core.async/pipeline-blocking concurrent
+                                  mix-chan
+                                  (map blocking-transact)
+                                  input-chan)
 
-                        stock-with-appended-price-history (-> data-subscription-stock
-                                                              (dissoc :data-sequence)
-                                                              (assoc :game.stock/price-history tick))
-                        entities                          [tick stock-with-appended-price-history]]
+    ;; B. controls to pause , resume
+    (let [mixer (core.async/mix stock-stream-channel)]
 
-                    ;; i
-                    (persistence.datomic/transact-entities! conn entities)
+      (core.async/admix mixer mix-chan)
+      (assoc game-control :mixer mixer :mix-chan mix-chan :input-chan input-chan))))
 
-                    ;; ii
-                    [moment value tick-id]))))))
+(defn start-game!
+
+  ([conn user-db-id game-control]
+   (start-game! conn user-db-id game-control identity))
+
+  ([conn user-db-id game-control game-loop-fn]
+
+   (let [{:keys [game stocks-with-tick-data
+                 tick-sleep-ms control-channel
+                 close-sink-fn sink-fn]}               game-control
+         input-seq                                     (stocks->stock-sequences conn game user-db-id stocks-with-tick-data)
+         {:keys [mixer mix-chan stock-stream-channel]} (chain-stock-sequence-controls! conn game-control input-seq)
+         channel-controls                              {:control-channel control-channel
+                                                        :pause-chan      mix-chan
+                                                        :mixer           mixer}]
+
+     (stream-subscription! game-control
+                           channel-controls
+                           {:close-sink-fn close-sink-fn
+                            :sink-fn       sink-fn}
+                           game-loop-fn)
+     {:game-control     game-control
+      :channel-controls channel-controls})))
 
 (comment
-
 
   (initialize-game!)
   (def result *1)

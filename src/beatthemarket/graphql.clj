@@ -49,7 +49,7 @@
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
         {{{email :email} :checked-authentication} :request} context
-        result-user-id                                      (ffirst
+        user-db-id                                          (ffirst
                                                               (d/q '[:find ?e
                                                                      :in $ ?email
                                                                      :where [?e :user/email ?email]]
@@ -57,26 +57,19 @@
                                                                    email))
 
         ;; A
-        {:keys [game stocks-with-tick-data tick-sleep-ms
-                stock-stream-channel control-channel
-                close-sink-fn sink-fn] :as game-control}   (game.games/create-game! conn result-user-id source-stream)
+        {:keys                         [game stocks-with-tick-data tick-sleep-ms
+                                        stock-stream-channel control-channel
+                                        close-sink-fn sink-fn] :as game-control} (game.games/create-game! conn user-db-id source-stream)]
 
-        ;; B
-        message (game.games/game->new-game-message game result-user-id)]
+    ;; B
+    (let [message (game.games/game->new-game-message game user-db-id)]
+      (>!! stock-stream-channel message))
 
     ;; C
-    (game.games/stream-subscription! tick-sleep-ms
-                                stock-stream-channel control-channel
-                                close-sink-fn sink-fn)
+    (game.games/start-game! conn user-db-id game-control)
 
-    (>!! stock-stream-channel message)
 
-    ;; D
-    (game.games/onto-open-chan ;;core.async/onto-chan
-      stock-stream-channel
-      (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data))
-
-    ;; Return a cleanup fn
+    ;; D Return a cleanup fn
     (constantly nil)))
 
 

@@ -4,6 +4,7 @@
 
  ;; COMPONENTS
  :game {:starting-balance 100000.00
+        :tick-sleep-ms    1000
         :levels           {;; thousands
                            1 {:profit-threshold 1000
 

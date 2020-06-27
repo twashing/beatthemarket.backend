@@ -66,7 +66,7 @@
 
           (is (some (into #{} game-stocks) game-user-subscriptions)))))))
 
-(deftest buy-stock!-test
+#_(deftest buy-stock!-test
 
   (let [conn         (-> repl.state/system :persistence/datomic :conn)
         stock-amount 100
@@ -168,7 +168,7 @@
                              (= (+ stock-starting-balance value-change))
                              is)))))))))))))
 
-(deftest buy-stock!-insufficient-funds-test
+#_(deftest buy-stock!-insufficient-funds-test
 
   (testing "Cannot buy stock with insufficient funds"
 
@@ -183,7 +183,7 @@
 
       (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price))))))
 
-(deftest sell-stock!-test
+#_(deftest sell-stock!-test
 
   (let [conn         (-> repl.state/system :persistence/datomic :conn)
         stock-amount 100
