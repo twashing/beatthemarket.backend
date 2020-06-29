@@ -18,6 +18,10 @@
 
   :BuyStockAck
   {:fields
+   {:message {:type (non-null String)}}}
+
+  :SellStockAck
+  {:fields
    {:message {:type (non-null String)}}}}
 
 
@@ -25,6 +29,16 @@
  :input-objects
  {:BuyStock
   {:description "An event to buy a stock"
+   :fields
+   {:gameId {:type (non-null String)}
+    :stockId {:type (non-null String)}
+    :stockAmount {:type (non-null Int)}
+    :tickId {:type (non-null String)}
+    :tickTime {:type (non-null Int)}
+    :tickPrice {:type (non-null Float)}}}
+
+  :SellStock
+  {:description "An event to sell a stock"
    :fields
    {:gameId {:type (non-null String)}
     :stockId {:type (non-null String)}
@@ -50,7 +64,12 @@
  {:buyStock
   {:type :BuyStockAck
    :args {:input {:type :BuyStock}}
-   :resolve :resolve-buy-stock}}
+   :resolve :resolve-buy-stock}
+
+  :sellStock
+  {:type :SellStockAck
+   :args {:input {:type :SellStock}}
+   :resolve :resolve-sell-stock}}
 
 
  ;; //

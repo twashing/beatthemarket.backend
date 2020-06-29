@@ -1,6 +1,8 @@
 (ns beatthemarket.handler.http.server-test
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
+            [clojure.core.async :as core.async
+             :refer [<!!]]
             [clj-time.core :as t]
             [clj-time.format :as f]
             [aero.core :as aero]
@@ -204,12 +206,34 @@
 
   (testing "First setting up a test harness"
 
-    (let [conn                       (-> state/system :persistence/datomic :conn)
-          email                      "twashing@gmail.com"
-          {user-id :db/id}           (ffirst (persistence.user/user-by-email conn email))
-          sink-fn                    identity
-          {{game-id :game/id} :game} (game.games/create-game! conn user-id sink-fn)
-          {stock-id :game.stock/id}  (ffirst (test-util/generate-stocks! conn 1))]
+    (let [conn                              (-> state/system :persistence/datomic :conn)
+          email                             "twashing@gmail.com"
+          {user-id :db/id}                  (ffirst (persistence.user/user-by-email conn email))
+          sink-fn                           identity
+          {{game-id :game/id :as game} :game
+           :as                game-control} (game.games/create-game! conn user-id sink-fn)
+          game-user-subscription            (-> game
+                                                :game/users first
+                                                :game.user/subscriptions first)
+          stock-id                          (:game.stock/id game-user-subscription)
+          test-chan                         (core.async/chan)
+          game-loop-fn                      (fn [a]
+                                              (core.async/>!! test-chan a))
+          {{:keys                             [control-channel
+                                               mixer
+                                               pause-chan
+                                               input-chan
+                                               output-chan] :as channel-controls}
+           :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)
+
+          {tick-price :game.stock.tick/close
+           tick-time  :game.stock.tick/trade-time
+           tick-id    :game.stock.tick/id}
+          (-> (<!! test-chan)
+              (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
+              first
+              second)]
+
 
       (test-util/send-data {:id   987
                             :type :start
@@ -220,14 +244,98 @@
                                        }
                                      }"
 
-                             :variables {:input {:gameId      (str game-id)
-                                                 :stockId     (str stock-id)
-                                                 :stockAmount 100
-                                                 :tickId      "asdf"
-                                                 :tickTime    3456
-                                                 :tickPrice   1234.45}}}})))
+                             :variables {:input (trace {:gameId      (str game-id)
+                                                        :stockId     (str stock-id)
+                                                        :stockAmount 100
+                                                        :tickId      (str tick-id)
+                                                        :tickTime    (.intValue (Long. tick-time))
+                                                        :tickPrice   tick-price})}}})))
 
-  (let [ack (test-util/<message!! 1000)]
+  (let [ack (trace (test-util/<message!! 1000))]
 
     (is (= {:type "data" :id 987 :payload {:data {:buyStock {:message "Ack"}}}}
            ack))))
+
+(deftest sell-stock-test
+
+  ;; A. REST Login (not WebSocket) ; creates a user
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)]
+
+    (test-util/login-assertion service id-token))
+
+
+  (test-util/send-init)
+  (test-util/expect-message {:type "connection_ack"})
+
+  (testing "First setting up a test harness"
+
+    (let [conn                              (-> state/system :persistence/datomic :conn)
+          email                             "twashing@gmail.com"
+          {user-id :db/id}                  (ffirst (persistence.user/user-by-email conn email))
+          sink-fn                           identity
+          {{game-id :game/id :as game} :game
+           :as                game-control} (game.games/create-game! conn user-id sink-fn)
+          game-user-subscription            (-> game
+                                                :game/users first
+                                                :game.user/subscriptions first)
+          stock-id                          (:game.stock/id game-user-subscription)
+          test-chan                         (core.async/chan)
+          game-loop-fn                      (fn [a]
+                                              (core.async/>!! test-chan a))
+          {{:keys                             [control-channel
+                                               mixer
+                                               pause-chan
+                                               input-chan
+                                               output-chan] :as channel-controls}
+           :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)
+
+          {tick-price :game.stock.tick/close
+           tick-time  :game.stock.tick/trade-time
+           tick-id    :game.stock.tick/id}
+          (-> (<!! test-chan)
+              (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
+              first
+              second)]
+
+
+      (testing "Initial stock purchase"
+        (test-util/send-data {:id   987
+                              :type :start
+                              :payload
+                              {:query "mutation BuyStock($input: BuyStock!) {
+                                       buyStock(input: $input) {
+                                         message
+                                       }
+                                     }"
+
+                               :variables {:input (trace {:gameId      (str game-id)
+                                                          :stockId     (str stock-id)
+                                                          :stockAmount 100
+                                                          :tickId      (str tick-id)
+                                                          :tickTime    (.intValue (Long. tick-time))
+                                                          :tickPrice   tick-price})}}})
+        (test-util/<message!! 1000)
+        (test-util/<message!! 1000))
+
+      (testing "Now selling the stock"
+        (test-util/send-data {:id   987
+                              :type :start
+                              :payload
+                              {:query "mutation SellStock($input: SellStock!) {
+                                       sellStock(input: $input) {
+                                         message
+                                       }
+                                     }"
+
+                               :variables {:input (trace {:gameId      (str game-id)
+                                                          :stockId     (str stock-id)
+                                                          :stockAmount 100
+                                                          :tickId      (str tick-id)
+                                                          :tickTime    (.intValue (Long. tick-time))
+                                                          :tickPrice   tick-price})}}})
+
+        (let [ack (trace (test-util/<message!! 1000))]
+
+          (is (= {:type "data" :id 987 :payload {:data {:sellStock {:message "Ack"}}}}
+                 ack)))))))

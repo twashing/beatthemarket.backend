@@ -82,7 +82,6 @@
         tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)
         latest-tick-comparator (->> (take latest-tick-threshold tick-history-sorted)
                                     (map :game.stock.tick/id)
-                                    trace
                                     set)]
 
     (if (some latest-tick-comparator [tickId])
@@ -160,7 +159,7 @@
   (let [stocks            (game.core/generate-stocks! 4)
         game              (game.core/initialize-game! conn user-entity stocks)
         blocking-transact (fn [entities]
-                            (trace (keys (persistence.datomic/transact-entities! conn entities)))
+                            (persistence.datomic/transact-entities! conn entities)
                             entities)
 
         stocks                (:game/stocks game)

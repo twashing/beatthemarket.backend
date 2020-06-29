@@ -226,7 +226,8 @@
       resource slurp edn/read-string
       (util/attach-resolvers {:resolve-hello     graphql/resolve-hello
                               :resolve-login     graphql/resolve-login
-                              :resolve-buy-stock graphql/resolve-buy-stock})
+                              :resolve-buy-stock graphql/resolve-buy-stock
+                              :resolve-sell-stock graphql/resolve-sell-stock})
       (util/attach-streamers {:stream-ping     graphql/stream-ping
                               :stream-new-game graphql/stream-new-game})
       schema/compile))

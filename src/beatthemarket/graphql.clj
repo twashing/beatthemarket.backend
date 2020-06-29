@@ -35,14 +35,35 @@
   (let [{{{userId :uid} :checked-authentication} :request} context
         conn                                               (-> repl.state/system :persistence/datomic :conn)
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
-        gameId (UUID/fromString gameId)]
+        gameId (UUID/fromString gameId)
+        stockId (UUID/fromString stockId)
+        tickId (UUID/fromString tickId)
+        tickPrice (Float. tickPrice)]
 
     (try
-      (game.games/buy-stock! conn userId gameId stockId stockAmount tickId tickPrice)
+      (if (:bookkeeping.tentry/id (game.games/buy-stock! conn userId gameId stockId stockAmount tickId tickPrice))
+        {:message "Ack"}
+        {:message (ex-info "Error / resolve-buy-stock / INCOMPLETE /" {})})
       (catch Throwable e
-        {:message (ex-data e)}))
+        {:message (ex-info "Error / resolve-buy-stock /" (bean e) e)}))))
 
-    {:message "Ack"}))
+(defn resolve-sell-stock [context args _]
+
+  (println "resolve-sell-stock CALLED /" args)
+  (let [{{{userId :uid} :checked-authentication} :request} context
+        conn                                               (-> repl.state/system :persistence/datomic :conn)
+        {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
+        gameId (UUID/fromString gameId)
+        stockId (UUID/fromString stockId)
+        tickId (UUID/fromString tickId)
+        tickPrice (Float. tickPrice)]
+
+    (try
+      (if (:bookkeeping.tentry/id (game.games/sell-stock! conn userId gameId stockId stockAmount tickId tickPrice))
+        {:message "Ack"}
+        {:message (ex-info "Error / resolve-sell-stock / INCOMPLETE /" {})})
+      (catch Throwable e
+        {:message (ex-info "Error / resolve-sell-stock /" (bean e) e)}))))
 
 (defn stream-new-game
   [context _ source-stream]
