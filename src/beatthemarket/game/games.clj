@@ -160,8 +160,7 @@
         game-control          {:game                  game
                                :tick-sleep-ms         (-> integrant.repl.state/config :game/game :tick-sleep-ms)
                                :stocks-with-tick-data stocks-with-tick-data
-                               :stock-stream-channel  (chan)
-                               :control-channel       (chan)
+                               :control-channel       (chan 1)
                                :close-sink-fn         (partial sink-fn nil)
                                :sink-fn               #(sink-fn {:message (json/write-str %)})}]
 
@@ -204,8 +203,15 @@
                     :subscriptions game-subscriptions})
         (assoc :game/id (str (:game/id game))))))
 
-(defn stream-stocks! [{:keys [tick-sleep-ms stock-stream-channel] :as game-control}
-                      {:keys [control-channel pause-chan mixer mix-chan] :as channel-controls}
+(defn control-streams! [{:keys [control-channel mixer pause-chan]} command]
+  (case command
+    :exit (core.async/>!! control-channel :exit)
+    :pause (core.async/toggle mixer {pause-chan { :pause true } })
+    :resume (core.async/toggle mixer {pause-chan { :pause false} })
+    (throw (ex-info (format "Invalid command %s" command {})))))
+
+(defn stream-stocks! [{:keys [tick-sleep-ms] :as game-control}
+                      {:keys [control-channel mixer pause-chan output-chan] :as channel-controls}
                       {:keys [close-sink-fn sink-fn] :as output-fns}
                       game-loop-fn]
 
@@ -213,12 +219,12 @@
     (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
                                     control-channel])]
 
-      (println (format "go-loop / value / %s" v))
+      (println (format "B. go-loop / value / %s" v))
       (case v
         :exit (close-sink-fn)
-        :pause (core.async/toggle mixer { mix-chan { :pause true } })
-        :resume (core.async/toggle mixer { mix-chan { :pause false} })
-        (let [v (<! stock-stream-channel)]
+        ;; :pause (core.async/toggle mixer {pause-chan { :pause true } })
+        ;; :resume (core.async/toggle mixer {pause-chan { :pause false } })
+        (let [vv (<! output-chan)]
 
 
           ;; TODO >> narrow to subscription <<
@@ -260,7 +266,7 @@
 
 
           ;; (println (format "Sink value / %s" v))
-          (game-loop-fn v)
+          (game-loop-fn vv)
           (sink-fn v)
           (recur))))))
 
@@ -426,28 +432,30 @@
 
 (defn chain-stock-sequence-controls! [conn
                                       {:keys [game stocks-with-tick-data tick-sleep-ms
-                                              stock-stream-channel control-channel
+                                              control-channel
                                               close-sink-fn sink-fn] :as game-control}
                                       input-seq]
 
-  (let [concurrent        10
-        blocking-transact (fn [entities]
-                            (persistence.datomic/transact-entities! conn entities)
-                            entities)
-        input-chan        (core.async/to-chan input-seq)
-        mix-chan          (chan)]
+  (let [blocking-transact    (fn [entities]
+                               (trace (str "A. transact / " (keys (persistence.datomic/transact-entities! conn entities))))
+                               entities)
 
-    ;; A. transact-entities
-    (core.async/pipeline-blocking concurrent
-                                  mix-chan
-                                  (map blocking-transact)
-                                  input-chan)
+        ;; B. transact-entities in xform
+        stock-stream-channel (chan 1 (map blocking-transact))
+        input-chan           (chan 1)]
 
-    ;; B. controls to pause , resume
+
+    (core.async/onto-chan input-chan input-seq)
+
+
+    ;; A. controls to pause , resume
     (let [mixer (core.async/mix stock-stream-channel)]
 
-      (core.async/admix mixer mix-chan)
-      (assoc game-control :mixer mixer :mix-chan mix-chan :input-chan input-chan))))
+      (core.async/admix mixer input-chan)
+      (assoc game-control
+             :input-chan input-chan
+             :mixer mixer
+             :output-chan stock-stream-channel))))
 
 (defn start-game!
 
@@ -455,15 +463,18 @@
    (start-game! conn user-db-id game-control identity))
 
   ([conn user-db-id game-control game-loop-fn]
-
    (let [{:keys [game stocks-with-tick-data
                  tick-sleep-ms control-channel
-                 close-sink-fn sink-fn]}               game-control
-         input-seq                                     (stocks->stock-sequences conn game user-db-id stocks-with-tick-data)
-         {:keys [mixer mix-chan stock-stream-channel]} (chain-stock-sequence-controls! conn game-control input-seq)
-         channel-controls                              {:control-channel control-channel
-                                                        :pause-chan      mix-chan
-                                                        :mixer           mixer}]
+                 close-sink-fn sink-fn]} game-control
+         input-seq                       (stocks->stock-sequences conn game user-db-id stocks-with-tick-data)
+         {:keys [mixer
+                 input-chan
+                 output-chan]}           (chain-stock-sequence-controls! conn game-control input-seq)
+         channel-controls                {:control-channel control-channel
+                                          :mixer           mixer
+                                          :input-chan      input-chan
+                                          :output-chan     output-chan
+                                          :pause-chan      input-chan}]
 
      (stream-subscription! game-control
                            channel-controls

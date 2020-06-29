@@ -128,7 +128,7 @@
     (def mixer mixer)
     (def mix-chan mix-chan)
 
-    (core.async/go-loop []
+    #_(core.async/go-loop []
       (Thread/sleep 1000)
       (println (core.async/<! stock-stream-channel))
       (recur)))
@@ -140,3 +140,78 @@
 
   ;; C
   (-> game-control :control-channel (>!! :exit)))
+
+(comment
+
+
+  ;; >> <<
+  (do
+
+    (def conn                   (-> repl.state/system :persistence/datomic :conn))
+    (def id-token               (test-util/->id-token))
+    (def checked-authentication (iam.auth/check-authentication id-token))
+    (def add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication))
+    (def result-user-id         (ffirst
+                                  (d/q '[:find ?e
+                                         :in $ ?email
+                                         :where [?e :user/email ?email]]
+                                       (d/db conn)
+                                       (-> checked-authentication
+                                           :claims (get "email")))))
+    (def sink-fn                util/pprint+identity)
+    (def game-control           (games/create-game! conn result-user-id sink-fn)))
+
+
+  ;; >> <<
+  (let [final-chan                               (core.async/chan)
+        game-loop-fn                              (fn [a]
+                                                    (println "C. game-loop-fn /" #_a)
+                                                    ;; (core.async/>!! final-chan a)
+                                                    )
+        {{:keys [control-channel
+                 mixer
+                 pause-chan
+                 input-chan
+                 output-chan] :as channel-controls}
+         :channel-controls} (games/start-game! conn result-user-id game-control game-loop-fn)]
+
+    ;; A
+    (def control-channel control-channel)
+    (def mixer mixer)
+    (def input-chan input-chan)
+
+    (def final-chan final-chan)
+    (def output-chan output-chan)
+    (def channel-controls channel-controls)
+
+    ;; B
+    #_(core.async/go-loop []
+        (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
+                                        final-chan])]
+
+          (println (format "TEST go-loop / value / %s" v))
+          (when-not (nil? v)
+            (recur))))
+
+    ;; C
+    ;; (core.async/>!! control-channel :exit)
+    )
+
+  (games/control-streams! channel-controls :pause)
+  (games/control-streams! channel-controls :resume)
+  (games/control-streams! channel-controls :exit)
+
+
+  (core.async/toggle mixer { input-chan { :pause true } })
+  (core.async/toggle mixer { input-chan { :pause false } })
+
+  ;; (core.async/>!! (-> game-control :control-channel) :exit)
+  (core.async/>!! control-channel :exit)
+  (core.async/<!! output-chan)
+  (core.async/<!! final-chan)
+
+
+  ;; >> <<
+  (pprint (-> integrant.repl.state/system :games/games))
+
+  )
