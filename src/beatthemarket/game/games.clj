@@ -69,7 +69,8 @@
         (rop/fail (ex-info message tick))))))
 
 (defn- latest-tick? [{:keys [conn tickId stockId] :as inputs}]
-  (let [{tick-history :game.stock/price-history :as stock}
+  (let [latest-tick-threshold (get (:game/game integrant.repl.state/config) :latest-tick-threshold 2)
+        {tick-history :game.stock/price-history :as stock}
         (ffirst
           (d/q '[:find (pull ?e [*])
                  :in $ ?stock-id
@@ -78,9 +79,13 @@
                (d/db conn)
                stockId))
 
-        tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)]
+        tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)
+        latest-tick-comparator (->> (take latest-tick-threshold tick-history-sorted)
+                                    (map :game.stock.tick/id)
+                                    trace
+                                    set)]
 
-    (if (= tickId (-> tick-history-sorted first :game.stock.tick/id))
+    (if (some latest-tick-comparator [tickId])
       (rop/succeed inputs)
       (let [message (format "Submitted tick [%s] is not the latest" tickId)]
         (rop/fail (ex-info message {:tick-history-sorted
@@ -164,7 +169,7 @@
                                :tick-sleep-ms         (-> integrant.repl.state/config :game/game :tick-sleep-ms)
                                :stocks-with-tick-data stocks-with-tick-data
 
-                               ;; transact-entities in xform
+                               ;; B. transact-entities in xform
                                :stock-stream-channel (chan 1 (map blocking-transact))
                                :control-channel      (chan 1)
                                :close-sink-fn        (partial sink-fn nil)
@@ -292,10 +297,6 @@
 
   ([game-control channel-controls output-fns game-loop-fn]
    (stream-stocks! game-control channel-controls output-fns game-loop-fn)))
-
-#_(defn narrow-stocks-by-game-user-subscription [stocks subscription-id-set]
-  (filter #(some subscription-id-set [(:game.stock/id %)])
-          stocks))
 
 (defn- stocks->partitioned-entities
   "Output should be a partitioned list of {:tick :stock}.

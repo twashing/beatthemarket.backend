@@ -114,30 +114,46 @@
 
           (game.games/control-streams! channel-controls :exit))))))
 
-#_(deftest buy-stock!-test
+(deftest buy-stock!-test
 
-  (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
+  (let [conn                                (-> repl.state/system :persistence/datomic :conn)
         {result-user-id :db/id
-         userId         :user/external-uid}                 (test-util/generate-user! conn)
-        sink-fn                                             identity
+         userId         :user/external-uid} (test-util/generate-user! conn)
+        sink-fn                             identity
         {{gameId :game/id :as game} :game
-         stock-stream-channel  :stock-stream-channel
-         stocks-with-tick-data      :stocks-with-tick-data} (game.games/create-game! conn result-user-id sink-fn)
+         stock-stream-channel       :stock-stream-channel
+         stocks-with-tick-data      :stocks-with-tick-data
+         :as                        game-control}                  (game.games/create-game! conn result-user-id sink-fn)
+        test-chan                           (core.async/chan)
+        game-loop-fn                        (fn [a]
+                                              (core.async/>!! test-chan a))
+        {{:keys               [control-channel
+                               mixer
+                               pause-chan
+                               input-chan
+                               output-chan] :as channel-controls}
+         :channel-controls}                 (game.games/start-game! conn result-user-id game-control game-loop-fn)
+        game-user-subscription              (-> game
+                                                :game/users first
+                                                :game.user/subscriptions first)
+        stockId                             (:game.stock/id game-user-subscription)
+        stockAmount                         100
 
-        _ (game.games/onto-open-chan
-            stock-stream-channel
-            (take 2 (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data)))
+        {tickPrice0 :game.stock.tick/close
+         tickId0    :game.stock.tick/id}
+        (-> (<!! test-chan)
+            (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
+            first
+            second)
 
-        stockId     (-> game
-                        :game/users first
-                        :game.user/subscriptions first
-                        :game.stock/id)
-        stockAmount 100
+        {tickPrice1 :game.stock.tick/close
+         tickId1    :game.stock.tick/id}
+        (-> (<!! test-chan)
+            (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
+            first
+            second)]
 
-        [_ tickPrice0 tickId0] (<!! stock-stream-channel)
-        [_ tickPrice1 tickId1] (<!! stock-stream-channel)
-        tickId0                (UUID/fromString tickId0)
-        tickId1                (UUID/fromString tickId1)]
+    (game.games/control-streams! channel-controls :exit)
 
     (testing "We are checking game is current and belongs to the user"
       (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
@@ -181,30 +197,49 @@
           expected-debit-value         debit-value
           expected-debit-account-name  debit-account-name)))))
 
-#_(deftest sell-stock!-test
+(deftest sell-stock!-test
 
-  (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
+  (let [conn                                      (-> repl.state/system :persistence/datomic :conn)
         {result-user-id :db/id
-         userId         :user/external-uid}                 (test-util/generate-user! conn)
-        sink-fn                                             identity
+         userId         :user/external-uid}       (test-util/generate-user! conn)
+        sink-fn                                   identity
         {{gameId :game/id :as game} :game
-         stock-stream-channel  :stock-stream-channel
-         stocks-with-tick-data      :stocks-with-tick-data} (game.games/create-game! conn result-user-id sink-fn)
+         stock-stream-channel       :stock-stream-channel
+         stocks-with-tick-data      :stocks-with-tick-data
+         :as                        game-control} (game.games/create-game! conn result-user-id sink-fn)
+        test-chan                                 (core.async/chan)
+        game-loop-fn                              (fn [a]
+                                                    (core.async/>!! test-chan a))
+        {{:keys                             [control-channel
+                                             mixer
+                                             pause-chan
+                                             input-chan
+                                             output-chan] :as channel-controls}
+         :channel-controls}                       (game.games/start-game! conn result-user-id game-control game-loop-fn)
+        game-user-subscription                    (-> game
+                                                      :game/users first
+                                                      :game.user/subscriptions first)
+        stockId                                   (-> game
+                                                      :game/users first
+                                                      :game.user/subscriptions first
+                                                      :game.stock/id)
+        stockAmount                               100
 
-        _ (game.games/onto-open-chan
-            stock-stream-channel
-            (take 2 (game.games/stocks->stock-sequences conn game result-user-id stocks-with-tick-data)))
+        {tickPrice0 :game.stock.tick/close
+         tickId0    :game.stock.tick/id}
+        (-> (<!! test-chan)
+            (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
+            first
+            second)
 
-        stockId     (-> game
-                        :game/users first
-                        :game.user/subscriptions first
-                        :game.stock/id)
-        stockAmount 100
+        {tickPrice1 :game.stock.tick/close
+         tickId1    :game.stock.tick/id}
+        (-> (<!! test-chan)
+            (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
+            first
+            second)]
 
-        [_ tickPrice0 tickId0] (<!! stock-stream-channel)
-        [_ tickPrice1 tickId1] (<!! stock-stream-channel)
-        tickId0                (UUID/fromString tickId0)
-        tickId1                (UUID/fromString tickId1)]
+    (game.games/control-streams! channel-controls :exit)
 
     (testing "We are checking game is current and belongs to the user"
       (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))

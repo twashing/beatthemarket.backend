@@ -3,27 +3,28 @@
 
 
  ;; COMPONENTS
- :game {:starting-balance 100000.00
-        :tick-sleep-ms    1000
-        :levels           {;; thousands
-                           1 {:profit-threshold 1000
+ :game {:starting-balance      100000.00
+        :tick-sleep-ms         1000
+        :latest-tick-threshold 2
+        :levels                {;; thousands
+                                1 {:profit-threshold 1000
 
-                              ;; TODO stock behaviours for this level
-                              :beta-distributions 1
-                              :time-limit 1}
+                                   ;; TODO stock behaviours for this level
+                                   :beta-distributions 1
+                                   :time-limit         1}
 
-                           2 {:profit-threshold 10000}
-                           3 {:profit-threshold 20000}
-                           4 {:profit-threshold 50000}
-                           5 {:profit-threshold 100000}
+                                2 {:profit-threshold 10000}
+                                3 {:profit-threshold 20000}
+                                4 {:profit-threshold 50000}
+                                5 {:profit-threshold 100000}
 
-                           ;; millions
-                           6 {:profit-threshold 10000000}
-                           7 {:profit-threshold 50000000}
-                           8 {:profit-threshold 100000000}
+                                ;; millions
+                                6 {:profit-threshold 10000000}
+                                7 {:profit-threshold 50000000}
+                                8 {:profit-threshold 100000000}
 
-                           ;; billion
-                           9 {:profit-threshold 1000000000}}}
+                                ;; billion
+                                9 {:profit-threshold 1000000000}}}
 
 
  :logging {:config {:level     :info

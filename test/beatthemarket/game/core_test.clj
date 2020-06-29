@@ -66,7 +66,7 @@
 
           (is (some (into #{} game-stocks) game-user-subscriptions)))))))
 
-#_(deftest buy-stock!-test
+(deftest buy-stock!-test
 
   (let [conn         (-> repl.state/system :persistence/datomic :conn)
         stock-amount 100
@@ -168,7 +168,7 @@
                              (= (+ stock-starting-balance value-change))
                              is)))))))))))))
 
-#_(deftest buy-stock!-insufficient-funds-test
+(deftest buy-stock!-insufficient-funds-test
 
   (testing "Cannot buy stock with insufficient funds"
 
@@ -183,7 +183,7 @@
 
       (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price))))))
 
-#_(deftest sell-stock!-test
+(deftest sell-stock!-test
 
   (let [conn         (-> repl.state/system :persistence/datomic :conn)
         stock-amount 100
@@ -394,5 +394,4 @@
                                (:bookkeeping.tentry/id tentry))))
   (->> (d/pull (d/db conn) '[*] result-tentry-id)
        util/pprint+identity
-       (def tentry-pulled))
-  )
+       (def tentry-pulled)))
