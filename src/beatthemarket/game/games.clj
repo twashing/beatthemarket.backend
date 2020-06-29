@@ -152,17 +152,23 @@
 
 (defn initialize-game! [conn user-entity sink-fn]
 
-  (let [stocks (game.core/generate-stocks! 4)
-        game   (game.core/initialize-game! conn user-entity stocks)
+  (let [stocks            (game.core/generate-stocks! 4)
+        game              (game.core/initialize-game! conn user-entity stocks)
+        blocking-transact (fn [entities]
+                            (trace (keys (persistence.datomic/transact-entities! conn entities)))
+                            entities)
 
         stocks                (:game/stocks game)
         stocks-with-tick-data (map bind-data-sequence stocks)
         game-control          {:game                  game
                                :tick-sleep-ms         (-> integrant.repl.state/config :game/game :tick-sleep-ms)
                                :stocks-with-tick-data stocks-with-tick-data
-                               :control-channel       (chan 1)
-                               :close-sink-fn         (partial sink-fn nil)
-                               :sink-fn               #(sink-fn {:message (json/write-str %)})}]
+
+                               ;; transact-entities in xform
+                               :stock-stream-channel (chan 1 (map blocking-transact))
+                               :control-channel      (chan 1)
+                               :close-sink-fn        (partial sink-fn nil)
+                               :sink-fn              #(sink-fn {:message (json/write-str %)})}]
 
     (register-game-control! game game-control)
     game-control))
@@ -203,6 +209,16 @@
                     :subscriptions game-subscriptions})
         (assoc :game/id (str (:game/id game))))))
 
+(defn narrow-stock-tick-pairs-by-subscription [stock-tick-pairs {input-stock-id :game.stock/id}]
+
+  (for [{{each-stock-tick-id :game.stock.tick/id} :game.stock/price-history
+         each-stock-id                            :game.stock/id :as e}      stock-tick-pairs
+        {binding-stock-tick-id                    :game.stock.tick/id :as f} stock-tick-pairs
+        :when                                                                (and (= input-stock-id each-stock-id)
+                                                                                  (= binding-stock-tick-id each-stock-tick-id))]
+
+    [e f]))
+
 (defn control-streams! [{:keys [control-channel mixer pause-chan]} command]
   (case command
     :exit (core.async/>!! control-channel :exit)
@@ -219,11 +235,9 @@
     (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
                                     control-channel])]
 
-      (println (format "B. go-loop / value / %s" v))
+      ;; (println (format "B. go-loop / value / %s" v))
       (case v
         :exit (close-sink-fn)
-        ;; :pause (core.async/toggle mixer {pause-chan { :pause true } })
-        ;; :resume (core.async/toggle mixer {pause-chan { :pause false } })
         (let [vv (<! output-chan)]
 
 
@@ -432,21 +446,13 @@
 
 (defn chain-stock-sequence-controls! [conn
                                       {:keys [game stocks-with-tick-data tick-sleep-ms
-                                              control-channel
+                                              control-channel stock-stream-channel
                                               close-sink-fn sink-fn] :as game-control}
                                       input-seq]
 
-  (let [blocking-transact    (fn [entities]
-                               (trace (str "A. transact / " (keys (persistence.datomic/transact-entities! conn entities))))
-                               entities)
-
-        ;; B. transact-entities in xform
-        stock-stream-channel (chan 1 (map blocking-transact))
-        input-chan           (chan 1)]
-
+  (let [input-chan (chan 1)]
 
     (core.async/onto-chan input-chan input-seq)
-
 
     ;; A. controls to pause , resume
     (let [mixer (core.async/mix stock-stream-channel)]
