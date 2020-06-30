@@ -29,6 +29,25 @@
       "user-added"
       "user-exists")))
 
+(defn resolve-create-game [context args _]
+
+  (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
+        {{{email :email} :checked-authentication} :request} context
+        user-db-id                                          (ffirst
+                                                              (d/q '[:find ?e
+                                                                     :in $ ?email
+                                                                     :where [?e :user/email ?email]]
+                                                                   (d/db conn)
+                                                                   email))
+
+        sink-fn                       identity
+        {{game-id :game/id
+          :as     game} :game
+          :as           game-control} (game.games/create-game! conn user-db-id sink-fn)
+        message (game.games/game->new-game-message game user-db-id)]
+
+    {:message message}))
+
 (defn resolve-buy-stock [context args _]
 
   ;; (println "resolve-buy-stock CALLED /" args)
@@ -66,7 +85,13 @@
         {:message (ex-info "Error / resolve-sell-stock /" (bean e) e)}))))
 
 (defn stream-new-game
-  [context _ source-stream]
+  [context {id :id :as args} source-stream]
+
+  (println "Sanity / args /" args)
+  ;; (util/pprint+identity args)
+
+  ;; (source-stream {:message "Ack"})
+  ;; (constantly nil)
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
         {{{email :email} :checked-authentication} :request} context
@@ -77,17 +102,32 @@
                                                                    (d/db conn)
                                                                    email))
 
-        ;; A
-        {:keys                         [game stocks-with-tick-data tick-sleep-ms
-                                        stock-stream-channel control-channel
-                                        close-sink-fn sink-fn] :as game-control} (game.games/create-game! conn user-db-id source-stream)]
+        ;; _ (println "B / user-db-id /" user-db-id)
+        ;; _ (trace (UUID/fromString id))
+        ;; _ (-> repl.state/system :game/games deref keys first
+        ;;       (= (UUID/fromString id)) trace)
+        ;; _ (-> repl.state/system :game/games deref keys first trace)
 
-    ;; B
-    (let [message (game.games/game->new-game-message game user-db-id)]
-      (>!! stock-stream-channel message))
+        {game :game :as game-control} (-> repl.state/system :game/games deref (get (UUID/fromString id)))
+        sink-fn                       source-stream
+        game-user-subscription        (-> game
+                                          :game/users first
+                                          :game.user/subscriptions first)
 
-    ;; C
-    (game.games/start-game! conn user-db-id game-control)
+        _ (println "C / game-user-subscription /" game-user-subscription)
+        runnable ^Runnable (fn []
+
+                             ;; TODO register channel-controls
+                             (let [game-loop-fn           identity
+                                   {{:keys [control-channel
+                                            mixer
+                                            pause-chan
+                                            input-chan
+                                            output-chan] :as channel-controls}
+                                    :channel-controls} (game.games/start-game! conn user-db-id game-control game-loop-fn)]
+                               ))]
+
+    (.start (Thread. runnable "stream-new-game-thread"))
 
 
     ;; D Return a cleanup fn
@@ -115,5 +155,6 @@
 
                                             (source-stream nil))]
     (.start (Thread. runnable "stream-ping-thread")))
+
   ;; Return a cleanup fn:
   #(swap! *ping-cleanups inc))

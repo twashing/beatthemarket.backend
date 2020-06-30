@@ -211,7 +211,7 @@
     (-> (transform [MAP-VALS ALL :game.stock/id] str
                    {:stocks        game-stocks
                     :subscriptions game-subscriptions})
-        (assoc :game/id (str (:game/id game))))))
+        (assoc :id (str (:game/id game))))))
 
 (defn narrow-stock-tick-pairs-by-subscription [stock-tick-pairs {input-stock-id :game.stock/id}]
 
@@ -239,7 +239,7 @@
     (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
                                     control-channel])]
 
-      ;; (println (format "B. go-loop / value / %s" v))
+      (println (format "B. go-loop / value / %s" v))
       (case v
         :exit (close-sink-fn)
         (let [vv (<! output-chan)]

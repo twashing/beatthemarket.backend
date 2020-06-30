@@ -128,69 +128,123 @@
                              :payload {:data {:ping {:message "short #1"}}}
                              :type "data"}))
 
-(deftest new-game-subscription-test
+(deftest create-game-resolver-test
 
-  ;; A. REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)]
 
-    (test-util/login-assertion service id-token))
+    ;; A. REST Login (not WebSocket) ; creates a user
+    (test-util/login-assertion service id-token)
 
-
-  (test-util/send-init)
-  (test-util/expect-message {:type "connection_ack"})
-
-  ;; B. NEW GAME
-  (testing "Creating a new game returns subscriptions and all stocks"
-
-    (test-util/send-data {:id 987
+    (test-util/send-data {:id   987
                           :type :start
                           :payload
-                          {:query "subscription { newGame( message: \"Foobar\" ) { message } }"}})
+                          {:query "mutation CreateGame {
+                                       createGame {
+                                         message
+                                       }
+                                     }"}})
 
-    (let [parse-newGame-message (fn [a] (-> a :payload :data :newGame :message (#(json/read-str % :key-fn keyword))))
+    (testing "We are returned expected game information [stocks subscriptions id]"
 
-          data                              (test-util/<message!! 1000)
-          message                           (parse-newGame-message data)
-          {:keys [id stocks subscriptions]} message]
+      (let [result  (test-util/<message!! 1000)
+            {:keys [stocks subscriptions id]} (-> result :payload :data :createGame :message read-string)]
 
-      (is (some (into #{} stocks) subscriptions))
+        (is (UUID/fromString id))
+        (is (some (into #{} stocks)
+                  subscriptions))
+        (are [x y] (= x y)
+          4 (count stocks)
+          1 (count subscriptions))
 
-      (testing "Returned game is what's registered in the :game/games component"
+        (testing "Returned game is what's registered in the :game/games component"
 
-        (let [game-id (UUID/fromString id)
-              expected-component-game-keys
-              (sort '(:game :stocks-with-tick-data :tick-sleep-ms :stock-stream-channel :control-channel :close-sink-fn :sink-fn))]
+          (let [game-id (UUID/fromString id)
+                expected-component-game-keys
+                (sort '(:game :stocks-with-tick-data :tick-sleep-ms :stock-stream-channel :control-channel :close-sink-fn :sink-fn))]
 
-          (-> state/system :game/games deref (get game-id) keys sort
-              (= expected-component-game-keys)
-              is)))
+            (-> state/system :game/games deref (get game-id) keys sort
+                (= expected-component-game-keys)
+                is)))))))
 
-      (testing "Subscription is being streamed to client"
+(deftest start-game-subscription-test
 
-        (let [[t0-time _v0 id0] (parse-newGame-message (test-util/<message!! 1000))
-              [t1-time _v1 id1] (parse-newGame-message (test-util/<message!! 1000))]
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)]
 
-          (is (t/after?
-                (c/from-long (Long/parseLong t1-time))
-                (c/from-long (Long/parseLong t0-time))))
 
-          (testing "Two ticks streamed to client, got saved to the DB"
+    (testing "REST Login (not WebSocket) ; creates a user"
+      (test-util/login-assertion service id-token))
 
-            (let [conn (-> state/system :persistence/datomic :conn)
 
-                  tick-id0 (UUID/fromString id0)
-                  tick-id1 (UUID/fromString id1)]
+    (testing "Create a Game"
 
-              (->> (d/q '[:find ?e
-                          :in $ [?tick-id ...]
-                          :where
-                          [?e :game.stock.tick/id ?tick-id]]
-                        (d/db conn)
-                        [tick-id0 tick-id1])
-                   count
-                   (= 2)
-                   is))))))))
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame {
+                                       createGame {
+                                         message
+                                       }
+                                     }"}}))
+
+    (testing "Expected data when we start streaming a new game"
+
+      (let [create-result                     (test-util/<message!! 1000)
+            _                                 (test-util/<message!! 1000)
+            {:keys [stocks subscriptions id]} (-> create-result :payload :data :createGame :message read-string)]
+
+
+        ;; B. NEW GAME
+        (test-util/send-data {:id   987
+                              :type :start
+                              :payload
+                              {:query "subscription StartGame($id: String!) {
+                                         startGame(id: $id) {
+                                           message
+                                         }
+                                       }"
+                               :variables {:id id}}})
+
+        (let [parse-startGame-message (fn [a]
+                                        (-> a
+                                            :payload :data :createGame :message
+                                            (#(json/read-str % :key-fn keyword))))
+
+              start-result (trace (test-util/<message!! 5000))
+              ;; message                           (parse-startGame-message data)
+              ;; {:keys [id stocks subscriptions]} message
+              ]
+
+
+          ;; (is (some (into #{} stocks) subscriptions))
+
+
+          #_(testing "Subscription is being streamed to client"
+
+              (let [[t0-time _v0 id0] (parse-startGame-message (test-util/<message!! 1000))
+                    [t1-time _v1 id1] (parse-startGame-message (test-util/<message!! 1000))]
+
+              (is (t/after?
+                    (c/from-long (Long/parseLong t1-time))
+                    (c/from-long (Long/parseLong t0-time))))
+
+              (testing "Two ticks streamed to client, got saved to the DB"
+
+                (let [conn (-> state/system :persistence/datomic :conn)
+
+                      tick-id0 (UUID/fromString id0)
+                      tick-id1 (UUID/fromString id1)]
+
+                  (->> (d/q '[:find ?e
+                              :in $ [?tick-id ...]
+                              :where
+                              [?e :game.stock.tick/id ?tick-id]]
+                            (d/db conn)
+                            [tick-id0 tick-id1])
+                       count
+                       (= 2)
+                       is))))))))))
 
 (deftest buy-stock-test
 
@@ -244,14 +298,14 @@
                                        }
                                      }"
 
-                             :variables {:input (trace {:gameId      (str game-id)
-                                                        :stockId     (str stock-id)
-                                                        :stockAmount 100
-                                                        :tickId      (str tick-id)
-                                                        :tickTime    (.intValue (Long. tick-time))
-                                                        :tickPrice   tick-price})}}})))
+                             :variables {:input {:gameId      (str game-id)
+                                                 :stockId     (str stock-id)
+                                                 :stockAmount 100
+                                                 :tickId      (str tick-id)
+                                                 :tickTime    (.intValue (Long. tick-time))
+                                                 :tickPrice   tick-price}}}})))
 
-  (let [ack (trace (test-util/<message!! 1000))]
+  (let [ack (test-util/<message!! 1000)]
 
     (is (= {:type "data" :id 987 :payload {:data {:buyStock {:message "Ack"}}}}
            ack))))
@@ -309,12 +363,12 @@
                                        }
                                      }"
 
-                               :variables {:input (trace {:gameId      (str game-id)
-                                                          :stockId     (str stock-id)
-                                                          :stockAmount 100
-                                                          :tickId      (str tick-id)
-                                                          :tickTime    (.intValue (Long. tick-time))
-                                                          :tickPrice   tick-price})}}})
+                               :variables {:input {:gameId      (str game-id)
+                                                   :stockId     (str stock-id)
+                                                   :stockAmount 100
+                                                   :tickId      (str tick-id)
+                                                   :tickTime    (.intValue (Long. tick-time))
+                                                   :tickPrice   tick-price}}}})
         (test-util/<message!! 1000)
         (test-util/<message!! 1000))
 
@@ -328,14 +382,14 @@
                                        }
                                      }"
 
-                               :variables {:input (trace {:gameId      (str game-id)
-                                                          :stockId     (str stock-id)
-                                                          :stockAmount 100
-                                                          :tickId      (str tick-id)
-                                                          :tickTime    (.intValue (Long. tick-time))
-                                                          :tickPrice   tick-price})}}})
+                               :variables {:input {:gameId      (str game-id)
+                                                   :stockId     (str stock-id)
+                                                   :stockAmount 100
+                                                   :tickId      (str tick-id)
+                                                   :tickTime    (.intValue (Long. tick-time))
+                                                   :tickPrice   tick-price}}}})
 
-        (let [ack (trace (test-util/<message!! 1000))]
+        (let [ack (test-util/<message!! 1000)]
 
           (is (= {:type "data" :id 987 :payload {:data {:sellStock {:message "Ack"}}}}
                  ack)))))))

@@ -16,6 +16,10 @@
   {:fields
    {:message {:type (non-null String)}}}
 
+  :CreateGamekAck
+  {:fields
+   {:message {:type (non-null String)}}}
+
   :BuyStockAck
   {:fields
    {:message {:type (non-null String)}}}
@@ -61,7 +65,12 @@
 
  ;; //
  :mutations
- {:buyStock
+ {:createGame
+  {:type :CreateGamekAck
+   :description "Creates a new game"
+   :resolve :resolve-create-game}
+
+  :buyStock
   {:type :BuyStockAck
    :args {:input {:type :BuyStock}}
    :resolve :resolve-buy-stock}
@@ -83,9 +92,9 @@
             :default 5}
     :message {:type (non-null String)}}}
 
-  :newGame
+  :startGame
   {:type :Tick
-   :description "Creates a new game and sends updates to the client"
+   :description "Starts streaming a game's stock subscription."
    :stream :stream-new-game
    :args
-   {:message {:type (non-null String)}}}}}
+   {:id {:type (non-null String)}}}}}
