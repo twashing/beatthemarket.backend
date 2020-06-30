@@ -219,7 +219,7 @@
            session (try
                      (g/connect uri
                        :on-receive (fn [message-text]
-                                     (log/debug :reason ::receive :message message-text)
+                                     (log/debug :reason ::receive :message (util/pprint+identity message-text))
                                      (put! messages-ch (json/read-str message-text :key-fn keyword)))
                        :on-connect (fn [a]
                                      (log/debug :reason ::connected))

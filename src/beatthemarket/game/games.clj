@@ -172,7 +172,7 @@
                                :stock-stream-channel (chan 1 (map blocking-transact))
                                :control-channel      (chan 1)
                                :close-sink-fn        (partial sink-fn nil)
-                               :sink-fn              #(sink-fn {:message (json/write-str %)})}]
+                               :sink-fn              #(sink-fn (json/write-str %))}]
 
     (register-game-control! game game-control)
     game-control))
@@ -223,21 +223,31 @@
 
     [e f]))
 
-(defn control-streams! [{:keys [control-channel mixer pause-chan]} command]
+(defn set-exit! [id-uuid]
+  (swap! (:game/games repl.state/system)
+         update-in [id-uuid] #(assoc % :exit true))
+
+  (println "Zzz " (-> repl.state/system :game/games deref (get id-uuid) keys)))
+
+(defn exit-game? [id-uuid]
+  (-> repl.state/system :game/games deref (get id-uuid) :exit))
+
+(defn control-streams! [control-channel {:keys [mixer pause-chan]} command]
   (case command
     :exit (core.async/>!! control-channel :exit)
     :pause (core.async/toggle mixer {pause-chan { :pause true } })
     :resume (core.async/toggle mixer {pause-chan { :pause false} })
     (throw (ex-info (format "Invalid command %s" command {})))))
 
-(defn stream-stocks! [{:keys [tick-sleep-ms] :as game-control}
-                      {:keys [control-channel mixer pause-chan output-chan] :as channel-controls}
+(defn stream-stocks! [{:keys [tick-sleep-ms control-channel] :as game-control}
+                      {:keys [mixer pause-chan output-chan] :as channel-controls}
                       {:keys [close-sink-fn sink-fn] :as output-fns}
                       game-loop-fn]
 
   (go-loop []
-    (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
-                                    control-channel])]
+
+    (let [[v ch] (core.async/alts! [control-channel
+                                    (core.async/timeout tick-sleep-ms)])]
 
       (println (format "B. go-loop / value / %s" v))
       (case v
@@ -285,8 +295,9 @@
 
           ;; (println (format "Sink value / %s" v))
           (game-loop-fn vv)
-          (sink-fn v)
-          (recur))))))
+          (when vv
+            (sink-fn vv)
+            (recur)))))))
 
 (defn stream-subscription!
 
@@ -476,8 +487,7 @@
          {:keys [mixer
                  input-chan
                  output-chan]}           (chain-stock-sequence-controls! conn game-control input-seq)
-         channel-controls                {:control-channel control-channel
-                                          :mixer           mixer
+         channel-controls                {:mixer           mixer
                                           :input-chan      input-chan
                                           :output-chan     output-chan
                                           :pause-chan      input-chan}]

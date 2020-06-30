@@ -12,9 +12,9 @@
    :fields
    {:message {:type (non-null String)}}}
 
-  :Tick
+  :Stocks
   {:fields
-   {:message {:type (non-null String)}}}
+   {:message {:type (list (non-null String))}}}
 
   :CreateGamekAck
   {:fields
@@ -93,7 +93,7 @@
     :message {:type (non-null String)}}}
 
   :startGame
-  {:type :Tick
+  {:type :Stocks
    :description "Starts streaming a game's stock subscription."
    :stream :stream-new-game
    :args

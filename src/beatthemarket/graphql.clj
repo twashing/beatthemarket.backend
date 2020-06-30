@@ -43,7 +43,7 @@
         sink-fn                       identity
         {{game-id :game/id
           :as     game} :game
-          :as           game-control} (game.games/create-game! conn user-db-id sink-fn)
+         :as           game-control} (game.games/create-game! conn user-db-id sink-fn)
         message (game.games/game->new-game-message game user-db-id)]
 
     {:message message}))
@@ -84,14 +84,14 @@
       (catch Throwable e
         {:message (ex-info "Error / resolve-sell-stock /" (bean e) e)}))))
 
+(defn update-sink-fn! [id-uuid sink-fn]
+  (swap! (:game/games repl.state/system)
+         update-in [id-uuid :sink-fn] (constantly #(do
+                                                     ;; (println "sink-fn CALLED /" %)
+                                                     (sink-fn {:message %}))) ))
+
 (defn stream-new-game
   [context {id :id :as args} source-stream]
-
-  (println "Sanity / args /" args)
-  ;; (util/pprint+identity args)
-
-  ;; (source-stream {:message "Ack"})
-  ;; (constantly nil)
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
         {{{email :email} :checked-authentication} :request} context
@@ -101,34 +101,27 @@
                                                                      :where [?e :user/email ?email]]
                                                                    (d/db conn)
                                                                    email))
-
-        ;; _ (println "B / user-db-id /" user-db-id)
-        ;; _ (trace (UUID/fromString id))
-        ;; _ (-> repl.state/system :game/games deref keys first
-        ;;       (= (UUID/fromString id)) trace)
-        ;; _ (-> repl.state/system :game/games deref keys first trace)
-
-        {game :game :as game-control} (-> repl.state/system :game/games deref (get (UUID/fromString id)))
-        sink-fn                       source-stream
+        id-uuid (UUID/fromString id)
+        _ (update-sink-fn! id-uuid source-stream)
+        {game :game
+         control-channel :control-channel
+         :as game-control}            (-> repl.state/system :game/games deref (get id-uuid))
         game-user-subscription        (-> game
                                           :game/users first
                                           :game.user/subscriptions first)
 
-        _ (println "C / game-user-subscription /" game-user-subscription)
-        runnable ^Runnable (fn []
+        game-loop-fn           identity
+        {{:keys [mixer
+                 pause-chan
+                 input-chan
+                 output-chan] :as channel-controls}
+         :channel-controls} (game.games/start-game! conn user-db-id game-control game-loop-fn)]
 
-                             ;; TODO register channel-controls
-                             (let [game-loop-fn           identity
-                                   {{:keys [control-channel
-                                            mixer
-                                            pause-chan
-                                            input-chan
-                                            output-chan] :as channel-controls}
-                                    :channel-controls} (game.games/start-game! conn user-db-id game-control game-loop-fn)]
-                               ))]
 
-    (.start (Thread. runnable "stream-new-game-thread"))
-
+    ;; TODO register channel-controls
+    (core.async/<!! (core.async/timeout 1200))
+    ;; (game.games/set-exit! id-uuid)
+    (game.games/control-streams! control-channel channel-controls :exit)
 
     ;; D Return a cleanup fn
     (constantly nil)))

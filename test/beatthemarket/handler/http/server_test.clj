@@ -133,17 +133,22 @@
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)]
 
-    ;; A. REST Login (not WebSocket) ; creates a user
-    (test-util/login-assertion service id-token)
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation CreateGame {
+    (testing "REST Login (not WebSocket) ; creates a user"
+
+      (test-util/login-assertion service id-token))
+
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame {
                                        createGame {
                                          message
                                        }
-                                     }"}})
+                                     }"}}))
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
@@ -174,6 +179,7 @@
 
 
     (testing "REST Login (not WebSocket) ; creates a user"
+
       (test-util/login-assertion service id-token))
 
 
@@ -188,6 +194,7 @@
                                        }
                                      }"}}))
 
+
     (testing "Expected data when we start streaming a new game"
 
       (let [create-result                     (test-util/<message!! 1000)
@@ -195,7 +202,6 @@
             {:keys [stocks subscriptions id]} (-> create-result :payload :data :createGame :message read-string)]
 
 
-        ;; B. NEW GAME
         (test-util/send-data {:id   987
                               :type :start
                               :payload
@@ -207,13 +213,11 @@
                                :variables {:id id}}})
 
         (let [parse-startGame-message (fn [a]
-                                        (-> a
-                                            :payload :data :createGame :message
-                                            (#(json/read-str % :key-fn keyword))))
+                                        (->> a :payload :data :startGame :message
+                                             (map read-string)))
 
-              start-result (trace (test-util/<message!! 5000))
-              ;; message                           (parse-startGame-message data)
-              ;; {:keys [id stocks subscriptions]} message
+              message (util/pprint+identity (parse-startGame-message (test-util/<message!! 2000)))
+              message (util/pprint+identity (parse-startGame-message (test-util/<message!! 2000)))
               ]
 
 
@@ -225,26 +229,26 @@
               (let [[t0-time _v0 id0] (parse-startGame-message (test-util/<message!! 1000))
                     [t1-time _v1 id1] (parse-startGame-message (test-util/<message!! 1000))]
 
-              (is (t/after?
-                    (c/from-long (Long/parseLong t1-time))
-                    (c/from-long (Long/parseLong t0-time))))
+                (is (t/after?
+                      (c/from-long (Long/parseLong t1-time))
+                      (c/from-long (Long/parseLong t0-time))))
 
-              (testing "Two ticks streamed to client, got saved to the DB"
+                (testing "Two ticks streamed to client, got saved to the DB"
 
-                (let [conn (-> state/system :persistence/datomic :conn)
+                  (let [conn (-> state/system :persistence/datomic :conn)
 
-                      tick-id0 (UUID/fromString id0)
-                      tick-id1 (UUID/fromString id1)]
+                        tick-id0 (UUID/fromString id0)
+                        tick-id1 (UUID/fromString id1)]
 
-                  (->> (d/q '[:find ?e
-                              :in $ [?tick-id ...]
-                              :where
-                              [?e :game.stock.tick/id ?tick-id]]
-                            (d/db conn)
-                            [tick-id0 tick-id1])
-                       count
-                       (= 2)
-                       is))))))))))
+                    (->> (d/q '[:find ?e
+                                :in $ [?tick-id ...]
+                                :where
+                                [?e :game.stock.tick/id ?tick-id]]
+                              (d/db conn)
+                              [tick-id0 tick-id1])
+                         count
+                         (= 2)
+                         is))))))))))
 
 (deftest buy-stock-test
 
