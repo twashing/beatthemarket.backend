@@ -212,43 +212,42 @@
                                        }"
                                :variables {:id id}}})
 
-        (let [parse-startGame-message (fn [a]
-                                        (->> a :payload :data :startGame :message
-                                             (map read-string)))
+        (core.async/<!! (core.async/timeout 5000))
 
-              message (util/pprint+identity (parse-startGame-message (test-util/<message!! 2000)))
-              message (util/pprint+identity (parse-startGame-message (test-util/<message!! 2000)))
-              ]
+        (testing "Subscription is being streamed to client"
 
+          (let [parse-startGame-message (fn [a]
+                                          (->> a :payload :data :startGame :message
+                                               (map read-string)))
 
-          ;; (is (some (into #{} stocks) subscriptions))
+                {id0 :game.stock.tick/id
+                 t0-time :game.stock.tick/trade-time}
+                (first (util/pprint+identity (parse-startGame-message (test-util/<message!! 100))))
 
+                {id1 :game.stock.tick/id
+                 t1-time :game.stock.tick/trade-time}
+                (first (util/pprint+identity (parse-startGame-message (test-util/<message!! 100))))]
 
-          #_(testing "Subscription is being streamed to client"
+            (is (t/after?
+                  (c/from-long t1-time)
+                  (c/from-long t0-time)))
 
-              (let [[t0-time _v0 id0] (parse-startGame-message (test-util/<message!! 1000))
-                    [t1-time _v1 id1] (parse-startGame-message (test-util/<message!! 1000))]
+            (testing "Two ticks streamed to client, got saved to the DB"
 
-                (is (t/after?
-                      (c/from-long (Long/parseLong t1-time))
-                      (c/from-long (Long/parseLong t0-time))))
+              (let [conn (-> state/system :persistence/datomic :conn)
 
-                (testing "Two ticks streamed to client, got saved to the DB"
+                    tick-id0 id0
+                    tick-id1 id1]
 
-                  (let [conn (-> state/system :persistence/datomic :conn)
-
-                        tick-id0 (UUID/fromString id0)
-                        tick-id1 (UUID/fromString id1)]
-
-                    (->> (d/q '[:find ?e
-                                :in $ [?tick-id ...]
-                                :where
-                                [?e :game.stock.tick/id ?tick-id]]
-                              (d/db conn)
-                              [tick-id0 tick-id1])
-                         count
-                         (= 2)
-                         is))))))))))
+                (->> (d/q '[:find ?e
+                            :in $ [?tick-id ...]
+                            :where
+                            [?e :game.stock.tick/id ?tick-id]]
+                          (d/db conn)
+                          [tick-id0 tick-id1])
+                     count
+                     (= 2)
+                     is)))))))))
 
 (deftest buy-stock-test
 
