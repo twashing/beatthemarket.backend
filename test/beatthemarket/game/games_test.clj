@@ -45,8 +45,7 @@
               game-loop-fn (fn [a]
                              (core.async/>!! test-chan a))
 
-              {{:keys [control-channel
-                       mixer
+              {{:keys [mixer
                        pause-chan
                        input-chan
                        output-chan] :as channel-controls}
@@ -112,7 +111,7 @@
                              (= 2)
                              is)))))))
 
-          (game.games/control-streams! channel-controls :exit))))))
+          (game.games/control-streams! control-channel channel-controls :exit))))))
 
 (deftest buy-stock!-test
 
@@ -121,17 +120,17 @@
          userId         :user/external-uid} (test-util/generate-user! conn)
         sink-fn                             identity
         {{gameId :game/id :as game} :game
+         control-channel            :control-channel
          stock-stream-channel       :stock-stream-channel
          stocks-with-tick-data      :stocks-with-tick-data
          :as                        game-control}                  (game.games/create-game! conn result-user-id sink-fn)
         test-chan                           (core.async/chan)
         game-loop-fn                        (fn [a]
                                               (core.async/>!! test-chan a))
-        {{:keys               [control-channel
-                               mixer
-                               pause-chan
-                               input-chan
-                               output-chan] :as channel-controls}
+        {{:keys                             [mixer
+                                             pause-chan
+                                             input-chan
+                                             output-chan] :as channel-controls}
          :channel-controls}                 (game.games/start-game! conn result-user-id game-control game-loop-fn)
         game-user-subscription              (-> game
                                                 :game/users first
@@ -153,7 +152,7 @@
             first
             second)]
 
-    (game.games/control-streams! channel-controls :exit)
+    (game.games/control-streams! control-channel channel-controls :exit)
 
     (testing "We are checking game is current and belongs to the user"
       (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
@@ -204,17 +203,17 @@
          userId         :user/external-uid}       (test-util/generate-user! conn)
         sink-fn                                   identity
         {{gameId :game/id :as game} :game
+         control-channel            :control-channel
          stock-stream-channel       :stock-stream-channel
          stocks-with-tick-data      :stocks-with-tick-data
          :as                        game-control} (game.games/create-game! conn result-user-id sink-fn)
         test-chan                                 (core.async/chan)
         game-loop-fn                              (fn [a]
                                                     (core.async/>!! test-chan a))
-        {{:keys                             [control-channel
-                                             mixer
-                                             pause-chan
-                                             input-chan
-                                             output-chan] :as channel-controls}
+        {{:keys                                           [mixer
+                                                           pause-chan
+                                                           input-chan
+                                                           output-chan] :as channel-controls}
          :channel-controls}                       (game.games/start-game! conn result-user-id game-control game-loop-fn)
         game-user-subscription                    (-> game
                                                       :game/users first
@@ -239,7 +238,7 @@
             first
             second)]
 
-    (game.games/control-streams! channel-controls :exit)
+    (game.games/control-streams! control-channel channel-controls :exit)
 
     (testing "We are checking game is current and belongs to the user"
       (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))

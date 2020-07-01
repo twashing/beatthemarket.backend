@@ -172,7 +172,7 @@
                                :stock-stream-channel (chan 1 (map blocking-transact))
                                :control-channel      (chan 1)
                                :close-sink-fn        (partial sink-fn nil)
-                               :sink-fn              #(sink-fn (json/write-str %))}]
+                               :sink-fn              #(sink-fn {:message %})}]
 
     (register-game-control! game game-control)
     game-control))
@@ -249,7 +249,7 @@
     (let [[v ch] (core.async/alts! [control-channel
                                     (core.async/timeout tick-sleep-ms)])]
 
-      (println (format "B. go-loop / value / %s" v))
+      ;; (println (format "B. go-loop / value / %s" v))
       (case v
         :exit (close-sink-fn)
         (let [vv (<! output-chan)]

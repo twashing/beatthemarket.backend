@@ -212,7 +212,7 @@
                                        }"
                                :variables {:id id}}})
 
-        (core.async/<!! (core.async/timeout 5000))
+        (core.async/<!! (core.async/timeout 1000))
 
         (testing "Subscription is being streamed to client"
 
@@ -220,13 +220,14 @@
                                           (->> a :payload :data :startGame :message
                                                (map read-string)))
 
-                {id0 :game.stock.tick/id
+                ;; NOTE I (unfortunately) have to futz around with the timing of collecting messages
+                {id0     :game.stock.tick/id
                  t0-time :game.stock.tick/trade-time}
-                (first (util/pprint+identity (parse-startGame-message (test-util/<message!! 100))))
+                (first (parse-startGame-message (test-util/<message!! 10000)))
 
-                {id1 :game.stock.tick/id
+                {id1     :game.stock.tick/id
                  t1-time :game.stock.tick/trade-time}
-                (first (util/pprint+identity (parse-startGame-message (test-util/<message!! 100))))]
+                (first (parse-startGame-message (test-util/<message!! 5000)))]
 
             (is (t/after?
                   (c/from-long t1-time)
@@ -268,7 +269,8 @@
           {user-id :db/id}                  (ffirst (persistence.user/user-by-email conn email))
           sink-fn                           identity
           {{game-id :game/id :as game} :game
-           :as                game-control} (game.games/create-game! conn user-id sink-fn)
+           control-channel             :control-channel
+           :as                         game-control} (game.games/create-game! conn user-id sink-fn)
           game-user-subscription            (-> game
                                                 :game/users first
                                                 :game.user/subscriptions first)
@@ -276,37 +278,38 @@
           test-chan                         (core.async/chan)
           game-loop-fn                      (fn [a]
                                               (core.async/>!! test-chan a))
-          {{:keys                             [control-channel
-                                               mixer
-                                               pause-chan
-                                               input-chan
-                                               output-chan] :as channel-controls}
-           :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)
+          {{:keys                                           [mixer
+                                                             pause-chan
+                                                             input-chan
+                                                             output-chan] :as channel-controls}
+           :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)]
 
-          {tick-price :game.stock.tick/close
-           tick-time  :game.stock.tick/trade-time
-           tick-id    :game.stock.tick/id}
-          (-> (<!! test-chan)
-              (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
-              first
-              second)]
+      (core.async/<!! (core.async/timeout 7000))
+      (game.games/control-streams! control-channel channel-controls :exit)
 
+      (let [{tick-price :game.stock.tick/close
+             tick-time  :game.stock.tick/trade-time
+             tick-id    :game.stock.tick/id}
+            (-> (<!! test-chan)
+                (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
+                first
+                second)]
 
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "mutation BuyStock($input: BuyStock!) {
+        (test-util/send-data {:id   987
+                              :type :start
+                              :payload
+                              {:query "mutation BuyStock($input: BuyStock!) {
                                        buyStock(input: $input) {
                                          message
                                        }
                                      }"
 
-                             :variables {:input {:gameId      (str game-id)
-                                                 :stockId     (str stock-id)
-                                                 :stockAmount 100
-                                                 :tickId      (str tick-id)
-                                                 :tickTime    (.intValue (Long. tick-time))
-                                                 :tickPrice   tick-price}}}})))
+                               :variables {:input {:gameId      (str game-id)
+                                                   :stockId     (str stock-id)
+                                                   :stockAmount 100
+                                                   :tickId      (str tick-id)
+                                                   :tickTime    (.intValue (Long. tick-time))
+                                                   :tickPrice   tick-price}}}}))))
 
   (let [ack (test-util/<message!! 1000)]
 
@@ -332,7 +335,8 @@
           {user-id :db/id}                  (ffirst (persistence.user/user-by-email conn email))
           sink-fn                           identity
           {{game-id :game/id :as game} :game
-           :as                game-control} (game.games/create-game! conn user-id sink-fn)
+           control-channel             :control-channel
+           :as                         game-control} (game.games/create-game! conn user-id sink-fn)
           game-user-subscription            (-> game
                                                 :game/users first
                                                 :game.user/subscriptions first)
@@ -340,59 +344,60 @@
           test-chan                         (core.async/chan)
           game-loop-fn                      (fn [a]
                                               (core.async/>!! test-chan a))
-          {{:keys                             [control-channel
-                                               mixer
-                                               pause-chan
-                                               input-chan
-                                               output-chan] :as channel-controls}
-           :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)
+          {{:keys                                           [mixer
+                                                             pause-chan
+                                                             input-chan
+                                                             output-chan] :as channel-controls}
+           :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)]
 
-          {tick-price :game.stock.tick/close
-           tick-time  :game.stock.tick/trade-time
-           tick-id    :game.stock.tick/id}
-          (-> (<!! test-chan)
-              (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
-              first
-              second)]
+      (core.async/<!! (core.async/timeout 7000))
+      (game.games/control-streams! control-channel channel-controls :exit)
 
+      (let [{tick-price :game.stock.tick/close
+             tick-time  :game.stock.tick/trade-time
+             tick-id    :game.stock.tick/id}
+            (-> (<!! test-chan)
+                (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
+                first
+                second)]
 
-      (testing "Initial stock purchase"
-        (test-util/send-data {:id   987
-                              :type :start
-                              :payload
-                              {:query "mutation BuyStock($input: BuyStock!) {
+        (testing "Initial stock purchase"
+          (test-util/send-data {:id   987
+                                :type :start
+                                :payload
+                                {:query "mutation BuyStock($input: BuyStock!) {
                                        buyStock(input: $input) {
                                          message
                                        }
                                      }"
 
-                               :variables {:input {:gameId      (str game-id)
-                                                   :stockId     (str stock-id)
-                                                   :stockAmount 100
-                                                   :tickId      (str tick-id)
-                                                   :tickTime    (.intValue (Long. tick-time))
-                                                   :tickPrice   tick-price}}}})
-        (test-util/<message!! 1000)
-        (test-util/<message!! 1000))
+                                 :variables {:input {:gameId      (str game-id)
+                                                     :stockId     (str stock-id)
+                                                     :stockAmount 100
+                                                     :tickId      (str tick-id)
+                                                     :tickTime    (.intValue (Long. tick-time))
+                                                     :tickPrice   tick-price}}}})
+          (test-util/<message!! 1000)
+          (test-util/<message!! 1000))
 
-      (testing "Now selling the stock"
-        (test-util/send-data {:id   987
-                              :type :start
-                              :payload
-                              {:query "mutation SellStock($input: SellStock!) {
+        (testing "Now selling the stock"
+          (test-util/send-data {:id   987
+                                :type :start
+                                :payload
+                                {:query "mutation SellStock($input: SellStock!) {
                                        sellStock(input: $input) {
                                          message
                                        }
                                      }"
 
-                               :variables {:input {:gameId      (str game-id)
-                                                   :stockId     (str stock-id)
-                                                   :stockAmount 100
-                                                   :tickId      (str tick-id)
-                                                   :tickTime    (.intValue (Long. tick-time))
-                                                   :tickPrice   tick-price}}}})
+                                 :variables {:input {:gameId      (str game-id)
+                                                     :stockId     (str stock-id)
+                                                     :stockAmount 100
+                                                     :tickId      (str tick-id)
+                                                     :tickTime    (.intValue (Long. tick-time))
+                                                     :tickPrice   tick-price}}}})
 
-        (let [ack (test-util/<message!! 1000)]
+          (let [ack (test-util/<message!! 1000)]
 
-          (is (= {:type "data" :id 987 :payload {:data {:sellStock {:message "Ack"}}}}
-                 ack)))))))
+            (is (= {:type "data" :id 987 :payload {:data {:sellStock {:message "Ack"}}}}
+                   ack))))))))

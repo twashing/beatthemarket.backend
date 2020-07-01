@@ -119,7 +119,7 @@
 
 
     ;; TODO register channel-controls
-    (core.async/<!! (core.async/timeout 5000))
+    (core.async/<!! (core.async/timeout 10000))
     ;; (game.games/set-exit! id-uuid)
     (game.games/control-streams! control-channel channel-controls :exit)
 
