@@ -29,11 +29,10 @@
 (defn ->combined-data-sequence
 
   ([beta-configurations]
-   (let [named-sequences [:datasource.sine/generate-sine-sequence
-                          :datasource.sine/generate-cosine-sequence
-                          :datasource.oscillating/generate-oscillating-sequence]]
-
-     (apply (partial ->combined-data-sequence beta-configurations) named-sequences)))
+   (->> integrant.repl.state/config
+        :game/game
+        :data-generators
+        (apply (partial ->combined-data-sequence beta-configurations))))
 
   ([beta-configurations & named-sequences]
    (->> (->data-sequences beta-configurations)

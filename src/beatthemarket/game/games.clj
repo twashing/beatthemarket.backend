@@ -68,20 +68,21 @@
       (let [message (format "Submitted price [%s] does not match price from tickId" tickPrice)]
         (rop/fail (ex-info message tick))))))
 
+(defn stock->tick-history [conn stockId]
+  (->> stockId
+       (d/q '[:find (pull ?e [*])
+              :in $ ?stock-id
+              :where
+              [?e :game.stock/id ?stock-id]]
+            (d/db conn))
+       ffirst
+       :game.stock/price-history
+       (sort-by :game.stock.tick/trade-time >)))
+
 (defn- latest-tick? [{:keys [conn tickId stockId] :as inputs}]
 
-  ;; TODO extract stock->tick-history
   (let [latest-tick-threshold (get (:game/game integrant.repl.state/config) :latest-tick-threshold 2)
-        {tick-history :game.stock/price-history :as stock}
-        (ffirst
-          (d/q '[:find (pull ?e [*])
-                 :in $ ?stock-id
-                 :where
-                 [?e :game.stock/id ?stock-id]]
-               (d/db conn)
-               stockId))
-
-        tick-history-sorted (sort-by :game.stock.tick/trade-time > tick-history)
+        tick-history-sorted (stock->tick-history conn stockId)
         latest-tick-comparator (->> (take latest-tick-threshold tick-history-sorted)
                                     (map :game.stock.tick/id)
                                     set)]
@@ -150,8 +151,10 @@
          assoc (:game/id game) game-control))
 
 (defn- bind-data-sequence [a]
-  (->> (datasource/->combined-data-sequence
-         datasource.core/beta-configurations :datasource.sine/generate-sine-sequence)
+  (->> integrant.repl.state/config
+       :game/game
+       :data-generators
+       (apply (partial datasource/->combined-data-sequence datasource.core/beta-configurations))
        (datasource/combined-data-sequence-with-datetime (t/now))
        (map #(conj % (UUID/randomUUID)))
        (assoc a :data-sequence)))
@@ -487,34 +490,6 @@
       :channel-controls channel-controls})))
 
 ;; CALCULATION
-(defn calculate-profit-loss-test []
-  )
+(defn profit-loss-by-current-equity [])
 
-(comment
-
-  (initialize-game!)
-  (def result *1)
-
-
-  (-> repl.state/system :game/games)
-
-
-  (>!! control-channel :foo)
-  (>!! control-channel :exit)
-
-  (def tick-sleep-ms 500)
-  (def control-channel (chan))
-  (let [data-sequence-channel (chan)]
-
-    (core.async/onto-chan data-sequence-channel (range))
-
-    (go-loop []
-      (let [[v ch] (core.async/alts! [(core.async/timeout tick-sleep-ms)
-                                      control-channel])]
-        (if (= :exit v)
-          (println v)
-          (do
-            (println (<! data-sequence-channel))
-            (recur))))))
-
-  (def result *1))
+(defn profit-loss-by-transaction-history [])

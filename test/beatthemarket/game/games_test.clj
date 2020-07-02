@@ -218,10 +218,7 @@
         game-user-subscription                    (-> game
                                                       :game/users first
                                                       :game.user/subscriptions first)
-        stockId                                   (-> game
-                                                      :game/users first
-                                                      :game.user/subscriptions first
-                                                      :game.stock/id)
+        stockId                                   (:game.stock/id game-user-subscription)
         stockAmount                               100
 
         {tickPrice0 :game.stock.tick/close

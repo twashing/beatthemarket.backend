@@ -6,6 +6,9 @@
  :game {:starting-balance      100000.00
         :tick-sleep-ms         1000
         :latest-tick-threshold 2
+        :data-generators [:datasource.sine/generate-sine-sequence
+                          :datasource.sine/generate-cosine-sequence
+                          :datasource.oscillating/generate-oscillating-sequence]
         :levels                {;; thousands
                                 1 {:profit-threshold 1000
 
