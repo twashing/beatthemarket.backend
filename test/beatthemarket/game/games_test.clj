@@ -8,6 +8,8 @@
             [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
             [beatthemarket.game.games :as game.games]
+            [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util])
   (:import [java.util UUID]
@@ -287,4 +289,144 @@
             expected-credit-value        credit-value
             expected-credit-account-name credit-account-name))))))
 
-(deftest calculate-profit-loss-test)
+(deftest calculate-profit-loss-test
+
+  (is true)
+
+  (let [;; A
+        conn                                      (-> repl.state/system :persistence/datomic :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid}       (test-util/generate-user! conn)
+
+        ;; B
+        tick-length 4
+        data-sequence-up (iterate (partial + 10) 100.00)
+        data-sequence-A (take tick-length data-sequence-up)
+        data-sequence-B (take 5 data-sequence-up)
+        data-sequence-C [100 110 105 120 110 125 130]
+
+        ;; C
+        sink-fn                                   identity
+        {{gameId :game/id :as game} :game
+         control-channel            :control-channel
+         stock-stream-channel       :stock-stream-channel
+         stocks-with-tick-data      :stocks-with-tick-data
+         :as                        game-control} (game.games/create-game! conn result-user-id sink-fn data-sequence-A)
+        test-chan                                 (core.async/chan)
+        game-loop-fn                              (fn [a]
+                                                    (when a (core.async/>!! test-chan a)))
+
+        ;; D
+        {{:keys                                           [mixer
+                                                           pause-chan
+                                                           input-chan
+                                                           output-chan] :as channel-controls}
+         :channel-controls}                       (game.games/start-game! conn result-user-id game-control game-loop-fn)
+        game-user-subscription                    (-> game
+                                                      :game/users first
+                                                      :game.user/subscriptions first)
+        stockId                                   (:game.stock/id game-user-subscription)
+        subscription-ticks (->> (repeatedly #(<!! test-chan))
+                                (take tick-length)
+                                (map #(second (first (game.games/narrow-stock-tick-pairs-by-subscription % game-user-subscription)))))
+
+        stockAmount 100
+        {tickId    :game.stock.tick/id
+         tickPrice :game.stock.tick/close} (-> subscription-ticks
+                                               last
+                                               (select-keys [:game.stock.tick/id :game.stock.tick/close]))
+
+
+        local-transact-stock! (fn [{tickId      :game.stock.tick/id
+                                   tickPrice   :game.stock.tick/close
+                                   op          :op
+                                   stockAmount :stockAmount}]
+
+                                (case op
+                                  :buy (game.games/buy-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
+                                  :sell (game.games/sell-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
+                                  :noop))]
+
+    (->> (map #(merge %1 %2)
+              subscription-ticks
+              [{}
+               {:op :buy :stockAmount 75}
+               {:op :buy :stockAmount 25}
+               {:op :sell :stockAmount 100}])
+         (run! local-transact-stock!))
+
+    ;; (game.games/buy-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice))
+
+
+    ;; (println (count ticks))
+    ;; (util/pprint+identity subscription-ticks)
+    (game.games/control-streams! control-channel channel-controls :exit)
+
+
+    ;; (persistence.core/pull-entity conn result-user-id)
+
+    ;; CASH + STOCK Accounts
+    ;;  (util/pprint+identity (bookkeeping.persistence/stock-accounts-by-user-entity conn result-user-id))
+    ;;  (util/pprint+identity (bookkeeping.persistence/stock-accounts-by-user-for-game conn result-user-id gameId))
+
+
+
+    ;; > price-history-by-stock-id
+    ;; :game.stock/price-history
+    ;;
+    ;; :game :db/id
+    ;; :game/id
+
+
+    #_(testing "Ensure we have the stock on hand before selling"
+      (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
+
+      (testing "Returned Tentry matches what was submitted"
+        (let [initial-debit-value         0.0
+              debit-value-change          (Float. (format "%.2f" (* stockAmount tickPrice1)))
+
+              result-tentry (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))]))))
+  )
+
+
+;; ;; C.
+;; ;; Calculate Profit / Loss
+;;
+;;
+;; > Profit / Loss
+;;
+;; - for this game
+;;
+;; Equity - Value of starting position
+;; (Value of all assets) - Value of starting position
+;; (Cash + (stock amount * price)) - (Starting cash position)
+;;
+;;
+;;
+;;
+;; >> Verification
+;; should equal sum of all profits + losses from trades
+;;
+;;
+;; ====
+;;
+;; i. (Cash + (stock amount * price)) >> current-equity(user, game) <<
+;;
+;; >> profit-loss-by-current-equity <<
+;;
+;; game -> user -> cash-account-by-user
+;; game -> stocks -> stock-account-by-user
+;; game -> stocks ->
+;; latest-stock-price
+;; stock->tick-history
+;;
+;; ====
+;;
+;; >> transaction-history <<
+;; >> profit-loss-by-transaction-history <<
+;;
+;; :game.user/portfolio
+;; :bookkeeping.portfolio
+;; :bookkeeping.portfolio/journals
+;; :bookkeeping.journal/entries
+;; :bookkeeping.tentry

@@ -2,6 +2,7 @@
   (:require [clojure.core.async :as core.async
              :refer [go go-loop chan close! timeout alts! >! <! >!!]]
             [clojure.core.async.impl.protocols]
+            [clojure.core.match :refer [match]]
             [clj-time.core :as t]
             [clojure.data.json :as json]
             [datomic.client.api :as d]
@@ -93,98 +94,127 @@
         (rop/fail (ex-info message {:tick-history-sorted
                                     (take 5 tick-history-sorted)}))))))
 
-(defn buy-stock! [conn userId gameId stockId stockAmount tickId tickPrice]
+(defn buy-stock!
 
-  (let [validation-inputs {:conn conn
-                           :userId userId
-                           :gameId gameId
-                           :stockId stockId
-                           :stockAmount stockAmount
-                           :tickId tickId
-                           :tickPrice tickPrice}
+  ([conn userId gameId stockId stockAmount tickId tickPrice]
+   (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice true))
 
-        result (rop/>>= validation-inputs
-                        game-iscurrent-and-belongsto-user?
-                        submitted-price-matches-tick?
-                        latest-tick?)]
+  ([conn userId gameId stockId stockAmount tickId tickPrice validate?]
 
-    (if (= clojure.lang.ExceptionInfo (type result))
+   (let [validation-inputs {:conn        conn
+                            :userId      userId
+                            :gameId      gameId
+                            :stockId     stockId
+                            :stockAmount stockAmount
+                            :tickId      tickId
+                            :tickPrice   tickPrice}]
 
-      (throw result)
+     (match [validate? (rop/>>= validation-inputs
+                                game-iscurrent-and-belongsto-user?
+                                submitted-price-matches-tick?
+                                latest-tick?)]
 
-      (let [extract-id  (comp :db/id ffirst)
-            user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))
-            game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-            stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
+            [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
+            [_ _] (let [extract-id  (comp :db/id ffirst)
+                        user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))
+                        game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+                        stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
-        (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))))
+                    (trace [game-db-id user-db-id stock-db-id stockAmount tickPrice])
+                    (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice))))))
 
-(defn sell-stock! [conn userId gameId stockId stockAmount tickId tickPrice]
+(defn sell-stock!
 
-  (let [validation-inputs {:conn conn
-                           :userId userId
-                           :gameId gameId
-                           :stockId stockId
-                           :stockAmount stockAmount
-                           :tickId tickId
-                           :tickPrice tickPrice}
+  ([conn userId gameId stockId stockAmount tickId tickPrice]
+   (sell-stock! conn userId gameId stockId stockAmount tickId tickPrice true))
 
-        result (rop/>>= validation-inputs
-                        game-iscurrent-and-belongsto-user?
-                        submitted-price-matches-tick?
-                        latest-tick?)]
+  ([conn userId gameId stockId stockAmount tickId tickPrice validate?]
 
-    (if (= clojure.lang.ExceptionInfo (type result))
+   (let [validation-inputs {:conn conn
+                            :userId userId
+                            :gameId gameId
+                            :stockId stockId
+                            :stockAmount stockAmount
+                            :tickId tickId
+                            :tickPrice tickPrice}]
 
-      (throw result)
+     (match [validate? (rop/>>= validation-inputs
+                                game-iscurrent-and-belongsto-user?
+                                submitted-price-matches-tick?
+                                latest-tick?)]
 
-      (let [extract-id  (comp :db/id ffirst)
-            user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))
-            game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-            stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
+            [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
+            [_ _] (let [extract-id  (comp :db/id ffirst)
+                        user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))
+                        game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+                        stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
-        (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice)))))
+                    (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice))))))
 
 ;; CREATE
 (defn register-game-control! [game game-control]
   (swap! (:game/games repl.state/system)
          assoc (:game/id game) game-control))
 
-(defn- bind-data-sequence [a]
-  (->> integrant.repl.state/config
+(defn ->data-sequence
+
+  ([]
+   (-> integrant.repl.state/config
        :game/game
        :data-generators
-       (apply (partial datasource/->combined-data-sequence datasource.core/beta-configurations))
-       (datasource/combined-data-sequence-with-datetime (t/now))
-       (map #(conj % (UUID/randomUUID)))
-       (assoc a :data-sequence)))
+       ->data-sequence))
 
-(defn initialize-game! [conn user-entity sink-fn]
+  ([data-sequence]
+   (apply (partial datasource/->combined-data-sequence datasource.core/beta-configurations) data-sequence)))
 
-  (let [stocks            (game.core/generate-stocks! 4)
-        game              (game.core/initialize-game! conn user-entity stocks)
-        blocking-transact (fn [entities]
-                            (persistence.datomic/transact-entities! conn entities)
-                            entities)
+(defn- bind-data-sequence
 
-        stocks                (:game/stocks game)
-        stocks-with-tick-data (map bind-data-sequence stocks)
-        game-control          {:game                  game
-                               :tick-sleep-ms         (-> integrant.repl.state/config :game/game :tick-sleep-ms)
-                               :stocks-with-tick-data stocks-with-tick-data
+  ([a]
+   (bind-data-sequence (->data-sequence) a))
 
-                               ;; B. transact-entities in xform
-                               :stock-stream-channel (chan 1 (map blocking-transact))
-                               :control-channel      (chan 1)
-                               :close-sink-fn        (partial sink-fn nil)
-                               :sink-fn              #(sink-fn {:message %})}]
+  ([data-sequence a]
+   (->> data-sequence
+        (datasource/combined-data-sequence-with-datetime (t/now))
+        (map #(conj % (UUID/randomUUID)))
+        (assoc a :data-sequence))))
 
-    (register-game-control! game game-control)
-    game-control))
+(defn initialize-game!
 
-(defn create-game! [conn user-id sink-fn]
-  (let [user-entity (hash-map :db/id user-id)]
-    (initialize-game! conn user-entity sink-fn)))
+  ([conn user-entity sink-fn]
+
+   (initialize-game! conn user-entity sink-fn (->data-sequence)))
+
+  ([conn user-entity sink-fn data-sequence]
+
+   (let [stocks            (game.core/generate-stocks! 4)
+         game              (game.core/initialize-game! conn user-entity stocks)
+         blocking-transact (fn [entities]
+                             (persistence.datomic/transact-entities! conn entities)
+                             entities)
+
+         stocks                (:game/stocks game)
+         stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
+         game-control          {:game                  game
+                                :tick-sleep-ms         (-> integrant.repl.state/config :game/game :tick-sleep-ms)
+                                :stocks-with-tick-data stocks-with-tick-data
+
+                                ;; B. transact-entities in xform
+                                :stock-stream-channel (chan 1 (map blocking-transact))
+                                :control-channel      (chan 1)
+                                :close-sink-fn        (partial sink-fn nil)
+                                :sink-fn              #(sink-fn {:message %})}]
+
+     (register-game-control! game game-control)
+     game-control)))
+
+(defn create-game!
+
+  ([conn user-id sink-fn]
+   (create-game! conn user-id sink-fn (->data-sequence)))
+
+  ([conn user-id sink-fn data-sequence]
+   (let [user-entity (hash-map :db/id user-id)]
+     (initialize-game! conn user-entity sink-fn data-sequence))))
 
 ;; START
 (defn onto-open-chan
@@ -490,6 +520,20 @@
       :channel-controls channel-controls})))
 
 ;; CALCULATION
-(defn profit-loss-by-current-equity [])
+
+;; i. (Cash + (stock amount * price)) >> current-equity(user, game) <<
+;;
+;; >> profit-loss-by-current-equity <<
+;;
+;; game -> user -> cash-account-by-user
+;; game -> stocks -> stock-account-by-user
+;; game -> stocks ->
+;; latest-stock-price
+;; stock->tick-history
+
+
+(defn profit-loss-by-current-equity []
+
+  )
 
 (defn profit-loss-by-transaction-history [])

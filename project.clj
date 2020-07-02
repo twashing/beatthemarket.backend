@@ -20,6 +20,7 @@
                  [org.clojure/core.async "0.4.474"]
                  [org.clojure/data.csv "1.0.0"]
                  [org.clojure/data.json "1.0.0"]
+                 [org.clojure/core.match "1.0.0"]
                  [org.clojure/tools.cli "1.0.194"]
 
                  ;; Remove this line and uncomment one of the next lines to
