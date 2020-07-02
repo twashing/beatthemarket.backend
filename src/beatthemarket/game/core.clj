@@ -3,11 +3,11 @@
             [clj-time.coerce :as c]
             [com.rpl.specter :refer [select-one  pred ALL]]
             [integrant.core :as ig]
-            [beatthemarket.bookkeeping :as bookkeeping]
+            [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util]
             [datomic.client.api :as d])
   (:import [java.util UUID]))
@@ -24,8 +24,8 @@
 (defn ->game [game-level stocks user]
 
   (let [subscriptions          (take 1 stocks)
-        portfolio-with-journal (beatthemarket.bookkeeping/->portfolio
-                                 (beatthemarket.bookkeeping/->journal))
+        portfolio-with-journal (bookkeeping/->portfolio
+                                 (bookkeeping/->journal))
 
         game-users (-> (hash-map
                          :game.user/user user
@@ -51,8 +51,8 @@
              :game.stock/symbol symbol)
      (util/exists? price-history) (assoc :game.stock/price-history price-history))))
 
-(defn generate-stocks! [no-of-stocks]
-  (->> (name-generator/generate-names no-of-stocks)
+(defn generate-stocks! [amount]
+  (->> (name-generator/generate-names amount)
        (map (juxt :stock-name :stock-symbol))
        (map #(apply ->stock %))
        (map persistence.core/bind-temporary-id)))
@@ -92,18 +92,18 @@
 
 
   (def journal
-    (->> (beatthemarket.bookkeeping/->journal)
+    (->> (bookkeeping/->journal)
          (persistence.datomic/transact-entities! conn)))
 
 
   (def portfolio
-    (->> (beatthemarket.bookkeeping/->portfolio)
+    (->> (bookkeeping/->portfolio)
          (persistence.datomic/transact-entities! conn)))
 
 
   (def composite-portfolio
-    (->> (beatthemarket.bookkeeping/->journal)
-         beatthemarket.bookkeeping/->portfolio
+    (->> (bookkeeping/->journal)
+         bookkeeping/->portfolio
          (persistence.datomic/transact-entities! conn)))
 
 
@@ -151,7 +151,7 @@
 
   (require '[integrant.repl.state :as repl.state]
            '[beatthemarket.test-util :as test-util]
-           '[beatthemarket.bookkeeping :as bookkeeping]
+           '[beatthemarket.bookkeeping.core :as bookkeeping]
            '[beatthemarket.iam.authentication :as iam.auth]
            '[beatthemarket.iam.user :as iam.user])
 
@@ -255,8 +255,8 @@
 (comment ;; Game
 
   (let [;; Create a bookkeeping book
-        portfolio+journal (->> (beatthemarket.bookkeeping/->journal)
-                               beatthemarket.bookkeeping/->portfolio)
+        portfolio+journal (->> (bookkeeping/->journal)
+                               bookkeeping/->portfolio)
 
         ;; Generate stocks + first subscription
         stocks        (->> [["Sun Ra Inc" "SUN"]

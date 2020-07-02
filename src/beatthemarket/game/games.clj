@@ -16,10 +16,10 @@
             [beatthemarket.game.core :as game.core]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.bookkeeping :as bookkeeping])
+            [beatthemarket.bookkeeping.core :as bookkeeping])
   (:import [java.util UUID]))
 
 
@@ -69,6 +69,8 @@
         (rop/fail (ex-info message tick))))))
 
 (defn- latest-tick? [{:keys [conn tickId stockId] :as inputs}]
+
+  ;; TODO extract stock->tick-history
   (let [latest-tick-threshold (get (:game/game integrant.repl.state/config) :latest-tick-threshold 2)
         {tick-history :game.stock/price-history :as stock}
         (ffirst
@@ -110,7 +112,7 @@
       (throw result)
 
       (let [extract-id  (comp :db/id ffirst)
-            user-db-id  (extract-id (persistence.user/user-by-external-uid conn userId))
+            user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))
             game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
             stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
@@ -136,7 +138,7 @@
       (throw result)
 
       (let [extract-id  (comp :db/id ffirst)
-            user-db-id  (extract-id (persistence.user/user-by-external-uid conn userId))
+            user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))
             game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
             stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
@@ -223,15 +225,6 @@
 
     [e f]))
 
-(defn set-exit! [id-uuid]
-  (swap! (:game/games repl.state/system)
-         update-in [id-uuid] #(assoc % :exit true))
-
-  (println "Zzz " (-> repl.state/system :game/games deref (get id-uuid) keys)))
-
-(defn exit-game? [id-uuid]
-  (-> repl.state/system :game/games deref (get id-uuid) :exit))
-
 (defn control-streams! [control-channel {:keys [mixer pause-chan]} command]
   (case command
     :exit (core.async/>!! control-channel :exit)
@@ -259,13 +252,6 @@
 
 
           ;; TODO Calculations
-
-          ;; >
-          ;; Calculate Profit / Loss
-
-          ;; ...
-          ;;    ((stock-amount * current-price) across all stock accounts) +
-          ;;    current-cash-balance
 
           ;; >
           ;; Complete a Level
@@ -499,6 +485,10 @@
                            game-loop-fn)
      {:game-control     game-control
       :channel-controls channel-controls})))
+
+;; CALCULATION
+(defn calculate-profit-loss-test []
+  )
 
 (comment
 

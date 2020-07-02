@@ -289,3 +289,5 @@
             expected-debit-account-name  debit-account-name
             expected-credit-value        credit-value
             expected-credit-account-name credit-account-name))))))
+
+(deftest calculate-profit-loss-test)

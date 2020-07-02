@@ -8,7 +8,7 @@
             [beatthemarket.test-util :as test-util]
             [beatthemarket.graphql :as sut]
             [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util]))
 
 
@@ -33,7 +33,7 @@
 
           (let [conn          (-> integrant.repl.state/system :persistence/datomic :conn)
                 email-initial "twashing@gmail.com"
-                user-entity   (:db/id (ffirst (persistence.user/user-by-email conn email-initial)))
+                user-entity   (:db/id (ffirst (iam.persistence/user-by-email conn email-initial)))
 
                 expected-email         email-initial
                 expected-name          "Timothy Washington"

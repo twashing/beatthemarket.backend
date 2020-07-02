@@ -22,7 +22,7 @@
 
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.authentication :as iam.auth]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.util]
@@ -156,7 +156,7 @@
 
                              conn (-> repl.state/system :persistence/datomic :conn)]
 
-                         (if (iam.user/user-exists? (persistence.user/user-by-email conn email))
+                         (if (iam.user/user-exists? (iam.persistence/user-by-email conn email))
                            (rop/succeed input)
                            (rop/fail (ex-info "User hasn't yet been created" decoded-token)))))
 

@@ -3,9 +3,10 @@
             [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.bookkeeping :as bookkeeping]
+            [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.persistence.core :as persistence.core]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
             [beatthemarket.util :as util])
@@ -30,7 +31,7 @@
                   :uid (str (UUID/randomUUID)))
 
         ;; Add User
-        _              (persistence.user/add-user! conn checked-authentication)
+        _              (iam.user/add-user! conn checked-authentication)
         result-user-id (-> (d/q '[:find ?e
                                   :in $ ?email
                                   :where [?e :user/email ?email]]
@@ -303,7 +304,7 @@
 
   (require '[integrant.repl.state :as repl.state]
            '[beatthemarket.test-util :as test-util]
-           '[beatthemarket.bookkeeping :as bookkeeping]
+           '[beatthemarket.bookkeeping.core :as bookkeeping]
            '[beatthemarket.iam.authentication :as iam.auth]
            '[beatthemarket.iam.user :as iam.user])
 

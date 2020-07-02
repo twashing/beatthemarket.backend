@@ -1,9 +1,11 @@
-(ns beatthemarket.bookkeeping
+(ns beatthemarket.bookkeeping.core
   (:require [datomic.client.api :as d]
             [com.rpl.specter :refer [select pred ALL MAP-VALS]]
             [rop.core :as rop]
+            [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util :refer [exists?]])
   (:import [java.util UUID]))
 
@@ -162,28 +164,6 @@
     (and (every? value-equals-price-times-amount-debit? debits)
          (every? value-equals-price-times-amount-credit? credits))))
 
-(defn cash-account-by-user
-
-  ([conn user-id]
-   (cash-account-by-user (persistence.core/pull-entity conn user-id)))
-
-  ([user-pulled]
-   (->> user-pulled
-        :user/accounts
-        (filter #(= "Cash" (:bookkeeping.account/name %)))
-        first)))
-
-(defn equity-account-by-user
-
-  ([conn user-id]
-   (equity-account-by-user (persistence.core/pull-entity conn user-id)))
-
-  ([user-pulled]
-   (->> user-pulled
-        :user/accounts
-        (filter #(= "Equity" (:bookkeeping.account/name %)))
-        first)))
-
 (defn create-stock-account! [conn user-entity stock-entity]
 
   (let [starting-balance         0.0
@@ -232,7 +212,8 @@
       (rop/fail (ex-info "No game bound to id" inputs)))))
 
 (defn- user-exists? [{:keys [conn user-id] :as inputs}]
-  (let [user-pulled (try (persistence.core/pull-entity conn user-id)
+
+  (let [user-pulled (try (iam.persistence/user-by-id conn user-id)
                          (catch Throwable e nil))]
     (if (exists? user-pulled)
       (rop/succeed (assoc inputs :user-pulled user-pulled))
@@ -257,7 +238,7 @@
         debit-value                        (Float. (format "%.2f" (* stock-amount stock-price)))
         cash-account-has-sufficient-funds? (fn [{user-pulled :user-pulled :as inputs}]
                                              (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
-                                                   (cash-account-by-user user-pulled)]
+                                                   (bookkeeping.persistence/cash-account-by-user user-pulled)]
 
                                                (if (> cash-account-starting-balance debit-value)
                                                  (rop/succeed inputs)
@@ -281,7 +262,7 @@
             credit-value                       debit-value
 
             ;; ACCOUNT BALANCE UPDATES
-            updated-debit-account  (update-in (cash-account-by-user user-pulled) [:bookkeeping.account/balance] - debit-value)
+            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-user user-pulled) [:bookkeeping.account/balance] - debit-value)
             updated-credit-account (-> stock-account
                                        (update-in [:bookkeeping.account/balance] + credit-value)
                                        (update-in [:bookkeeping.account/amount] + stock-amount))
@@ -368,7 +349,7 @@
                                        :bookkeeping.account/_counter-party
                                        (update-in [:bookkeeping.account/balance] - credit-value)
                                        (update-in [:bookkeeping.account/amount] - stock-amount))
-            updated-credit-account (update-in (cash-account-by-user user-pulled) [:bookkeeping.account/balance] + debit-value)
+            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-user user-pulled) [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
             debits+credits          [(->debit updated-debit-account debit-value stock-price stock-amount)

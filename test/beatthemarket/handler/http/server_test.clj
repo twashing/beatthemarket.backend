@@ -17,7 +17,7 @@
             [io.pedestal.test :refer [response-for]]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.handler.http.service :as http.service]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util]
             [clj-time.coerce :as c])
   (:import [java.util UUID]))
@@ -212,7 +212,7 @@
                                        }"
                                :variables {:id id}}})
 
-        (core.async/<!! (core.async/timeout 1000))
+        (core.async/<!! (core.async/timeout 2000))
 
         (testing "Subscription is being streamed to client"
 
@@ -266,7 +266,7 @@
 
     (let [conn                              (-> state/system :persistence/datomic :conn)
           email                             "twashing@gmail.com"
-          {user-id :db/id}                  (ffirst (persistence.user/user-by-email conn email))
+          {user-id :db/id}                  (ffirst (iam.persistence/user-by-email conn email))
           sink-fn                           identity
           {{game-id :game/id :as game} :game
            control-channel             :control-channel
@@ -332,7 +332,7 @@
 
     (let [conn                              (-> state/system :persistence/datomic :conn)
           email                             "twashing@gmail.com"
-          {user-id :db/id}                  (ffirst (persistence.user/user-by-email conn email))
+          {user-id :db/id}                  (ffirst (iam.persistence/user-by-email conn email))
           sink-fn                           identity
           {{game-id :game/id :as game} :game
            control-channel             :control-channel
