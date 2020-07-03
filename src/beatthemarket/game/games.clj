@@ -521,17 +521,6 @@
 
 ;; CALCULATION
 
-;; i. (Cash + (stock amount * price)) >> current-equity(user, game) <<
-;;
-;; >> profit-loss-by-current-equity <<
-;;
-;; game -> user -> cash-account-by-user
-;; game -> stocks -> stock-account-by-user
-;; game -> stocks ->
-;; latest-stock-price
-;; stock->tick-history
-
-
 (defn profit-loss-by-current-equity
   " Profit Calculation
 

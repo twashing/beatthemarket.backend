@@ -298,10 +298,7 @@
 
         ;; B
         tick-length 4
-        data-sequence-up (iterate (partial + 10) 100.00)
-        data-sequence-A (take tick-length data-sequence-up)
-        data-sequence-B (take 5 data-sequence-up)
-        data-sequence-C [100 110 105 120 110 125 130]
+        data-sequence-A (take tick-length (iterate (partial + 10) 100.00))
 
         ;; C create-game!
         sink-fn                                   identity
@@ -353,18 +350,6 @@
 
     (game.games/control-streams! control-channel channel-controls :exit)
 
-
-    ;; CASH Account
-    ;; (util/pprint+identity (bookkeeping.persistence/cash-account-by-user conn result-user-id))
-
-    ;; STOCK Accounts
-    ;; (util/pprint+identity (bookkeeping.persistence/stock-accounts-by-user-for-game conn result-user-id gameId))
-
-    ;; TODO
-    ;; (util/pprint+identity (game.games/profit-loss-by-current-equity conn result-user-id gameId))
-
-    101750.0
-
     ;; > price-history-by-stock-id
     ;; :game.stock/price-history
     ;;
@@ -398,37 +383,113 @@
           (is (= (.floatValue expected-profit-B)
                  (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId)))))))))
 
+(deftest profit-loss-by-current-equity-B-test
+
+  (let [;; A
+        conn                                      (-> repl.state/system :persistence/datomic :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid}       (test-util/generate-user! conn)
+
+        ;; B
+        tick-length 5
+        data-sequence-B [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
+
+        ;; C create-game!
+        sink-fn                                   identity
+        {{gameId :game/id :as game} :game
+         control-channel            :control-channel
+         stock-stream-channel       :stock-stream-channel
+         stocks-with-tick-data      :stocks-with-tick-data
+         :as                        game-control} (game.games/create-game! conn result-user-id sink-fn data-sequence-B)
+        test-chan                                 (core.async/chan)
+        game-loop-fn                              (fn [a]
+                                                    (when a (core.async/>!! test-chan a)))
+
+        ;; D start-game!
+        {{:keys                                           [mixer
+                                                           pause-chan
+                                                           input-chan
+                                                           output-chan] :as channel-controls}
+         :channel-controls}                       (game.games/start-game! conn result-user-id game-control game-loop-fn)
+        game-user-subscription                    (-> game
+                                                      :game/users first
+                                                      :game.user/subscriptions first)
+        stockId                                   (:game.stock/id game-user-subscription)
+
+
+        ;; E subscription price history
+        subscription-ticks (->> (repeatedly #(<!! test-chan))
+                                (take tick-length)
+                                (map #(second (first (game.games/narrow-stock-tick-pairs-by-subscription % game-user-subscription)))))
+
+        local-transact-stock! (fn [{tickId      :game.stock.tick/id
+                                   tickPrice   :game.stock.tick/close
+                                   op          :op
+                                   stockAmount :stockAmount}]
+
+                                (case op
+                                  :buy (game.games/buy-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
+                                  :sell (game.games/sell-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
+                                  :noop))]
+
+
+    ;; F buy & sell
+    (->> (map #(merge %1 %2)
+              subscription-ticks
+              [{:op :buy :stockAmount 35}
+               {:op :buy :stockAmount 35}
+               {:op :buy :stockAmount 30}
+               {}])
+         (run! local-transact-stock!))
+
+
+    (game.games/control-streams! control-channel channel-controls :exit)
+
+    ;; > price-history-by-stock-id
+    ;; :game.stock/price-history
+    ;;
+    ;; :game :db/id
+    ;; :game/id
+
+    (testing "Initial stock purchases give us our expected profit level"
+
+      (let [expected-profit-A (+ (-> 100000.0
+                                     (#(- % (* 35 100)))
+                                     (#(- % (* 35 110)))
+                                     (#(- % (* 30 105))))
+
+                                 (-> 0
+                                     (#(+ % (* 35 100)))
+                                     (#(+ % (* 35 110)))
+                                     (#(+ % (* 30 105)))))
+
+            expected-profit-B (-> 100000.0
+                                  (#(- % (* 35 100)))
+                                  (#(- % (* 35 110)))
+                                  (#(- % (* 30 105)))
+                                  (#(+ % (* 100 110))))]
+
+        (is (= (.floatValue expected-profit-A)
+               (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId))))
+
+        (testing "Selling stocks correctly adjusts profit level"
+
+          (-> (last subscription-ticks)
+              (merge {:op :sell :stockAmount 100})
+              local-transact-stock!)
+
+          (is (= (.floatValue expected-profit-B)
+                 (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId)))))))))
+
 
 ;; ;; C.
 ;; ;; Calculate Profit / Loss
-;;
-;;
-;; > Profit / Loss
-;;
-;; - for this game
-;;
-;; Equity - Value of starting position
-;; (Value of all assets) - Value of starting position
-;; (Cash + (stock amount * price)) - (Starting cash position)
-;;
 ;;
 ;;
 ;;
 ;; >> Verification
 ;; should equal sum of all profits + losses from trades
 ;;
-;;
-;; ====
-;;
-;; i. (Cash + (stock amount * price)) >> current-equity(user, game) <<
-;;
-;; >> profit-loss-by-current-equity <<
-;;
-;; game -> user -> cash-account-by-user
-;; game -> stocks -> stock-account-by-user
-;; game -> stocks ->
-;; latest-stock-price
-;; stock->tick-history
 ;;
 ;; ====
 ;;
