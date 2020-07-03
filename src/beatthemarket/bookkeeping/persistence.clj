@@ -42,20 +42,21 @@
        user-db-id))
 
 (defn stock-accounts-by-user-for-game [conn user-db-id game-id]
-  (d/q '[:find (pull ?gs [{:bookkeeping.account/_counter-party [*]}])
-         :in $ ?e ?game-id
-         :where
-         [?e]
+  (->> (d/q '[:find (pull ?gs [{:bookkeeping.account/_counter-party [*]}])
+              :in $ ?e ?game-id
+              :where
+              [?e]
 
-         ;; Match Game to User
-         [?g :game/id ?game-id]
-         [?g :game/users ?gus]
-         [?gus :game.user/user ?e]
+              ;; Match Game to User
+              [?g :game/id ?game-id]
+              [?g :game/users ?gus]
+              [?gus :game.user/user ?e]
 
-         ;; Narrow accounts for the game
-         [?g :game/stocks ?gs]
-         [?e :user/accounts ?uas]
-         [?uas :bookkeeping.account/counter-party ?gs]]
-       (d/db conn)
-       user-db-id
-       game-id))
+              ;; Narrow accounts for the game
+              [?g :game/stocks ?gs]
+              [?e :user/accounts ?uas]
+              [?uas :bookkeeping.account/counter-party ?gs]]
+            (d/db conn)
+            user-db-id
+            game-id)
+       (map (comp :bookkeeping.account/_counter-party first))))

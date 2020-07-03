@@ -212,7 +212,6 @@
       (rop/fail (ex-info "No game bound to id" inputs)))))
 
 (defn- user-exists? [{:keys [conn user-id] :as inputs}]
-
   (let [user-pulled (try (iam.persistence/user-by-id conn user-id)
                          (catch Throwable e nil))]
     (if (exists? user-pulled)
@@ -226,6 +225,48 @@
       (rop/succeed (assoc inputs :stock-pulled stock-pulled))
       (rop/fail (ex-info "No stock bound to id" inputs)))))
 
+(defn- cash-account-has-sufficient-funds? [debit-value {user-pulled :user-pulled :as inputs}]
+  (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
+        (bookkeeping.persistence/cash-account-by-user user-pulled)]
+
+    (if (> cash-account-starting-balance debit-value)
+      (rop/succeed inputs)
+      (rop/fail (ex-info (format "Insufficient funds [%s] for purchase value [%s]"
+                                 cash-account-starting-balance
+                                 debit-value)
+                         inputs)))))
+
+(defn- stock-account-exists? [conn {stock-id :stock-id :as inputs}]
+  (try
+    (if-let [stock-account
+             (ffirst (d/q '[:find (pull ?stock-id
+                                        [:game.stock/id
+                                         {:bookkeeping.account/_counter-party [*]}])
+                            :in $ ?stock-id
+                            :where
+                            [?stock-id]]
+                          (d/db conn)
+                          stock-id))]
+      (rop/succeed (assoc inputs :stock-account stock-account)))
+    (catch Throwable e (rop/fail (ex-info (format "No stock entity [%s]" stock-id)
+                                          inputs)))))
+
+(defn- stock-account-has-sufficient-shares? [{:keys [conn stock-id stock-amount stock-account] :as inputs}]
+  (if-let [initial-account-amount
+           (-> stock-account
+               :bookkeeping.account/_counter-party
+               :bookkeeping.account/amount)]
+
+    (if (>= initial-account-amount stock-amount)
+      (rop/succeed inputs)
+      (rop/fail
+        (ex-info (format "Insufficient amount of stock [%s] to sell" initial-account-amount)
+                 inputs)))
+
+    (rop/fail
+      (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
+               inputs))))
+
 (defn buy-stock! [conn game-id user-id stock-id stock-amount stock-price]
 
   (let [validation-inputs {:conn         conn
@@ -236,22 +277,12 @@
                            :stock-price  stock-price}
 
         debit-value                        (Float. (format "%.2f" (* stock-amount stock-price)))
-        cash-account-has-sufficient-funds? (fn [{user-pulled :user-pulled :as inputs}]
-                                             (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
-                                                   (bookkeeping.persistence/cash-account-by-user user-pulled)]
-
-                                               (if (> cash-account-starting-balance debit-value)
-                                                 (rop/succeed inputs)
-                                                 (rop/fail (ex-info (format "Insufficient funds [%s] for purchase value [%s]"
-                                                                            cash-account-starting-balance
-                                                                            debit-value)
-                                                                    inputs)))))
 
         result (rop/>>= validation-inputs
                         game-exists?
                         user-exists?
                         stock-exists?
-                        cash-account-has-sufficient-funds?)]
+                        (partial cash-account-has-sufficient-funds? debit-value))]
 
     (if (= clojure.lang.ExceptionInfo (type result))
 
@@ -262,7 +293,8 @@
             credit-value                       debit-value
 
             ;; ACCOUNT BALANCE UPDATES
-            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-user user-pulled) [:bookkeeping.account/balance] - debit-value)
+            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-user user-pulled)
+                                              [:bookkeeping.account/balance] - debit-value)
             updated-credit-account (-> stock-account
                                        (update-in [:bookkeeping.account/balance] + credit-value)
                                        (update-in [:bookkeeping.account/amount] + stock-amount))
@@ -298,39 +330,8 @@
                            :stock-amount stock-amount
                            :stock-price  stock-price}
 
-        stock-account-exists? (fn [{stock-id :stock-id :as inputs}]
-                                (try
-                                  (if-let [stock-account
-                                           (ffirst (d/q '[:find (pull ?stock-id
-                                                                      [:game.stock/id
-                                                                       {:bookkeeping.account/_counter-party [*]}])
-                                                          :in $ ?stock-id
-                                                          :where
-                                                          [?stock-id]]
-                                                        (d/db conn)
-                                                        stock-id))]
-                                    (rop/succeed (assoc inputs :stock-account stock-account)))
-                                  (catch Throwable e (rop/fail (ex-info (format "No stock entity [%s]" stock-id)
-                                                                        inputs)))))
-
-        stock-account-has-sufficient-shares? (fn [{:keys [conn stock-id stock-amount stock-account] :as inputs}]
-
-                                               (if-let [initial-account-amount
-                                                        (-> stock-account
-                                                            :bookkeeping.account/_counter-party
-                                                            :bookkeeping.account/amount)]
-
-                                                 (if (>= initial-account-amount stock-amount)
-                                                   (rop/succeed inputs)
-                                                   (rop/fail
-                                                     (ex-info (format "Insufficient amount of stock [%s] to sell" initial-account-amount)
-                                                              inputs)))
-
-                                                 (rop/fail
-                                                   (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
-                                                            inputs))))
         result (rop/>>= validation-inputs
-                        stock-account-exists?
+                        (partial stock-account-exists? conn)
                         game-exists?
                         user-exists?
                         stock-exists?
@@ -340,16 +341,22 @@
 
       (throw result)
 
-      (let [{:keys [user-pulled stock-pulled stock-account]} result
-            debit-value                                      (Float. (format "%.2f" (* stock-amount stock-price)))
-            credit-value                                     debit-value
+      (let [{:keys [user-pulled
+                    stock-pulled
+                    stock-account]}               result
+            {{stock-account-amount :bookkeeping.account/amount}
+             :bookkeeping.account/_counter-party} stock-account
+            debit-value                           (Float. (format "%.2f" (* stock-amount stock-price)))
+            credit-value                          debit-value
+            stock-account-balance-updated         (Float. (format "%.2f" (* (- stock-account-amount stock-amount) stock-price)))
 
             ;; ACCOUNT BALANCE UPDATES
             updated-debit-account  (-> stock-account
                                        :bookkeeping.account/_counter-party
-                                       (update-in [:bookkeeping.account/balance] - credit-value)
+                                       (update-in [:bookkeeping.account/balance] (constantly stock-account-balance-updated))
                                        (update-in [:bookkeeping.account/amount] - stock-amount))
-            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-user user-pulled) [:bookkeeping.account/balance] + debit-value)
+            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-user user-pulled)
+                                              [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
             debits+credits          [(->debit updated-debit-account debit-value stock-price stock-amount)

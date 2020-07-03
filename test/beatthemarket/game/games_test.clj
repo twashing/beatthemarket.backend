@@ -289,7 +289,7 @@
             expected-credit-value        credit-value
             expected-credit-account-name credit-account-name))))))
 
-(deftest calculate-profit-loss-test
+(deftest profit-loss-by-current-equity-test
 
   (is true)
 
@@ -305,7 +305,7 @@
         data-sequence-B (take 5 data-sequence-up)
         data-sequence-C [100 110 105 120 110 125 130]
 
-        ;; C
+        ;; C create-game!
         sink-fn                                   identity
         {{gameId :game/id :as game} :game
          control-channel            :control-channel
@@ -316,7 +316,7 @@
         game-loop-fn                              (fn [a]
                                                     (when a (core.async/>!! test-chan a)))
 
-        ;; D
+        ;; D start-game!
         {{:keys                                           [mixer
                                                            pause-chan
                                                            input-chan
@@ -326,16 +326,12 @@
                                                       :game/users first
                                                       :game.user/subscriptions first)
         stockId                                   (:game.stock/id game-user-subscription)
+
+
+        ;; E subscription price history
         subscription-ticks (->> (repeatedly #(<!! test-chan))
                                 (take tick-length)
                                 (map #(second (first (game.games/narrow-stock-tick-pairs-by-subscription % game-user-subscription)))))
-
-        stockAmount 100
-        {tickId    :game.stock.tick/id
-         tickPrice :game.stock.tick/close} (-> subscription-ticks
-                                               last
-                                               (select-keys [:game.stock.tick/id :game.stock.tick/close]))
-
 
         local-transact-stock! (fn [{tickId      :game.stock.tick/id
                                    tickPrice   :game.stock.tick/close
@@ -347,29 +343,41 @@
                                   :sell (game.games/sell-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
                                   :noop))]
 
+    ;; F buy & sell
     (->> (map #(merge %1 %2)
               subscription-ticks
               [{}
                {:op :buy :stockAmount 75}
                {:op :buy :stockAmount 25}
-               {:op :sell :stockAmount 100}])
+               {:op :sell :stockAmount 100}]
+              )
          (run! local-transact-stock!))
 
-    ;; (game.games/buy-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice))
+
+    #_(-> 100000
+          (#(- % (* 75 110))) trace
+          (#(- % (* 25 120))) trace
+          (#(+ % (* 100 130))) trace)
+
+    #_(-> 0
+        (#(+ % (* 75 110))) trace
+        (#(+ % (* 25 120))) trace
+        (#(- % (* 100 130))) trace)
 
 
-    ;; (println (count ticks))
-    ;; (util/pprint+identity subscription-ticks)
     (game.games/control-streams! control-channel channel-controls :exit)
 
 
-    ;; (persistence.core/pull-entity conn result-user-id)
+    ;; CASH Account
+    (util/pprint+identity (bookkeeping.persistence/cash-account-by-user conn result-user-id))
 
-    ;; CASH + STOCK Accounts
-    ;;  (util/pprint+identity (bookkeeping.persistence/stock-accounts-by-user-entity conn result-user-id))
-    ;;  (util/pprint+identity (bookkeeping.persistence/stock-accounts-by-user-for-game conn result-user-id gameId))
+    ;; STOCK Accounts
+    (util/pprint+identity (bookkeeping.persistence/stock-accounts-by-user-for-game conn result-user-id gameId))
 
+    ;; TODO
+    (util/pprint+identity (game.games/profit-loss-by-current-equity conn result-user-id gameId))
 
+    101750.0
 
     ;; > price-history-by-stock-id
     ;; :game.stock/price-history
@@ -378,15 +386,7 @@
     ;; :game/id
 
 
-    #_(testing "Ensure we have the stock on hand before selling"
-      (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
-
-      (testing "Returned Tentry matches what was submitted"
-        (let [initial-debit-value         0.0
-              debit-value-change          (Float. (format "%.2f" (* stockAmount tickPrice1)))
-
-              result-tentry (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))]))))
-  )
+    ))
 
 
 ;; ;; C.

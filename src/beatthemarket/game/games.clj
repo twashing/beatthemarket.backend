@@ -10,13 +10,14 @@
             [rop.core :as rop]
             [integrant.core :as ig]
             [integrant.repl.state :as repl.state]
+            [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
-            [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util]
@@ -120,7 +121,6 @@
                         game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
                         stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
-                    (trace [game-db-id user-db-id stock-db-id stockAmount tickPrice])
                     (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice))))))
 
 (defn sell-stock!
@@ -532,8 +532,23 @@
 ;; stock->tick-history
 
 
-(defn profit-loss-by-current-equity []
+(defn profit-loss-by-current-equity
+  " Profit Calculation
 
-  )
+       Equity                          - Value of starting cash position
+     = (Value of all assets)           - Value of starting cash position
+     = (Cash + (stock amount * price)) - Value of starting cash position"
+  [conn user-db-id game-id]
+
+  (let [;; CASH Account
+        cash-account-balances (:bookkeeping.account/balance
+                               (bookkeeping.persistence/cash-account-by-user conn user-db-id))
+
+        ;; STOCK Accounts
+        stock-account-balances (->> (bookkeeping.persistence/stock-accounts-by-user-for-game conn user-db-id game-id)
+                                    (map :bookkeeping.account/balance)
+                                    (apply +))]
+
+    (+ cash-account-balances stock-account-balances)))
 
 (defn profit-loss-by-transaction-history [])
