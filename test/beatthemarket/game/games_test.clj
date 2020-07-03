@@ -289,9 +289,7 @@
             expected-credit-value        credit-value
             expected-credit-account-name credit-account-name))))))
 
-(deftest profit-loss-by-current-equity-test
-
-  (is true)
+(deftest profit-loss-by-current-equity-A-test
 
   (let [;; A
         conn                                      (-> repl.state/system :persistence/datomic :conn)
@@ -349,33 +347,21 @@
               [{}
                {:op :buy :stockAmount 75}
                {:op :buy :stockAmount 25}
-               {:op :sell :stockAmount 100}]
-              )
+               {}])
          (run! local-transact-stock!))
-
-
-    #_(-> 100000
-          (#(- % (* 75 110))) trace
-          (#(- % (* 25 120))) trace
-          (#(+ % (* 100 130))) trace)
-
-    #_(-> 0
-        (#(+ % (* 75 110))) trace
-        (#(+ % (* 25 120))) trace
-        (#(- % (* 100 130))) trace)
 
 
     (game.games/control-streams! control-channel channel-controls :exit)
 
 
     ;; CASH Account
-    (util/pprint+identity (bookkeeping.persistence/cash-account-by-user conn result-user-id))
+    ;; (util/pprint+identity (bookkeeping.persistence/cash-account-by-user conn result-user-id))
 
     ;; STOCK Accounts
-    (util/pprint+identity (bookkeeping.persistence/stock-accounts-by-user-for-game conn result-user-id gameId))
+    ;; (util/pprint+identity (bookkeeping.persistence/stock-accounts-by-user-for-game conn result-user-id gameId))
 
     ;; TODO
-    (util/pprint+identity (game.games/profit-loss-by-current-equity conn result-user-id gameId))
+    ;; (util/pprint+identity (game.games/profit-loss-by-current-equity conn result-user-id gameId))
 
     101750.0
 
@@ -385,8 +371,32 @@
     ;; :game :db/id
     ;; :game/id
 
+    (testing "Initial stock purchases give us our expected profit level"
 
-    ))
+      (let [expected-profit-A (+ (-> 100000.0
+                                     (#(- % (* 75 110)))
+                                     (#(- % (* 25 120))))
+
+                                 (-> 0
+                                     (#(+ % (* 75 110)))
+                                     (#(+ % (* 25 120)))))
+
+            expected-profit-B (-> 100000.0
+                                  (#(- % (* 75 110)))
+                                  (#(- % (* 25 120)))
+                                  (#(+ % (* 100 130))))]
+
+        (is (= (.floatValue expected-profit-A)
+               (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId))))
+
+        (testing "Selling stocks correctly adjusts profit level"
+
+          (-> (last subscription-ticks)
+              (merge {:op :sell :stockAmount 100})
+              local-transact-stock!)
+
+          (is (= (.floatValue expected-profit-B)
+                 (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId)))))))))
 
 
 ;; ;; C.
