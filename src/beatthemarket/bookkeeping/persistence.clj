@@ -52,7 +52,7 @@
               [?g :game/users ?gus]
               [?gus :game.user/user ?e]
 
-              ;; Narrow accounts for the game
+              ;; Narrow to stock accounts for the game
               [?g :game/stocks ?gs]
               [?e :user/accounts ?uas]
               [?uas :bookkeeping.account/counter-party ?gs]]

@@ -6,6 +6,7 @@
             [clj-time.core :as t]
             [clojure.data.json :as json]
             [datomic.client.api :as d]
+            [datascript.core :as ds]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [rop.core :as rop]
             [integrant.core :as ig]
@@ -529,7 +530,7 @@
      = (Cash + (stock amount * price)) - Value of starting cash position"
   [conn user-db-id game-id]
 
-  (let [;; CASH Account
+  #_(let [;; CASH Account
         cash-account-balances (:bookkeeping.account/balance
                                (bookkeeping.persistence/cash-account-by-user conn user-db-id))
 
@@ -538,6 +539,106 @@
                                     (map :bookkeeping.account/balance)
                                     (apply +))]
 
-    (+ cash-account-balances stock-account-balances)))
+    (+ cash-account-balances stock-account-balances))
+
+
+  ;; TODO Update Profit calculation
+  ;;  Realized Profit / Loss
+  ;;  Running Profit / Loss
+
+  ;; Needs a list of journal entries (buys + sells)
+  :game/users
+  :game.user/user
+  :game.user/portfolio
+  :bookkeeping.portfolio/journals
+  :bookkeeping.journal/entries
+
+
+  ;; TODO Running Profit / Loss - Should correspond with a list of i. Stock accounts ii. for this game iii. with stocks in them
+  bookkeeping.persistence/stock-accounts-by-user-for-game
+
+
+  (let [tentries (d/q '[:find (pull ?jes [:bookkeeping.tentry/debits
+                                          :bookkeeping.tentry/credits])
+                        :in $ ?e ?game-id
+                        :where
+                        [?g :game/id ?game-id]
+                        [?g :game/users ?gus]
+                        [?gus :game.user/user ?e]
+
+                        [?gus :game.user/portfolio ?up]
+                        [?up :bookkeeping.portfolio/journals ?js]
+                        [?js :bookkeeping.journal/entries ?jes]
+                        ]
+                      (d/db conn)
+                      user-db-id game-id)
+
+        ;; list of tentries, where stock is credited
+        tentry-buys (d/q '[:find ?jt (pull ?jes [:bookkeeping.tentry/debits
+                                                 :bookkeeping.tentry/credits])
+                           :in $ ?e ?game-id
+                           :where
+                           [?g :game/id ?game-id]
+                           [?g :game/users ?gus]
+                           [?gus :game.user/user ?e]
+
+                           [?gus :game.user/portfolio ?up]
+                           [?up :bookkeeping.portfolio/journals ?js]
+                           [?js :bookkeeping.journal/entries ?jes ?jt]
+
+                           ;; constrain to a list of tentries, where stock is credited
+                           [?jes :bookkeeping.tentry/credits ?cs]
+                           [?cs :bookkeeping.credit/account ?ca]
+                           [?ca :bookkeeping.account/counter-party ?acp]
+                           [?acp :game.stock/id]]
+                         (d/db conn)
+                         user-db-id game-id)
+
+
+        ;; group by BUYS, Stock account
+        tentry-buys-by-account
+        (group-by (comp :bookkeeping.account/id :bookkeeping.credit/account first :bookkeeping.tentry/credits second identity)
+                  tentry-buys)]
+
+    (println "A / count of entries")
+    (util/pprint+identity (count tentries))
+
+
+    (println "B / count of stock buys")
+    (util/pprint+identity (count tentry-buys))
+
+    (util/pprint+identity tentry-buys-by-account)
+
+    (println "C /")
+    (util/pprint+identity (for [[k vs]  tentry-buys-by-account
+                                [t {credits :bookkeeping.tentry/credits}] vs
+                                :let [[{:keys [:bookkeeping.credit/price
+                                               :bookkeeping.credit/amount] :as credit}] credits]]
+
+
+                            ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
+                            {:pershare-price (/ price amount)
+
+                             ;; TODO get total shar amount, at time t
+                             :pershare-amount 2}))
+
+    ;; (def tentry-buys tentry-buys)
+    ;; (util/pprint+identity 1)
+
+
+    ;; ... count purchase entries, at given price > track i. pershare price ii. pershare amount
+
+
+    ;; calculate running proft/loss
+    ;; match corresponding sells
+
+
+    ))
 
 (defn profit-loss-by-transaction-history [])
+
+;; > price-history-by-stock-id
+;; :game.stock/price-history
+;;
+;; :game :db/id
+;; :game/id

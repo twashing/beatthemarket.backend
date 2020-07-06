@@ -22,6 +22,13 @@ You'll notice a corresponding log message in the Clojure REPL.
 4. Send a message to the client and close with `(service/send-and-close!)`
 
 
+## Running
+
+```
+GOOGLE_APPLICATION_CREDENTIALS="./beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json" \
+lein repl
+```
+
 ## Component
 
 Beatthemarket uses the [Integrant](https://github.com/weavejester/integrant) Component system.

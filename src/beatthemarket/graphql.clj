@@ -74,7 +74,7 @@
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
         gameId (UUID/fromString gameId)
         stockId (UUID/fromString stockId)
-        tickId (UUID/fromString tickId)
+          tickId (UUID/fromString tickId)
         tickPrice (Float. tickPrice)]
 
     (try
