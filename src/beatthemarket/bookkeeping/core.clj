@@ -276,13 +276,12 @@
                            :stock-amount stock-amount
                            :stock-price  stock-price}
 
-        debit-value                        (Float. (format "%.2f" (* stock-amount stock-price)))
-
-        result (rop/>>= validation-inputs
-                        game-exists?
-                        user-exists?
-                        stock-exists?
-                        (partial cash-account-has-sufficient-funds? debit-value))]
+        debit-value (Float. (format "%.2f" (* stock-amount stock-price)))
+        result      (rop/>>= validation-inputs
+                             game-exists?
+                             user-exists?
+                             stock-exists?
+                             (partial cash-account-has-sufficient-funds? debit-value))]
 
     (if (= clojure.lang.ExceptionInfo (type result))
 

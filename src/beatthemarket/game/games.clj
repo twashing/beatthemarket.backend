@@ -521,8 +521,7 @@
       :channel-controls channel-controls})))
 
 ;; CALCULATION
-
-(defn profit-loss-by-current-equity
+(defn collect-pershare-price-statistics
   " Profit Calculation
 
        Equity                          - Value of starting cash position
@@ -546,34 +545,12 @@
   ;;  Realized Profit / Loss
   ;;  Running Profit / Loss
 
-  ;; Needs a list of journal entries (buys + sells)
-  :game/users
-  :game.user/user
-  :game.user/portfolio
-  :bookkeeping.portfolio/journals
-  :bookkeeping.journal/entries
-
 
   ;; TODO Running Profit / Loss - Should correspond with a list of i. Stock accounts ii. for this game iii. with stocks in them
   bookkeeping.persistence/stock-accounts-by-user-for-game
 
 
-  (let [tentries (d/q '[:find (pull ?jes [:bookkeeping.tentry/debits
-                                          :bookkeeping.tentry/credits])
-                        :in $ ?e ?game-id
-                        :where
-                        [?g :game/id ?game-id]
-                        [?g :game/users ?gus]
-                        [?gus :game.user/user ?e]
-
-                        [?gus :game.user/portfolio ?up]
-                        [?up :bookkeeping.portfolio/journals ?js]
-                        [?js :bookkeeping.journal/entries ?jes]
-                        ]
-                      (d/db conn)
-                      user-db-id game-id)
-
-        ;; list of tentries, where stock is credited
+  (let [;; A. List of tentries, where stock is credited
         tentry-buys (d/q '[:find ?jt (pull ?jes [:bookkeeping.tentry/debits
                                                  :bookkeeping.tentry/credits])
                            :in $ ?e ?game-id
@@ -581,7 +558,6 @@
                            [?g :game/id ?game-id]
                            [?g :game/users ?gus]
                            [?gus :game.user/user ?e]
-
                            [?gus :game.user/portfolio ?up]
                            [?up :bookkeeping.portfolio/journals ?js]
                            [?js :bookkeeping.journal/entries ?jes ?jt]
@@ -595,47 +571,61 @@
                          user-db-id game-id)
 
 
-        ;; group by BUYS, Stock account
+        ;; B. Group by BUYS, Stock account
         tentry-buys-by-account
         (group-by (comp :bookkeeping.account/id :bookkeeping.credit/account first :bookkeeping.tentry/credits second identity)
-                  tentry-buys)]
+                  tentry-buys)
 
-    (println "A / count of entries")
-    (util/pprint+identity (count tentries))
+        pershare-price-and-amount-per-buy
+        (for [[k vs] tentry-buys-by-account
+              [t {credits :bookkeeping.tentry/credits}] vs
+              :let [[{{{price-history :game.stock/price-history} :bookkeeping.account/counter-party
+                       credit-account-id                         :bookkeeping.account/id
+                       credit-account-name                       :bookkeeping.account/name
+                       ;; credit-account-amount                     :bookkeeping.account/amount
+                       } :bookkeeping.credit/account
+                      price                                               :bookkeeping.credit/price
+                      amount                                              :bookkeeping.credit/amount :as credit}] credits
 
+                    [[_ credit-account-amount]]
+                    (seq
+                        (d/q '[:find ?t ?credit-account-amount
+                               :in $ ?credit-account-id
+                               :where
+                               [?a :bookkeeping.account/id ?credit-account-id]
+                               [?a :bookkeeping.account/name ?credit-account-name]
+                               [?a :bookkeeping.account/amount ?credit-account-amount ?t]]
 
-    (println "B / count of stock buys")
-    (util/pprint+identity (count tentry-buys))
+                             (-> (d/db conn)
+                                 (d/as-of t))
+                             credit-account-id))]]
 
-    (util/pprint+identity tentry-buys-by-account)
+          ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
+          (let [{latest-price :game.stock.tick/close}
+                (->> price-history (sort-by :game.stock.tick/trade-time) last)]
+            {:time t
+             :credit-account-id k
+             :credit-account-amount credit-account-amount
+             :credit-account-name credit-account-name
+
+             :latest-price latest-price
+             :buy-price price
+             :amount amount
+
+             :pershare-price (/ price amount)
+             :pershare-amount (/ amount credit-account-amount)  ;; total share amount, at time t
+             :pershare-gain-or-loss (- latest-price price)}))]
+
+    ;; (println "B / count of stock buys")
+    ;; (util/pprint+identity (count tentry-buys))
+
+    ;; (util/pprint+identity tentry-buys-by-account)
 
     (println "C /")
-    (util/pprint+identity (for [[k vs]  tentry-buys-by-account
-                                [t {credits :bookkeeping.tentry/credits}] vs
-                                :let [[{:keys [:bookkeeping.credit/price
-                                               :bookkeeping.credit/amount] :as credit}] credits]]
-
-
-                            ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
-                            {:pershare-price (/ price amount)
-
-                             ;; TODO get total shar amount, at time t
-                             :pershare-amount 2}))
-
-    ;; (def tentry-buys tentry-buys)
-    ;; (util/pprint+identity 1)
-
-
-    ;; ... count purchase entries, at given price > track i. pershare price ii. pershare amount
-
-
-    ;; calculate running proft/loss
-    ;; match corresponding sells
-
+    (util/pprint+identity (group-by :credit-account-id pershare-price-and-amount-per-buy))
 
     ))
 
-(defn profit-loss-by-transaction-history [])
 
 ;; > price-history-by-stock-id
 ;; :game.stock/price-history

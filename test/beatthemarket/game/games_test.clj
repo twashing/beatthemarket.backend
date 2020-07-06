@@ -289,7 +289,7 @@
             expected-credit-value        credit-value
             expected-credit-account-name credit-account-name))))))
 
-(deftest profit-loss-by-current-equity-A-test
+(deftest collect-pershare-price-statistics-A-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -372,7 +372,7 @@
                                     (#(+ % (* 100 130))))]
 
           (is (= (.floatValue expected-profit-A)
-                 (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId))))
+                 (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId))))
 
           (testing "Selling stocks correctly adjusts profit level B"
 
@@ -381,9 +381,9 @@
                 local-transact-stock!)
 
             (is (= (.floatValue expected-profit-B)
-                   (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId))))))))))
+                   (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId))))))))))
 
-(deftest profit-loss-by-current-equity-B-test
+(deftest collect-pershare-price-statistics-B-test
 
   (testing "Testing buy / sells with this patterns
 
@@ -471,7 +471,7 @@
                                     (#(+ % (* 100 110))))]
 
           (is (= (.floatValue expected-profit-A)
-                 (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId))))
+                 (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId))))
 
           (testing "Selling stocks correctly adjusts profit level B"
 
@@ -480,9 +480,9 @@
                 local-transact-stock!)
 
             (is (= (.floatValue expected-profit-B)
-                   (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId))))))))))
+                   (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId))))))))))
 
-(deftest profit-loss-by-current-equity-C-test
+(deftest collect-pershare-price-statistics-C-test
 
   (testing "Testing buy / sells with this patterns
 
@@ -601,12 +601,22 @@
           ;; [100.0 110.0 105.0 , 120.0 110.0 , 125.0 130.0]
           ;; [100.0 110.0 105.0 , 120.0 110.0 , 125.0 130.0]
 
-          ;; (util/pprint+identity (persistence.core/pull-entity conn game-db-id))
-          (game.games/profit-loss-by-current-equity conn result-user-id gameId)
+          (game.games/collect-pershare-price-statistics conn result-user-id gameId)
 
-          (is true)
+          (println "D /")
+          (util/pprint+identity (persistence.core/pull-entity conn game-db-id))
+
+
+          ;; TODO pershare profit @ t and each tick
+          ;;   running proft/loss
+
+          ;; TODO match corresponding sells
+
+
+
+          #_(is true)
           #_(is (= (.floatValue expected-profit-A)
-                 (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId))))
+                 (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId))))
 
           #_(testing "Selling stocks correctly adjusts profit level B"
 
@@ -618,7 +628,7 @@
                    (run! local-transact-stock!))
 
               (is (= (.floatValue expected-profit-B)
-                     (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId)))))
+                     (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId)))))
 
           #_(testing "Selling stocks correctly adjusts profit level C"
 
@@ -629,7 +639,7 @@
                    (run! local-transact-stock!))
 
               (is (= (.floatValue expected-profit-C)
-                     (.floatValue (game.games/profit-loss-by-current-equity conn result-user-id gameId))))))))))
+                     (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId))))))))))
 
 
 ;; ;; C.
