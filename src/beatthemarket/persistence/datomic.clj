@@ -63,6 +63,14 @@
 (def profit-loss (atom []))
 
 
+(defn recalculate-profit-loss-on-buy [updated-credit-account-amount
+                                      {:keys [amount pershare-gain-or-loss] :as calculation}]
+
+  (let [pershare-purchase-ratio (/ amount updated-credit-account-amount)
+        A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
+
+    (assoc calculation :running-aggregate-profit-loss (* A updated-credit-account-amount))))
+
 
 ;; DATABASE
 (defn transact! [conn data]
@@ -71,6 +79,8 @@
   :bookkeeping.journal/entries
 
   ;; TODO
+  ;; group-by stock
+  ;; collect sells
 
   #_(filter #(or (:bookkeeping.tentry/id %)
                  (:bookkeeping.journal/entries %)))
@@ -103,12 +113,10 @@
     (when credit-account-id
       (util/pprint+identity
         (let [{latest-price :game.stock.tick/close} (->> price-history (sort-by :game.stock.tick/trade-time) last)
-              ;; pershare-price                        (/ price amount)
-              ;; purchase-amount-by-total-amount       (/ amount credit-account-amount)
               pershare-gain-or-loss                 (- latest-price price)
               pershare-purchase-ratio               (/ amount credit-account-amount)
               A                                     (* pershare-gain-or-loss pershare-purchase-ratio)
-              ;; B                                     (* price credit-account-amount)
+              running-profit-loss                   (* A credit-account-amount)
 
               profit-loss-calculation
               {:credit-account-id     credit-account-id
@@ -119,18 +127,24 @@
                :buy-price    price
                :amount       amount
 
-               ;; :pershare-price  pershare-price
-               ;; :pershare-amount (/ amount credit-account-amount) ;; total share amount, at time t
+               :pershare-gain-or-loss         pershare-gain-or-loss
+               :pershare-purchase-ratio       pershare-purchase-ratio
+               :A                             A
+               :running-profit-loss           running-profit-loss
+               :running-aggregate-profit-loss running-profit-loss}
 
-               :pershare-gain-or-loss   pershare-gain-or-loss
-               :pershare-purchase-ratio pershare-purchase-ratio
-               :A                       A
-               ;; :B                       B
-               :running-profit-loss     (* A credit-account-amount)}]
+              updated-profit-loss-calculations
+              (as-> (deref profit-loss) pl
+                (map (partial recalculate-profit-loss-on-buy credit-account-amount) pl)
+                (concat pl [profit-loss-calculation]))
+              ]
 
-          #_(swap! profit-loss #(update-in % [:buys credit-account-id]))
 
-          (swap! profit-loss conj profit-loss-calculation)
+          (swap! profit-loss (constantly updated-profit-loss-calculations))
+
+          ;; TODO Recalculate
+          ;; UPDATED > credit-account-amount
+
 
           ))))
 
@@ -273,4 +287,3 @@
 (defn transact-entities! [conn entity]
   (->> (conditionially-wrap-in-sequence entity)
        (transact! conn)))
-
