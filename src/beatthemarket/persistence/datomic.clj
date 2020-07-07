@@ -57,8 +57,83 @@
   (close-db-connection! datomic-component-map))
 
 
+{:buys {:id []}}
+(def profit-loss (atom {:buys {}
+                        :sells {}}))
+(def profit-loss (atom []))
+
+
+
 ;; DATABASE
 (defn transact! [conn data]
+
+  :bookkeeping.tentry/id
+  :bookkeeping.journal/entries
+
+  ;; TODO
+
+  #_(filter #(or (:bookkeeping.tentry/id %)
+                 (:bookkeeping.journal/entries %)))
+
+
+  ;; collect SELLS by stock account
+  #_(->> data
+         (filter (comp :bookkeeping.account/counter-party :bookkeeping.debit/account :bookkeeping.tentry/debits))
+         util/pprint+identity)
+
+
+  ;; collect BUYS by stock account
+  ;; (println "A /")
+  (let [tentry-buys-by-account
+        (filter (comp :bookkeeping.account/counter-party :bookkeeping.credit/account
+                   :bookkeeping.tentry/credits)
+                data)
+
+        [{{{{price-history :game.stock/price-history} :bookkeeping.account/counter-party
+            credit-account-id                         :bookkeeping.account/id
+            credit-account-amount                     :bookkeeping.account/amount
+            credit-account-name                       :bookkeeping.account/name} :bookkeeping.credit/account
+           price                                               :bookkeeping.credit/price
+           amount                                              :bookkeeping.credit/amount} :bookkeeping.tentry/credits}]
+        tentry-buys-by-account]
+
+    ;; (println "B /")
+
+    ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
+    (when credit-account-id
+      (util/pprint+identity
+        (let [{latest-price :game.stock.tick/close} (->> price-history (sort-by :game.stock.tick/trade-time) last)
+              ;; pershare-price                        (/ price amount)
+              ;; purchase-amount-by-total-amount       (/ amount credit-account-amount)
+              pershare-gain-or-loss                 (- latest-price price)
+              pershare-purchase-ratio               (/ amount credit-account-amount)
+              A                                     (* pershare-gain-or-loss pershare-purchase-ratio)
+              ;; B                                     (* price credit-account-amount)
+
+              profit-loss-calculation
+              {:credit-account-id     credit-account-id
+               :credit-account-amount credit-account-amount
+               :credit-account-name   credit-account-name
+
+               :latest-price latest-price
+               :buy-price    price
+               :amount       amount
+
+               ;; :pershare-price  pershare-price
+               ;; :pershare-amount (/ amount credit-account-amount) ;; total share amount, at time t
+
+               :pershare-gain-or-loss   pershare-gain-or-loss
+               :pershare-purchase-ratio pershare-purchase-ratio
+               :A                       A
+               ;; :B                       B
+               :running-profit-loss     (* A credit-account-amount)}]
+
+          #_(swap! profit-loss #(update-in % [:buys credit-account-id]))
+
+          (swap! profit-loss conj profit-loss-calculation)
+
+          ))))
+
   (d/transact conn {:tx-data data}))
 
 (comment
@@ -198,3 +273,4 @@
 (defn transact-entities! [conn entity]
   (->> (conditionially-wrap-in-sequence entity)
        (transact! conn)))
+

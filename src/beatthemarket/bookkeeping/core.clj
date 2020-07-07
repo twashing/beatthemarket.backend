@@ -20,7 +20,7 @@
 
 (defn ->journal
 
-  ([] (->journal nil))
+  ([] (->journal []))
 
   ([entries]
    (cond-> (hash-map :bookkeeping.journal/id (UUID/randomUUID))
@@ -306,7 +306,9 @@
                                         :game/users first
                                         :game.user/portfolio
                                         :bookkeeping.portfolio/journals first
-                                        (assoc :bookkeeping.journal/entries tentry))
+                                        (assoc :bookkeeping.journal/entries tentry)
+                                        ;; (update-in [:bookkeeping.journal/entries] conj tentry)
+                                        )
 
             entities [tentry updated-journal-entries]]
 
@@ -365,7 +367,9 @@
                                         :game/users first
                                         :game.user/portfolio
                                         :bookkeeping.portfolio/journals first
-                                        (assoc :bookkeeping.journal/entries tentry))
+                                        (assoc :bookkeeping.journal/entries tentry)
+                                        ;; (update-in [:bookkeeping.journal/entries] conj tentry)
+                                        )
 
             entities [tentry updated-journal-entries]]
 

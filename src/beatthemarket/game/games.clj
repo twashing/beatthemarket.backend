@@ -621,8 +621,9 @@
 
     ;; (util/pprint+identity tentry-buys-by-account)
 
-    (println "C /")
-    (util/pprint+identity (group-by :credit-account-id pershare-price-and-amount-per-buy))
+    ;; (println "C /")
+    ;; (util/pprint+identity (group-by :credit-account-id pershare-price-and-amount-per-buy))
+    (group-by :credit-account-id pershare-price-and-amount-per-buy)
 
     ))
 

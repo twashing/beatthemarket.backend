@@ -518,10 +518,10 @@
                                                       (when a (core.async/>!! test-chan a)))
 
           ;; D start-game!
-          {{:keys                                                                       [mixer
-                                                                                         pause-chan
-                                                                                         input-chan
-                                                                                         output-chan] :as channel-controls}
+          {{:keys [mixer
+                   pause-chan
+                   input-chan
+                   output-chan] :as channel-controls}
            :channel-controls}    (game.games/start-game! conn result-user-id game-control game-loop-fn)
           game-user-subscription (-> game
                                      :game/users first
@@ -603,8 +603,8 @@
 
           (game.games/collect-pershare-price-statistics conn result-user-id gameId)
 
-          (println "D /")
-          (util/pprint+identity (persistence.core/pull-entity conn game-db-id))
+          ;; (println "D /")
+          ;; (util/pprint+identity (persistence.core/pull-entity conn game-db-id))
 
 
           ;; TODO pershare profit @ t and each tick
@@ -614,7 +614,7 @@
 
 
 
-          #_(is true)
+          (is true)
           #_(is (= (.floatValue expected-profit-A)
                  (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId))))
 
