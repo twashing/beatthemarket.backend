@@ -71,6 +71,99 @@
 
     (assoc calculation :running-aggregate-profit-loss (* A updated-credit-account-amount))))
 
+(defn recalculate-profit-loss-on-sell [old-account-amount updated-debit-account-amount
+                                      {:keys [amount pershare-gain-or-loss] :as calculation}]
+
+  (let [account-amount-new-old-ratio (/ updated-debit-account-amount old-account-amount)
+        pershare-purchase-ratio (/ (* amount account-amount-new-old-ratio) updated-debit-account-amount)
+        A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
+
+    (assoc calculation :running-aggregate-profit-loss (* A updated-debit-account-amount))))
+
+(defn calculate-running-aggregate-profit-loss-on-BUY! [data]
+
+  (let [tentry-buys-by-account
+        (filter (comp :bookkeeping.account/counter-party :bookkeeping.credit/account :bookkeeping.tentry/credits)
+                data)
+
+        [{{{{price-history :game.stock/price-history} :bookkeeping.account/counter-party
+            credit-account-id                         :bookkeeping.account/id
+            credit-account-amount                     :bookkeeping.account/amount
+            credit-account-name                       :bookkeeping.account/name} :bookkeeping.credit/account
+           price                                               :bookkeeping.credit/price
+           amount                                              :bookkeeping.credit/amount} :bookkeeping.tentry/credits}]
+        tentry-buys-by-account]
+
+    ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
+    (when credit-account-id
+      (let [{latest-price :game.stock.tick/close} (->> price-history (sort-by :game.stock.tick/trade-time) last)
+            pershare-gain-or-loss                 (- latest-price price)
+            pershare-purchase-ratio               (/ amount credit-account-amount)
+            A                                     (* pershare-gain-or-loss pershare-purchase-ratio)
+            running-profit-loss                   (* A credit-account-amount)
+
+            profit-loss-calculation
+            {:credit-account-id     credit-account-id
+             :credit-account-amount credit-account-amount
+             :credit-account-name   credit-account-name
+
+             :latest-price latest-price
+             :buy-price    price
+             :amount       amount
+
+             :pershare-gain-or-loss         pershare-gain-or-loss
+             :pershare-purchase-ratio       pershare-purchase-ratio
+             :A                             A
+             :running-profit-loss           running-profit-loss
+             :running-aggregate-profit-loss running-profit-loss}
+
+            updated-profit-loss-calculations
+            (as-> (deref profit-loss) pl
+              (map (partial recalculate-profit-loss-on-buy credit-account-amount) pl)
+              (concat pl [profit-loss-calculation]))]
+
+        (swap! profit-loss (constantly updated-profit-loss-calculations))))))
+
+(defn calculate-running-aggregate-profit-loss-on-SELL! [data]
+
+  (let [tentry-sells-by-account
+        (filter (comp :bookkeeping.account/counter-party :bookkeeping.debit/account :bookkeeping.tentry/debits)
+                data)
+
+        [{{{{price-history :game.stock/price-history} :bookkeeping.account/counter-party
+            debit-account-id                         :bookkeeping.account/id
+            debit-account-amount                     :bookkeeping.account/amount
+            debit-account-name                       :bookkeeping.account/name} :bookkeeping.debit/account
+           price                                               :bookkeeping.debit/price
+           amount                                              :bookkeeping.debit/amount} :bookkeeping.tentry/debits}]
+        tentry-sells-by-account]
+
+    ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
+    (when debit-account-id
+      (util/pprint+identity
+        (let [{latest-price :game.stock.tick/close} (->> price-history (sort-by :game.stock.tick/trade-time) last)
+              pershare-gain-or-loss                 (- latest-price price)
+              realized-profit-loss                  (* pershare-gain-or-loss amount)
+              old-account-amount                    (+ amount debit-account-amount)
+
+              profit-loss-calculation
+              {:debit-account-id     debit-account-id
+               :debit-account-amount debit-account-amount
+               :debit-account-name   debit-account-name
+
+               :latest-price latest-price
+               :sell-price   price
+               :amount       amount
+
+               :pershare-gain-or-loss pershare-gain-or-loss
+               :realized-profit-loss  realized-profit-loss}
+
+              updated-profit-loss-calculations
+              (as-> (deref profit-loss) pl
+                (map (partial recalculate-profit-loss-on-sell old-account-amount debit-account-amount) pl)
+                (concat pl [profit-loss-calculation]))]
+
+          (swap! profit-loss (constantly updated-profit-loss-calculations)))))))
 
 ;; DATABASE
 (defn transact! [conn data]
@@ -86,67 +179,12 @@
                  (:bookkeeping.journal/entries %)))
 
 
-  ;; collect SELLS by stock account
-  #_(->> data
-         (filter (comp :bookkeeping.account/counter-party :bookkeeping.debit/account :bookkeeping.tentry/debits))
-         util/pprint+identity)
-
-
   ;; collect BUYS by stock account
-  ;; (println "A /")
-  (let [tentry-buys-by-account
-        (filter (comp :bookkeeping.account/counter-party :bookkeeping.credit/account
-                   :bookkeeping.tentry/credits)
-                data)
+  (util/pprint+identity (calculate-running-aggregate-profit-loss-on-BUY! data))
 
-        [{{{{price-history :game.stock/price-history} :bookkeeping.account/counter-party
-            credit-account-id                         :bookkeeping.account/id
-            credit-account-amount                     :bookkeeping.account/amount
-            credit-account-name                       :bookkeeping.account/name} :bookkeeping.credit/account
-           price                                               :bookkeeping.credit/price
-           amount                                              :bookkeeping.credit/amount} :bookkeeping.tentry/credits}]
-        tentry-buys-by-account]
+  ;; collect SELLS by stock account
+  (util/pprint+identity (calculate-running-aggregate-profit-loss-on-SELL! data))
 
-    ;; (println "B /")
-
-    ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
-    (when credit-account-id
-      (util/pprint+identity
-        (let [{latest-price :game.stock.tick/close} (->> price-history (sort-by :game.stock.tick/trade-time) last)
-              pershare-gain-or-loss                 (- latest-price price)
-              pershare-purchase-ratio               (/ amount credit-account-amount)
-              A                                     (* pershare-gain-or-loss pershare-purchase-ratio)
-              running-profit-loss                   (* A credit-account-amount)
-
-              profit-loss-calculation
-              {:credit-account-id     credit-account-id
-               :credit-account-amount credit-account-amount
-               :credit-account-name   credit-account-name
-
-               :latest-price latest-price
-               :buy-price    price
-               :amount       amount
-
-               :pershare-gain-or-loss         pershare-gain-or-loss
-               :pershare-purchase-ratio       pershare-purchase-ratio
-               :A                             A
-               :running-profit-loss           running-profit-loss
-               :running-aggregate-profit-loss running-profit-loss}
-
-              updated-profit-loss-calculations
-              (as-> (deref profit-loss) pl
-                (map (partial recalculate-profit-loss-on-buy credit-account-amount) pl)
-                (concat pl [profit-loss-calculation]))
-              ]
-
-
-          (swap! profit-loss (constantly updated-profit-loss-calculations))
-
-          ;; TODO Recalculate
-          ;; UPDATED > credit-account-amount
-
-
-          ))))
 
   (d/transact conn {:tx-data data}))
 

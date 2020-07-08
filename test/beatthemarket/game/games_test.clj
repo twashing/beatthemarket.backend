@@ -601,7 +601,7 @@
           ;; [100.0 110.0 105.0 , 120.0 110.0 , 125.0 130.0]
           ;; [100.0 110.0 105.0 , 120.0 110.0 , 125.0 130.0]
 
-          (game.games/collect-pershare-price-statistics conn result-user-id gameId)
+          ;; (game.games/collect-pershare-price-statistics conn result-user-id gameId)
 
           ;; (println "D /")
           ;; (util/pprint+identity (persistence.core/pull-entity conn game-db-id))
@@ -614,7 +614,7 @@
 
 
 
-          (is true)
+          (is false)
           #_(is (= (.floatValue expected-profit-A)
                  (.floatValue (game.games/collect-pershare-price-statistics conn result-user-id gameId))))
 
