@@ -22,7 +22,7 @@
 
   (let [{{checked-authentication :checked-authentication}
          :request}                                   context
-        conn                                         (-> repl.state/system :persistence/datomic :conn)
+        conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
         {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
 
     (if (util/truthy? (and db-before db-after tx-data tempids))
@@ -31,7 +31,7 @@
 
 (defn resolve-create-game [context args _]
 
-  (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
+  (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
         user-db-id                                          (ffirst
                                                               (d/q '[:find ?e
@@ -52,7 +52,7 @@
 
   ;; (println "resolve-buy-stock CALLED /" args)
   (let [{{{userId :uid} :checked-authentication} :request} context
-        conn                                               (-> repl.state/system :persistence/datomic :conn)
+        conn                                               (-> repl.state/system :persistence/datomic :opts :conn)
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
         gameId (UUID/fromString gameId)
         stockId (UUID/fromString stockId)
@@ -70,7 +70,7 @@
 
   (println "resolve-sell-stock CALLED /" args)
   (let [{{{userId :uid} :checked-authentication} :request} context
-        conn                                               (-> repl.state/system :persistence/datomic :conn)
+        conn                                               (-> repl.state/system :persistence/datomic :opts :conn)
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
         gameId (UUID/fromString gameId)
         stockId (UUID/fromString stockId)
@@ -93,7 +93,7 @@
 (defn stream-new-game
   [context {id :id :as args} source-stream]
 
-  (let [conn                                                (-> repl.state/system :persistence/datomic :conn)
+  (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
         user-db-id                                          (ffirst
                                                               (d/q '[:find ?e

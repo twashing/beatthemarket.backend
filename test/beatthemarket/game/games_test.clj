@@ -26,7 +26,7 @@
 
   (testing "We get an expected game-control struct"
 
-    (let [conn               (-> repl.state/system :persistence/datomic :conn)
+    (let [conn               (-> repl.state/system :persistence/datomic :opts :conn)
           result-user-id     (:db/id (test-util/generate-user! conn))
           sink-fn            identity
           {:keys [game tick-sleep-ms control-channel]
@@ -98,7 +98,7 @@
 
                   (testing "Two ticks streamed to client, got saved to the DB"
 
-                      (let [conn (-> repl.state/system :persistence/datomic :conn)
+                      (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
 
                             tick-id0 id0
                             tick-id1 id1]
@@ -117,7 +117,7 @@
 
 (deftest buy-stock!-test
 
-  (let [conn                                (-> repl.state/system :persistence/datomic :conn)
+  (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)
         {result-user-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
         sink-fn                             identity
@@ -200,7 +200,7 @@
 
 (deftest sell-stock!-test
 
-  (let [conn                                      (-> repl.state/system :persistence/datomic :conn)
+  (let [conn                                      (-> repl.state/system :persistence/datomic :opts :conn)
         {result-user-id :db/id
          userId         :user/external-uid}       (test-util/generate-user! conn)
         sink-fn                                   identity
@@ -298,7 +298,7 @@
             - 100"
 
     (let [;; A
-          conn                                      (-> repl.state/system :persistence/datomic :conn)
+          conn                                      (-> repl.state/system :persistence/datomic :opts :conn)
           {result-user-id :db/id
            userId         :user/external-uid}       (test-util/generate-user! conn)
 
@@ -393,7 +393,7 @@
             - 100"
 
     (let [;; A
-          conn                                      (-> repl.state/system :persistence/datomic :conn)
+          conn                                      (-> repl.state/system :persistence/datomic :opts :conn)
           {result-user-id :db/id
            userId         :user/external-uid}       (test-util/generate-user! conn)
 
@@ -497,7 +497,7 @@
             - 30"
 
     (let [;; A
-          conn                                (-> repl.state/system :persistence/datomic :conn)
+          conn                                (-> repl.state/system :persistence/datomic :opts :conn)
           {result-user-id :db/id
            userId         :user/external-uid} (test-util/generate-user! conn)
 

@@ -154,7 +154,7 @@
                        (let [decoded-token (second (iam.auth/decode-token id-token))
                              email         (get decoded-token "email")
 
-                             conn (-> repl.state/system :persistence/datomic :conn)]
+                             conn (-> repl.state/system :persistence/datomic :opts :conn)]
 
                          (if (iam.user/user-exists? (iam.persistence/user-by-email conn email))
                            (rop/succeed input)

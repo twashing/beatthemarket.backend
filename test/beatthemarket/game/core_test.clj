@@ -22,7 +22,7 @@
 
 (deftest initialize-game!-test
 
-  (let [conn (-> repl.state/system :persistence/datomic :conn)
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
 
         email "foo@bar.com"
         checked-authentication
@@ -69,7 +69,7 @@
 
 (deftest buy-stock!-test
 
-  (let [conn         (-> repl.state/system :persistence/datomic :conn)
+  (let [conn         (-> repl.state/system :persistence/datomic :opts :conn)
         stock-amount 100
         stock-price  50.47
 
@@ -173,7 +173,7 @@
 
   (testing "Cannot buy stock with insufficient funds"
 
-    (let [conn                     (-> repl.state/system :persistence/datomic :conn)
+    (let [conn                     (-> repl.state/system :persistence/datomic :opts :conn)
           stock-amount             100
           stock-price              50.47
           starting-cash-balance    0.0
@@ -186,7 +186,7 @@
 
 (deftest sell-stock!-test
 
-  (let [conn         (-> repl.state/system :persistence/datomic :conn)
+  (let [conn         (-> repl.state/system :persistence/datomic :opts :conn)
         stock-amount 100
         stock-price  50.47
 
@@ -312,7 +312,7 @@
   ;; USER
   (do
 
-    (def conn                   (-> repl.state/system :persistence/datomic :conn))
+    (def conn                   (-> repl.state/system :persistence/datomic :opts :conn))
     (def id-token               (test-util/->id-token))
     (def checked-authentication (iam.auth/check-authentication id-token))
     (def add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication))
@@ -326,7 +326,7 @@
 
   ;; ACCOUNT
   (do
-    (def conn (-> repl.state/system :persistence/datomic :conn))
+    (def conn (-> repl.state/system :persistence/datomic :opts :conn))
     (->> (d/pull (d/db conn) '[*] result-user-id)
          util/pprint+identity
          (def user-pulled)))

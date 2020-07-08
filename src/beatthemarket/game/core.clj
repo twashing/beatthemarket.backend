@@ -159,7 +159,7 @@
   ;; USER
   (do
 
-    (def conn                   (-> repl.state/system :persistence/datomic :conn))
+    (def conn                   (-> repl.state/system :persistence/datomic :opts :conn))
     (def id-token               (test-util/->id-token))
     (def checked-authentication (iam.auth/check-authentication id-token))
     (def add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication))

@@ -12,7 +12,7 @@
      (apply-norms! norms)))
 
   ([norms]
-   (-> state/system :persistence/datomic :conn
+   (-> state/system :persistence/datomic :opts :conn
        (apply-norms! norms)))
 
   ([conn norms]
