@@ -196,6 +196,7 @@
          stocks                (:game/stocks game)
          stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
          game-control          {:game                  game
+                                :profit-loss           {}
                                 :tick-sleep-ms         (-> integrant.repl.state/config :game/game :tick-sleep-ms)
                                 :stocks-with-tick-data stocks-with-tick-data
 

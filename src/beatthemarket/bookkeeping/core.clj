@@ -306,9 +306,7 @@
                                         :game/users first
                                         :game.user/portfolio
                                         :bookkeeping.portfolio/journals first
-                                        (assoc :bookkeeping.journal/entries tentry)
-                                        ;; (update-in [:bookkeeping.journal/entries] conj tentry)
-                                        )
+                                        (assoc :bookkeeping.journal/entries tentry))
 
             entities [tentry updated-journal-entries]]
 
@@ -367,9 +365,7 @@
                                         :game/users first
                                         :game.user/portfolio
                                         :bookkeeping.portfolio/journals first
-                                        (assoc :bookkeeping.journal/entries tentry)
-                                        ;; (update-in [:bookkeeping.journal/entries] conj tentry)
-                                        )
+                                        (assoc :bookkeeping.journal/entries tentry))
 
             entities [tentry updated-journal-entries]]
 
