@@ -21,11 +21,15 @@
 (defn recalculate-profit-loss-on-sell [old-account-amount updated-debit-account-amount
                                       {:keys [amount pershare-gain-or-loss] :as calculation}]
 
-  (let [account-amount-new-old-ratio (/ updated-debit-account-amount old-account-amount)
-        pershare-purchase-ratio (/ (* amount account-amount-new-old-ratio) updated-debit-account-amount)
-        A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
+  (if (= 0 updated-debit-account-amount)
 
-    (assoc calculation :running-aggregate-profit-loss (* A updated-debit-account-amount))))
+    (assoc calculation :running-aggregate-profit-loss 0.0)
+
+    (let [account-amount-new-old-ratio (/ updated-debit-account-amount old-account-amount)
+          pershare-purchase-ratio (/ (* amount account-amount-new-old-ratio) updated-debit-account-amount)
+          A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
+
+      (assoc calculation :running-aggregate-profit-loss (* A updated-debit-account-amount)))))
 
 (defn game-id-by-account-id [conn account-id]
   (-> (d/q '[:find (pull ?e [{:user/_accounts
@@ -143,7 +147,7 @@
     (cond
 
       ;; collect BUYS by stock account
-      (buys-fn data) (util/pprint+identity (calculate-running-aggregate-profit-loss-on-BUY! data))
+      (buys-fn data) (calculate-running-aggregate-profit-loss-on-BUY! data)
 
       ;; collect SELLS by stock account
-      (sells-fn data) (util/pprint+identity (calculate-running-aggregate-profit-loss-on-SELL! data)))))
+      (sells-fn data) (calculate-running-aggregate-profit-loss-on-SELL! data))))
