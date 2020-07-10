@@ -522,25 +522,13 @@
       :channel-controls channel-controls})))
 
 ;; CALCULATION
-(defn collect-pershare-price-statistics [conn game-id]
+(defn collect-realized-profit-loss [game-id]
 
   (let [profit-loss (-> repl.state/system :game/games deref (get game-id) :profit-loss)]
-
-    (for [[k vs] profit-loss]
-
-      (let [running-aggregate-profit-loss
-            (reduce (fn [acc e]
-                      (if-let [rapl (:running-aggregate-profit-loss e)]
-                        (+ acc rapl)
-                        acc))
-                    0.0 vs)
-
-            realized-profit-loss
-            (reduce (fn [acc e]
-                      (if-let [rpl (:realized-profit-loss e)]
-                        (+ acc rpl)
-                        acc))
-                    0.0 vs)]
-
-        {k {:running-aggregate-profit-loss (Float. (format "%.2f" running-aggregate-profit-loss))
-            :realized-profit-loss (Float. (format "%.2f" realized-profit-loss))}}))))
+    (->> (for [[k vs] profit-loss]
+           [k (->> (filter :realized-profit-loss vs)
+                   (reduce (fn [ac {pl :realized-profit-loss}]
+                             (+ ac pl))
+                           0.0))])
+         flatten
+         (apply hash-map))))

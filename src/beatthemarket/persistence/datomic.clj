@@ -53,8 +53,8 @@
                                                 transducers :data-proccesors :as opts}]
 
   {:opts (->datomic-client (assoc datomic-opts :env (:env opts)))
-   :data-proccesors (->> (map resolve transducers)
-                     (apply juxt)) })
+   :data-proccesors (->> (map resolve (trace transducers))
+                         (apply juxt)) })
 
 (defmethod ig/halt-key! :persistence/datomic [_ {datomic-component-map :opts}]
   (println "Closing database...")

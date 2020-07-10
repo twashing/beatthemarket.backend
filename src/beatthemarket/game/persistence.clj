@@ -1,35 +1,57 @@
 (ns beatthemarket.game.persistence
   (:require [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :as util])
+  (:import [java.util UUID]))
 
-
-(def profit-loss (atom {}))
 
 (defn track-profit-loss-by-stock-id! [game-id stock-id updated-profit-loss-calculations]
   (swap! (:game/games repl.state/system)
          #(update-in % [game-id :profit-loss stock-id] (constantly updated-profit-loss-calculations))))
 
-(defn recalculate-profit-loss-on-buy [updated-credit-account-amount
-                                      {:keys [amount pershare-gain-or-loss] :as calculation}]
+(defn track-profit-loss-by-stock-id2! [game-id updated-profit-loss-calculations]
+  (swap! (:game/games repl.state/system)
+         (fn [gs]
+           (update-in gs [game-id :profit-loss]
+                      #(->> updated-profit-loss-calculations
+                            (reduce (fn [acc kvs]
+                                      (reduce (fn [a [k v]]
+                                                (assoc acc k v))
+                                              kvs))
+                                    %)
+                            (apply hash-map))))))
 
-  (let [pershare-purchase-ratio (/ amount updated-credit-account-amount)
+(defn recalculate-profit-loss-on-buy [updated-stock-account-amount
+                                      latest-trade-price
+                                      {:keys [amount trade-price] :as calculation}]
+
+  (let [pershare-purchase-ratio (/ amount updated-stock-account-amount)
+        pershare-gain-or-loss   (- latest-trade-price trade-price)
         A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
 
-    (assoc calculation :running-aggregate-profit-loss (* A updated-credit-account-amount))))
+    (assoc calculation
+           :latest-trade-price->price     [latest-trade-price trade-price]
+           :pershare-gain-or-loss         pershare-gain-or-loss)))
 
-(defn recalculate-profit-loss-on-sell [old-account-amount updated-debit-account-amount
-                                      {:keys [amount pershare-gain-or-loss] :as calculation}]
+(defn recalculate-profit-loss-on-sell [old-account-amount updated-stock-account-amount latest-trade-price
+                                       {:keys [amount trade-price] :as calculation}]
 
-  (if (= 0 updated-debit-account-amount)
+  (let [pershare-gain-or-loss (- latest-trade-price trade-price)]
 
-    (assoc calculation :running-aggregate-profit-loss 0.0)
+    (if (= 0 updated-stock-account-amount)
 
-    (let [account-amount-new-old-ratio (/ updated-debit-account-amount old-account-amount)
-          pershare-purchase-ratio (/ (* amount account-amount-new-old-ratio) updated-debit-account-amount)
-          A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
+      (assoc calculation
+             :latest-price->trade-price     [latest-trade-price trade-price]
+             :pershare-gain-or-loss         pershare-gain-or-loss)
 
-      (assoc calculation :running-aggregate-profit-loss (* A updated-debit-account-amount)))))
+      (let [account-amount-new-old-ratio (/ updated-stock-account-amount old-account-amount)
+            pershare-purchase-ratio (/ (* amount account-amount-new-old-ratio) updated-stock-account-amount)
+            A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
+
+        (assoc calculation
+               :pershare-purchase-ratio   pershare-purchase-ratio
+               :latest-price->trade-price [latest-trade-price trade-price]
+               :pershare-gain-or-loss     pershare-gain-or-loss)))))
 
 (defn game-id-by-account-id [conn account-id]
   (-> (d/q '[:find (pull ?e [{:user/_accounts
@@ -43,6 +65,12 @@
       flatten first
       :user/_accounts :game.user/_user :game/_users :game/id))
 
+(defn profit-loss->chunks [profit-loss]
+  (->> profit-loss
+       (partition-by #(= 0 (:stock-account-amount %)))
+       (partition-all 2)
+       (map flatten)))
+
 (defn calculate-running-aggregate-profit-loss-on-BUY! [data]
 
   (let [tentry-buys-by-account
@@ -50,48 +78,59 @@
                 data)
 
         [{{{{price-history :game.stock/price-history
-             game-stock-id :game.stock/id}            :bookkeeping.account/counter-party
-            credit-account-id                         :bookkeeping.account/id
-            credit-account-amount                     :bookkeeping.account/amount
-            credit-account-name                       :bookkeeping.account/name} :bookkeeping.credit/account
-           price                                               :bookkeeping.credit/price
-           amount                                              :bookkeeping.credit/amount} :bookkeeping.tentry/credits}]
+             game-stock-id :game.stock/id} :bookkeeping.account/counter-party
+            credit-account-id              :bookkeeping.account/id
+            stock-account-amount           :bookkeeping.account/amount
+            credit-account-name            :bookkeeping.account/name} :bookkeeping.credit/account
+           price                                                      :bookkeeping.credit/price
+           amount                                                     :bookkeeping.credit/amount} :bookkeeping.tentry/credits}]
         tentry-buys-by-account]
 
     ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
     (when credit-account-id
-      (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-            game-id (game-id-by-account-id conn credit-account-id)
-
-            {latest-price :game.stock.tick/close} (->> price-history (sort-by :game.stock.tick/trade-time) last)
-            pershare-gain-or-loss                 (- latest-price price)
-            pershare-purchase-ratio               (/ amount credit-account-amount)
-            A                                     (* pershare-gain-or-loss pershare-purchase-ratio)
-            running-profit-loss                   (* A credit-account-amount)
+      (let [conn                    (-> repl.state/system :persistence/datomic :opts :conn)
+            game-id                 (game-id-by-account-id conn credit-account-id)
+            pershare-gain-or-loss   (- price price)
+            pershare-purchase-ratio (/ amount stock-account-amount)
+            A                       (* pershare-gain-or-loss pershare-purchase-ratio)
+            running-profit-loss     (* A stock-account-amount)
 
             profit-loss-calculation
-            {:credit-account-id     credit-account-id
-             :credit-account-amount credit-account-amount
-             :credit-account-name   credit-account-name
+            {:id                   (UUID/randomUUID)
+             :op                   :BUY
+             :credit-account-id    credit-account-id
+             :stock-account-amount stock-account-amount
+             :credit-account-name  credit-account-name
 
-             :latest-price latest-price
-             :buy-price    price
-             :amount       amount
+             :latest-price->trade-price [price price]
+             :trade-price               price
+             :amount                    amount
 
-             :pershare-gain-or-loss         pershare-gain-or-loss
-             :pershare-purchase-ratio       pershare-purchase-ratio
-             :A                             A
-             :running-profit-loss           running-profit-loss
-             :running-aggregate-profit-loss running-profit-loss}
+             :pershare-gain-or-loss   pershare-gain-or-loss
+             :pershare-purchase-ratio pershare-purchase-ratio
+             :A                       A}
 
-            profit-loss (-> repl.state/system :game/games deref (get game-id) :profit-loss)
-            updated-profit-loss-calculations
-            (as-> profit-loss pl
-              (get pl game-stock-id)
-              (map (partial recalculate-profit-loss-on-buy credit-account-amount) pl)
-              (concat pl [profit-loss-calculation]))]
+            profit-loss
+            (as-> (deref (:game/games repl.state/system)) gs
+              (get gs game-id)
+              (:profit-loss gs)
+              (assoc gs game-stock-id (get gs game-stock-id [])))
 
-        (track-profit-loss-by-stock-id! game-id game-stock-id updated-profit-loss-calculations)))))
+            updated-profit-loss-calculations2
+            (->> profit-loss
+                 (map (fn [[k v]]
+
+                        (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
+                                                                 (concat v)
+                                                                 profit-loss->chunks
+                                                                 ((juxt butlast last)))]
+                          [k (->> latest-chunk
+                                  (map (partial recalculate-profit-loss-on-buy stock-account-amount price))
+                                  (concat butlast-chunks)
+                                  flatten)])))
+                 (map #(apply hash-map %)))]
+
+        (track-profit-loss-by-stock-id2! game-id updated-profit-loss-calculations2)))))
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
 
@@ -102,7 +141,7 @@
         [{{{{price-history :game.stock/price-history
              game-stock-id :game.stock/id}           :bookkeeping.account/counter-party
             debit-account-id                         :bookkeeping.account/id
-            debit-account-amount                     :bookkeeping.account/amount
+            stock-account-amount                     :bookkeeping.account/amount
             debit-account-name                       :bookkeeping.account/name} :bookkeeping.debit/account
            price                                               :bookkeeping.debit/price
            amount                                              :bookkeeping.debit/amount} :bookkeeping.tentry/debits}]
@@ -110,35 +149,66 @@
 
     ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
     (when debit-account-id
-      (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+      (let [conn    (-> repl.state/system :persistence/datomic :opts :conn)
             game-id (game-id-by-account-id conn debit-account-id)
 
-            {latest-price :game.stock.tick/close} (->> price-history (sort-by :game.stock.tick/trade-time) last)
-            pershare-gain-or-loss                 (- latest-price price)
+            pershare-gain-or-loss                 (- price price)
             realized-profit-loss                  (* pershare-gain-or-loss amount)
-            old-account-amount                    (+ amount debit-account-amount)
+            old-account-amount                    (+ amount stock-account-amount)
 
             profit-loss-calculation
-            {:debit-account-id     debit-account-id
-             :debit-account-amount debit-account-amount
+            {:id                   (UUID/randomUUID)
+             :op                   :SELL
+             :debit-account-id     debit-account-id
+             :stock-account-amount stock-account-amount
              :debit-account-name   debit-account-name
 
-             :latest-price latest-price
-             :sell-price   price
+             :latest-price->trade-price [price price]
+             :trade-price  price
              :amount       amount
 
-             :pershare-gain-or-loss pershare-gain-or-loss
-             :realized-profit-loss  realized-profit-loss}
+             ;; :pershare-gain-or-loss pershare-gain-or-loss
+             }
 
-            profit-loss (-> repl.state/system :game/games deref (get game-id) :profit-loss)
-            updated-profit-loss-calculations
-            (as-> profit-loss pl
-              (get pl game-stock-id)
-              (map (partial recalculate-profit-loss-on-sell old-account-amount debit-account-amount) pl)
-              (concat pl [profit-loss-calculation]))]
+            profit-loss
+            (as-> (deref (:game/games repl.state/system)) gs
+              (get gs game-id)
+              (:profit-loss gs)
+              (assoc gs game-stock-id (get gs game-stock-id [])))
 
-        (track-profit-loss-by-stock-id! game-id game-stock-id updated-profit-loss-calculations)))))
+            calculate-lealized-profit-loss
+            (fn [chunk]
+              (let [[buys {sell-amount :amount :as sell}] ((juxt butlast last) chunk)
 
+                    realized-profit-loss
+                    (reduce (fn [ac {:keys [pershare-purchase-ratio pershare-gain-or-loss]}]
+                              (+ ac (* sell-amount (* pershare-purchase-ratio pershare-gain-or-loss))))
+                            0.0
+                            buys)]
+                (concat buys [(assoc sell :realized-profit-loss realized-profit-loss)])))
+
+            updated-profit-loss-calculations2
+            (->> profit-loss
+                 (map (fn [[k v]]
+                        (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
+                                                                 (concat v)
+                                                                 profit-loss->chunks
+                                                                 ((juxt butlast last)))]
+                          [k (->> latest-chunk
+                                  (map (partial recalculate-profit-loss-on-sell old-account-amount stock-account-amount price))
+                                  calculate-lealized-profit-loss
+                                  (concat butlast-chunks)
+                                  flatten)])))
+                 (map #(apply hash-map %)))]
+
+        (track-profit-loss-by-stock-id2! game-id updated-profit-loss-calculations2)))))
+
+
+;; > Profit Calculation Use Cases
+;;
+;; Single buy / sell (multiple times)
+;; Multiple buy / single sell
+;; Multiple buy / multiple sell (multiple times)
 (defn track-profit-loss! [data]
 
   (let [buys-fn (comp :bookkeeping.account/counter-party :bookkeeping.credit/account :bookkeeping.tentry/credits first)
