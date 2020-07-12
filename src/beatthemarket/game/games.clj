@@ -529,6 +529,8 @@
            [k (->> (filter :realized-profit-loss vs)
                    (reduce (fn [ac {pl :realized-profit-loss}]
                              (+ ac pl))
-                           0.0))])
+                           0.0)
+                   (format "%.2f")
+                   (Float.))])
          flatten
          (apply hash-map))))

@@ -4,7 +4,10 @@
             [clojure.edn :refer [read-string]]
             [integrant.core :as ig]
             [compute.datomic-client-memdb.core :as memdb]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :as util]
+
+            ;; TODO Make configurable, loading of :data-processor namespaces
+            [beatthemarket.game.persistence]))
 
 
 ;; COMPONENT
@@ -53,7 +56,7 @@
                                                 transducers :data-proccesors :as opts}]
 
   {:opts (->datomic-client (assoc datomic-opts :env (:env opts)))
-   :data-proccesors (->> (map resolve (trace transducers))
+   :data-proccesors (->> (map resolve transducers)
                          (apply juxt)) })
 
 (defmethod ig/halt-key! :persistence/datomic [_ {datomic-component-map :opts}]

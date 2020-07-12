@@ -96,8 +96,7 @@
             running-profit-loss     (* A stock-account-amount)
 
             profit-loss-calculation
-            {:id                   (UUID/randomUUID)
-             :op                   :BUY
+            {:op                   :BUY
              :credit-account-id    credit-account-id
              :stock-account-amount stock-account-amount
              :credit-account-name  credit-account-name
@@ -157,18 +156,14 @@
             old-account-amount                    (+ amount stock-account-amount)
 
             profit-loss-calculation
-            {:id                   (UUID/randomUUID)
-             :op                   :SELL
+            {:op                   :SELL
              :debit-account-id     debit-account-id
              :stock-account-amount stock-account-amount
              :debit-account-name   debit-account-name
 
              :latest-price->trade-price [price price]
              :trade-price  price
-             :amount       amount
-
-             ;; :pershare-gain-or-loss pershare-gain-or-loss
-             }
+             :amount       amount}
 
             profit-loss
             (as-> (deref (:game/games repl.state/system)) gs
@@ -176,15 +171,17 @@
               (:profit-loss gs)
               (assoc gs game-stock-id (get gs game-stock-id [])))
 
-            calculate-lealized-profit-loss
+            calculate-realized-profit-loss
             (fn [chunk]
               (let [[buys {sell-amount :amount :as sell}] ((juxt butlast last) chunk)
 
                     realized-profit-loss
-                    (reduce (fn [ac {:keys [pershare-purchase-ratio pershare-gain-or-loss]}]
-                              (+ ac (* sell-amount (* pershare-purchase-ratio pershare-gain-or-loss))))
-                            0.0
-                            buys)]
+                    (->> (reduce (fn [ac {:keys [pershare-purchase-ratio pershare-gain-or-loss]}]
+                                   (+ ac (* sell-amount (* pershare-purchase-ratio pershare-gain-or-loss))))
+                                 0.0
+                                 buys)
+                         (format "%.2f")
+                         (Float.))]
                 (concat buys [(assoc sell :realized-profit-loss realized-profit-loss)])))
 
             updated-profit-loss-calculations2
@@ -196,7 +193,7 @@
                                                                  ((juxt butlast last)))]
                           [k (->> latest-chunk
                                   (map (partial recalculate-profit-loss-on-sell old-account-amount stock-account-amount price))
-                                  calculate-lealized-profit-loss
+                                  calculate-realized-profit-loss
                                   (concat butlast-chunks)
                                   flatten)])))
                  (map #(apply hash-map %)))]
