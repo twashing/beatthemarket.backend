@@ -31,7 +31,7 @@
         (testing "A lookup of the added user"
 
 
-          (let [conn          (-> integrant.repl.state/system :persistence/datomic :conn)
+          (let [conn          (-> integrant.repl.state/system :persistence/datomic :opts :conn)
                 email-initial "twashing@gmail.com"
                 user-entity   (:db/id (ffirst (iam.persistence/user-by-email conn email-initial)))
 

@@ -166,11 +166,12 @@
 
           (let [game-id (UUID/fromString id)
                 expected-component-game-keys
-                (sort '(:game :stocks-with-tick-data :tick-sleep-ms :stock-stream-channel :control-channel :close-sink-fn :sink-fn))]
+                #{:game :stocks-with-tick-data :tick-sleep-ms :stock-stream-channel :control-channel :close-sink-fn :sink-fn :profit-loss}]
 
-            (-> state/system :game/games deref (get game-id) keys sort
-                (= expected-component-game-keys)
-                is)))))))
+            (->> state/system :game/games deref (#(get % game-id)) keys
+                 (into #{})
+                 (= expected-component-game-keys)
+                 is)))))))
 
 (deftest start-game-subscription-test
 
@@ -235,7 +236,7 @@
 
             (testing "Two ticks streamed to client, got saved to the DB"
 
-              (let [conn (-> state/system :persistence/datomic :conn)
+              (let [conn (-> state/system :persistence/datomic :opts :conn)
 
                     tick-id0 id0
                     tick-id1 id1]
@@ -264,7 +265,7 @@
 
   (testing "First setting up a test harness"
 
-    (let [conn                              (-> state/system :persistence/datomic :conn)
+    (let [conn                              (-> state/system :persistence/datomic :opts :conn)
           email                             "twashing@gmail.com"
           {user-id :db/id}                  (ffirst (iam.persistence/user-by-email conn email))
           sink-fn                           identity
@@ -278,10 +279,10 @@
           test-chan                         (core.async/chan)
           game-loop-fn                      (fn [a]
                                               (core.async/>!! test-chan a))
-          {{:keys                                           [mixer
-                                                             pause-chan
-                                                             input-chan
-                                                             output-chan] :as channel-controls}
+          {{:keys [mixer
+                   pause-chan
+                   input-chan
+                   output-chan] :as channel-controls}
            :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)]
 
       (core.async/<!! (core.async/timeout 7000))
@@ -330,7 +331,7 @@
 
   (testing "First setting up a test harness"
 
-    (let [conn                              (-> state/system :persistence/datomic :conn)
+    (let [conn                              (-> state/system :persistence/datomic :opts :conn)
           email                             "twashing@gmail.com"
           {user-id :db/id}                  (ffirst (iam.persistence/user-by-email conn email))
           sink-fn                           identity
@@ -366,10 +367,10 @@
                                 :type :start
                                 :payload
                                 {:query "mutation BuyStock($input: BuyStock!) {
-                                       buyStock(input: $input) {
-                                         message
-                                       }
-                                     }"
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
 
                                  :variables {:input {:gameId      (str game-id)
                                                      :stockId     (str stock-id)
@@ -385,10 +386,10 @@
                                 :type :start
                                 :payload
                                 {:query "mutation SellStock($input: SellStock!) {
-                                       sellStock(input: $input) {
-                                         message
-                                       }
-                                     }"
+                                           sellStock(input: $input) {
+                                             message
+                                           }
+                                         }"
 
                                  :variables {:input {:gameId      (str game-id)
                                                      :stockId     (str stock-id)

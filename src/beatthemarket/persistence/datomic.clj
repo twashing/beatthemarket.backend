@@ -53,10 +53,10 @@
 
 
 (defmethod ig/init-key :persistence/datomic [_ {datomic-opts :datomic
-                                                transducers :data-proccesors :as opts}]
+                                                data-proccesors :data-proccesors :as opts}]
 
   {:opts (->datomic-client (assoc datomic-opts :env (:env opts)))
-   :data-proccesors (->> (map resolve transducers)
+   :data-proccesors (->> (map resolve data-proccesors)
                          (apply juxt)) })
 
 (defmethod ig/halt-key! :persistence/datomic [_ {datomic-component-map :opts}]

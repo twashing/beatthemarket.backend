@@ -40,6 +40,7 @@
                                                                    (d/db conn)
                                                                    email))
 
+        ;; NOTE sink-fn updates once we start to stream a game
         sink-fn                       identity
         {{game-id :game/id
           :as     game} :game

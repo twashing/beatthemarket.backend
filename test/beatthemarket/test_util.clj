@@ -72,9 +72,9 @@
 
 (defn component-fixture [f]
 
-  (beatthemarket.state.core/init-components)
+  (state.core/init-components)
   (f)
-  (beatthemarket.state.core/halt-components))
+  (state.core/halt-components))
 
 (defn migration-fixture [f]
 
