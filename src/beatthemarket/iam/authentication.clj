@@ -58,8 +58,8 @@
     (map #(String. %) jwt) ;; byte array to string
     (map json/read-str jwt)))
 
-(defmethod ig/init-key :firebase/firebase [_ {:keys [firebase-database-url
-                                                     service-account-file-name] :as opts}]
+(defmethod ig/init-key :firebase/firebase [_ {:keys                             [firebase-database-url
+                                                                                 service-account-file-name] :as opts}]
   (initialize-firebase firebase-database-url service-account-file-name)
   opts)
 
@@ -108,14 +108,14 @@
 
 
   (defn token->body-payload [customToken]
-    (json/write-str {:token customToken
+    (json/write-str {:token             customToken
                      :returnSecureToken true}))
 
   (def api-key (-> state/config :firebase/firebase :api-key))
 
   (http/post (format "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyCustomToken?key=%s" api-key)
              {:content-type :json
-              :body (token->body-payload customToken)})
+              :body         (token->body-payload customToken)})
 
   (def result *1)
 

@@ -1,4 +1,6 @@
-{:objects
+{
+ ;; //
+ :objects
  {:Ping
   {:description "Captures a message and a timestamp. This is used when testing Subscriptions."
    :fields
@@ -8,8 +10,49 @@
   :Game
   {:description "Container for game events."
    :fields
+   {:message {:type (non-null String)}}}
+
+  :Stocks
+  {:fields
+   {:message {:type (list (non-null String))}}}
+
+  :CreateGamekAck
+  {:fields
+   {:message {:type (non-null String)}}}
+
+  :BuyStockAck
+  {:fields
+   {:message {:type (non-null String)}}}
+
+  :SellStockAck
+  {:fields
    {:message {:type (non-null String)}}}}
 
+
+ ;; //
+ :input-objects
+ {:BuyStock
+  {:description "An event to buy a stock"
+   :fields
+   {:gameId {:type (non-null String)}
+    :stockId {:type (non-null String)}
+    :stockAmount {:type (non-null Int)}
+    :tickId {:type (non-null String)}
+    :tickTime {:type (non-null Int)}
+    :tickPrice {:type (non-null Float)}}}
+
+  :SellStock
+  {:description "An event to sell a stock"
+   :fields
+   {:gameId {:type (non-null String)}
+    :stockId {:type (non-null String)}
+    :stockAmount {:type (non-null Int)}
+    :tickId {:type (non-null String)}
+    :tickTime {:type (non-null Int)}
+    :tickPrice {:type (non-null Float)}}}}
+
+
+ ;; //
  :queries
  {:hello
   {:type String
@@ -19,6 +62,26 @@
   {:type String
    :resolve :resolve-login}}
 
+
+ ;; //
+ :mutations
+ {:createGame
+  {:type :CreateGamekAck
+   :description "Creates a new game"
+   :resolve :resolve-create-game}
+
+  :buyStock
+  {:type :BuyStockAck
+   :args {:input {:type :BuyStock}}
+   :resolve :resolve-buy-stock}
+
+  :sellStock
+  {:type :SellStockAck
+   :args {:input {:type :SellStock}}
+   :resolve :resolve-sell-stock}}
+
+
+ ;; //
  :subscriptions
  {:ping
   {:type :Ping
@@ -29,9 +92,9 @@
             :default 5}
     :message {:type (non-null String)}}}
 
-  :newGame
-  {:type :Game
-   :description "Creates a new game and sends updates to the client"
+  :startGame
+  {:type :Stocks
+   :description "Starts streaming a game's stock subscription."
    :stream :stream-new-game
    :args
-   {:message {:type (non-null String)}}}}}
+   {:id {:type (non-null String)}}}}}

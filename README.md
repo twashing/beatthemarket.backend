@@ -1,4 +1,4 @@
-# BeataTheMarket.Backend
+# BeatTheMarket.Backend
 
 
 This sample illustrates how to use WebSockets with Pedestal and Jetty.
@@ -21,6 +21,13 @@ You'll notice a corresponding log message in the Clojure REPL.
 
 4. Send a message to the client and close with `(service/send-and-close!)`
 
+
+## Running
+
+```
+GOOGLE_APPLICATION_CREDENTIALS="./beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json" \
+lein repl
+```
 
 ## Component
 
@@ -45,6 +52,7 @@ Reloaded Workflow uses [weavejester/integrant-repl](https://github.com/weavejest
 
 To configure logging see config/logback.xml. By default, the app logs to stdout and logs/.
 To learn more about configuring Logback, read its [documentation](http://logback.qos.ch/documentation.html).
+
 
 ## Links
 * [Other Pedestal examples](http://pedestal.io/samples)
@@ -92,10 +100,11 @@ lein kibit
 lein nvd check
 ```
 
+
 > REPL
 
 * [Orchestra](https://github.com/jeaye/orchestra). Every call to a spec'd function will have its arguments, return value, and :fn spec validated
-* [x] [Slamhound](https://github.com/technomancy/slamhound) rips your namespace form apart and reconstructs it (demo [here](https://vimeo.com/80650659)).
+* __[Slamhound](https://github.com/technomancy/slamhound)__ rips your namespace form apart and reconstructs it (demo [here](https://vimeo.com/80650659)).
 
 
 ## TODOs
@@ -103,16 +112,34 @@ lein nvd check
 
 ### C
 
-* Add a migration to create the DB schema
-  * https://github.com/avescodes/conformity (*)
-  * https://github.com/vvvvalvalval/datofu
+* Integration Test
+  * Apollo client, login, new game, stream to client
+  * Buy a stock sell a stock
+  * Complete level 1
 
 
-* Add a stock name generator
+* Need a mechanism to stop data-subscription ticks -> db transact, when Channel or DB is closed
+goo-loop and closed? on core.async channels are not a good enough control mechanism
+async operations take a long time, and can have a closed DB when trying to write
+
+* These values should match against aggregated tentries
+:bookkeeping.account/balance
+:bookkeeping.account/amount
+
+* ! Ensure we're only creating stock accounts on a per user / game basis
+
 * generate specs from example data
   * https://github.com/stathissideris/spec-provider
+
 * fn specs for all game and bookkeeping artifacts
   Use [Orchestra](https://github.com/jeaye/orchestra)
+
+* UI workbench for Integration test
+* Replace clj-time with juxt/tick (https://github.com/juxt/tick)
+
+
+* ? Stream two games (Separate Users) at the same time
+* Have a mechanism to simultaneously stream multiple subscriptions (beatthemarket.graphql/stream-new-game)
 
 * Move code in `comment` blocks, to tests
 * Add git hooks to automate code checks
@@ -120,13 +147,6 @@ lein nvd check
   * lein-kibit
   * yagni
   * lein-nvm
-
-
-* Integration Test
-  * Apollo client, login, new game, stream to client
-  * Buy a stock sell a stock
-  * Complete level 1
-* Stream two games at the same time
 
 
 * Howto db pull composite references
@@ -152,6 +172,29 @@ lein nvd check
 
 
 ? Why aren't subscription / WS paths available
+
+
+* Name journals, entries, etc
+
+
+* GraphQL - multiple concurrent connections?
+  ticks
+  updates on portfolio positions, profits, etc
+
+
+* Screens
+  Finish level screen
+  Finish game screen
+
+
+* buy as many shares as you want, until level 5
+* start to restrict shares starting at level 5
+* Lose a game @ losing 10% of your money
+
+
+* UI library 
+  how to keep just a certain amount of ticks in view
+  how to scroll pane up / down to keep data in view
 
 
 

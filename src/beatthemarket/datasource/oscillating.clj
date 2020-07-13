@@ -28,7 +28,7 @@
                (< % 0.31) (.sample beta-highend)
                (< % 0.46) (.sample beta-lowend)
                (< % 0.61) (.sample beta-midpoint)
-               :else (.sample beta-bigswings)))))
+               :else      (.sample beta-bigswings)))))
 
 (defn generate-oscillating-sequence [beta-configurations]
 
@@ -71,7 +71,7 @@
              (iterate reverse))
 
         chunk-multiple 50
-        price-swings (price-swing-occurence-sequence chunk-multiple beta-midpoint)
+        price-swings   (price-swing-occurence-sequence chunk-multiple beta-midpoint)
 
         price-directions (->> (map generate-price-directions
                                    price-swings
@@ -87,7 +87,7 @@
                                    price-directions
                                    price-changes)
 
-        initial-price (datasource.core/rand-double-in-range 15 35)]
+        initial-price (datasource.core/random-double-in-range 15 35)]
 
 
 

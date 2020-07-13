@@ -3,7 +3,11 @@
             [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
             [integrant.core :as ig]
-            [compute.datomic-client-memdb.core :as memdb]))
+            [compute.datomic-client-memdb.core :as memdb]
+            [beatthemarket.util :as util]
+
+            ;; TODO Make configurable, loading of :data-processor namespaces
+            [beatthemarket.game.persistence]))
 
 
 ;; COMPONENT
@@ -17,7 +21,7 @@
 
 (defn ->datomic-client-local [{:keys [db-name config env]}]
 
-  (let [url (format "datomic:mem://%s" db-name)
+  (let [url    (format "datomic:mem://%s" db-name)
         client (memdb/client config)]
 
     (d/create-database client {:db-name url})
@@ -48,29 +52,25 @@
   (->datomic-client-local opts))
 
 
-(defmethod ig/init-key :persistence/datomic [_ datomic-opts]
-  (->datomic-client datomic-opts))
+(defmethod ig/init-key :persistence/datomic [_ {datomic-opts :datomic
+                                                data-proccesors :data-proccesors :as opts}]
 
-(defmethod ig/halt-key! :persistence/datomic [_ datomic-component-map]
+  {:opts (->datomic-client (assoc datomic-opts :env (:env opts)))
+   :data-proccesors (->> (map resolve data-proccesors)
+                         (apply juxt)) })
+
+(defmethod ig/halt-key! :persistence/datomic [_ {datomic-component-map :opts}]
+  (println "Closing database...")
   (close-db-connection! datomic-component-map))
 
 
 ;; DATABASE
 (defn transact! [conn data]
+
+  (let [data-proccesors (->> integrant.repl.state/system :persistence/datomic :data-proccesors)]
+    (data-proccesors data))
+
   (d/transact conn {:tx-data data}))
-
-(defn load-schema
-
-  ([] (load-schema "schema.datomic.edn"))
-
-  ([schema]
-   (-> schema
-       resource slurp
-       read-string)))
-
-(defn transact-schema! [conn]
-  (transact! conn (load-schema)))
-
 
 (comment
 
@@ -110,37 +110,37 @@
   ;; B add data
 
   ;; BAD
-  (->> [{:user/email "twashing@gmail.com"
-         :user/name "Timothy Washington"
+  (->> [{:user/email                 "twashing@gmail.com"
+         :user/name                  "Timothy Washington"
          :user/identity-provider-uid "adb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "twashing@gmail.com"
-         :user/name "Timothy Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "twashing@gmail.com"
+         :user/name                  "Timothy Washington"
          :user/identity-provider-uid "adb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "swashing@gmail.com"
-         :user/name "Samuel Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "swashing@gmail.com"
+         :user/name                  "Samuel Washington"
          :user/identity-provider-uid "bdb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "mwashing@gmail.com"
-         :user/name "Michelle Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "mwashing@gmail.com"
+         :user/name                  "Michelle Washington"
          :user/identity-provider-uid "cdb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}]
+         :user/identity-provider     "Google"}]
        (transact! conn))
 
   ;; GOOD
-  (->> [{:user/email "twashing@gmail.com"
-         :user/name "Timothy Washington"
+  (->> [{:user/email                 "twashing@gmail.com"
+         :user/name                  "Timothy Washington"
          :user/identity-provider-uid "adb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "swashing@gmail.com"
-         :user/name "Samuel Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "swashing@gmail.com"
+         :user/name                  "Samuel Washington"
          :user/identity-provider-uid "bdb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}
-        {:user/email "mwashing@gmail.com"
-         :user/name "Michelle Washington"
+         :user/identity-provider     "Google"}
+        {:user/email                 "mwashing@gmail.com"
+         :user/name                  "Michelle Washington"
          :user/identity-provider-uid "cdb6d854-4886-46bd-86ba-d5a9a7dc2028"
-         :user/identity-provider "Google"}]
+         :user/identity-provider     "Google"}]
        (transact! conn))
 
   (def result-users *1)
@@ -208,5 +208,4 @@
 
 (defn transact-entities! [conn entity]
   (->> (conditionially-wrap-in-sequence entity)
-       ;; util/pprint+identity
        (transact! conn)))

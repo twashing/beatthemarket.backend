@@ -15,9 +15,15 @@
             [clj-http.client :as http]
             [gniazdo.core :as g]
             [expound.alpha :as expound]
+            [datomic.client.api :as d]
             [compute.datomic-client-memdb.core :as memdb]
-            [beatthemarket.handler.http.server :refer [set-prep+load-namespaces]]
+            [beatthemarket.iam.authentication :as iam.auth]
+            [beatthemarket.iam.user :as iam.user]
+            [beatthemarket.game.core :as game.core]
+            [beatthemarket.migration.core :as migration.core]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.state.core :as state.core]
             [beatthemarket.util :as util])
   (:import [com.google.firebase.auth FirebaseAuth]))
 
@@ -60,13 +66,19 @@
   ([profile f]
 
    ;; Prep components and load namespaces
-   (set-prep+load-namespaces profile)
+   (state.core/set-prep+load-namespaces profile)
 
    (f)))
 
 (defn component-fixture [f]
 
-  (util/dev-fixture persistence.datomic/transact-schema!)
+  (state.core/init-components)
+  (f)
+  (state.core/halt-components))
+
+(defn migration-fixture [f]
+
+  (migration.core/apply-norms!)
 
   (f))
 
@@ -123,8 +135,50 @@
         :idToken)))
 
 
+
+  ;; USER
+(defn generate-user!
+
+  ([conn] (generate-user! conn (-> repl.state/config :game/game :starting-balance)))
+
+  ([conn starting-balance]
+
+   (let [id-token               (->id-token)
+         checked-authentication (iam.auth/check-authentication id-token)]
+
+     (as-> checked-authentication obj
+       (iam.user/conditionally-add-new-user! conn obj starting-balance)
+       (:db-after obj)
+       (d/q '[:find ?e
+              :in $ ?email
+              :where [?e :user/email ?email]]
+            obj
+            (-> checked-authentication
+                :claims (get "email")))
+       (ffirst obj)
+       (persistence.core/pull-entity conn obj)))))
+
+
+;; DOMAIN
+(defn generate-stocks!
+
+  ([conn] (generate-stocks! conn 1))
+
+  ([conn no-of-stocks]
+
+   (let [stocks (game.core/generate-stocks! no-of-stocks)]
+
+     (persistence.datomic/transact-entities! conn stocks)
+
+     (d/q '[:find (pull ?e [*])
+            :in $ [?stock-id ...]
+            :where [?e :game.stock/id ?stock-id]]
+          (d/db conn)
+          (map :game.stock/id stocks)))))
+
+
 ;; GraphQL
-(def ws-uri "ws://localhost:8080/graphql-ws")
+(def ws-uri "ws://localhost:8080/ws")
 (def ^:dynamic *messages-ch* nil)
 (def ^:dynamic *session* nil)
 (def *subscriber-id (atom 0))
@@ -165,7 +219,7 @@
            session (try
                      (g/connect uri
                        :on-receive (fn [message-text]
-                                     (log/debug :reason ::receive :message message-text)
+                                     (log/debug :reason ::receive :message (util/pprint+identity message-text))
                                      (put! messages-ch (json/read-str message-text :key-fn keyword)))
                        :on-connect (fn [a]
                                      (log/debug :reason ::connected))

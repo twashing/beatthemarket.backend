@@ -1,21 +1,21 @@
-(ns beatthemarket.handler.http.graphql-test
+(ns beatthemarket.graphql-test
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer [response-for]]
             [integrant.repl.state :as state]
             [clojure.data.json :as json]
             [datomic.client.api :as d]
 
-            [beatthemarket.test-util :as test-util
-             :refer [component-prep-fixture component-fixture subscriptions-fixture]]
-
-            [beatthemarket.handler.http.graphql :as sut]
+            [beatthemarket.test-util :as test-util]
+            [beatthemarket.graphql :as sut]
             [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util]))
 
 
-(use-fixtures :once (partial component-prep-fixture :test))
-(use-fixtures :each component-fixture)
+(use-fixtures :once (partial test-util/component-prep-fixture :test))
+(use-fixtures :each
+  test-util/component-fixture
+  test-util/migration-fixture)
 
 
 (deftest login-test
@@ -31,22 +31,22 @@
         (testing "A lookup of the added user"
 
 
-          (let [conn (-> integrant.repl.state/system :persistence/datomic :conn)
+          (let [conn          (-> integrant.repl.state/system :persistence/datomic :opts :conn)
                 email-initial "twashing@gmail.com"
-                user-entity (persistence.user/user-by-email conn email-initial)
+                user-entity   (:db/id (ffirst (iam.persistence/user-by-email conn email-initial)))
 
-                expected-email email-initial
-                expected-name "Timothy Washington"
+                expected-email         email-initial
+                expected-name          "Timothy Washington"
                 expected-account-names ["Cash" "Equity"]
 
-                {:user/keys [email name accounts]} (d/pull (d/db conn) '[*] (ffirst user-entity))
-                account-names (->> accounts
-                                   (map :bookkeeping.account/name)
-                                   sort)]
+                {:user/keys [email name accounts]} (d/pull (d/db conn) '[*] user-entity)
+                account-names                      (->> accounts
+                                                        (map :bookkeeping.account/name)
+                                                        sort)]
 
             (are [x y] (= x y)
-              expected-email email
-              expected-name name
+              expected-email         email
+              expected-name          name
               expected-account-names account-names)))
 
         (testing "Subsequent logins find an existing user"

@@ -18,11 +18,11 @@
             [io.pedestal.http.jetty.websockets :as ws]
             [io.pedestal.interceptor.error :as error-int]
             [integrant.core :as ig]
-            [beatthemarket.handler.http.graphql :as graphql]
+            [beatthemarket.graphql :as graphql]
 
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.authentication :as iam.auth]
-            [beatthemarket.persistence.user :as persistence.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.util]
@@ -152,11 +152,11 @@
         user-exists? (fn [{id-token :id-token :as input}]
 
                        (let [decoded-token (second (iam.auth/decode-token id-token))
-                             email (get decoded-token "email")
+                             email         (get decoded-token "email")
 
-                             conn (-> repl.state/system :persistence/datomic :conn)]
+                             conn (-> repl.state/system :persistence/datomic :opts :conn)]
 
-                         (if (iam.user/user-exists? (persistence.user/user-by-email conn email))
+                         (if (iam.user/user-exists? (iam.persistence/user-by-email conn email))
                            (rop/succeed input)
                            (rop/fail (ex-info "User hasn't yet been created" decoded-token)))))
 
@@ -224,9 +224,12 @@
 
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
-      (util/attach-resolvers {:resolve-hello graphql/resolve-hello
-                              :resolve-login graphql/resolve-login})
-      (util/attach-streamers {:stream-ping graphql/stream-ping
+      (util/attach-resolvers {:resolve-hello       graphql/resolve-hello
+                              :resolve-login       graphql/resolve-login
+                              :resolve-create-game graphql/resolve-create-game
+                              :resolve-buy-stock   graphql/resolve-buy-stock
+                              :resolve-sell-stock  graphql/resolve-sell-stock})
+      (util/attach-streamers {:stream-ping     graphql/stream-ping
                               :stream-new-game graphql/stream-new-game})
       schema/compile))
 

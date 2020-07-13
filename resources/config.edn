@@ -3,11 +3,32 @@
 
 
  ;; COMPONENTS
- :service {:join?    false
-           :hostname "0.0.0.0"
-           :port     8080}
+ :game {:starting-balance      100000.00
+        :tick-sleep-ms         1000
+        :latest-tick-threshold 2
+        :data-generators [:datasource.sine/generate-sine-sequence
+                          :datasource.sine/generate-cosine-sequence
+                          :datasource.oscillating/generate-oscillating-sequence]
+        :levels                {;; thousands
+                                1 {:profit-threshold 1000
 
- :nrepl {:port 7000}
+                                   ;; TODO stock behaviours for this level
+                                   :beta-distributions 1
+                                   :time-limit         1}
+
+                                2 {:profit-threshold 10000}
+                                3 {:profit-threshold 20000}
+                                4 {:profit-threshold 50000}
+                                5 {:profit-threshold 100000}
+
+                                ;; millions
+                                6 {:profit-threshold 10000000}
+                                7 {:profit-threshold 50000000}
+                                8 {:profit-threshold 100000000}
+
+                                ;; billion
+                                9 {:profit-threshold 1000000000}}}
+
 
  :logging {:config {:level     :info
                     :console   true
@@ -18,32 +39,49 @@
                                                      :max-size 5120}
                                  :pattern           "%p [%d] %t - %c %m%n"
                                  :file              "logs/beatthemarket.log"}]
-                    :overrides {"org.apache.http"      :info
+                    :overrides {"org.apachea.http"     :info
                                 "org.apache.http.wire" :error}}}
+
 
  ;; MAIN
  :integrant #profile
- {:production {:service/service     {:join?    false
-                                     :hostname "0.0.0.0"
-                                     :port     5000}
-               :server/server       {:service #ig/ref :service/service}
-               :firebase/firebase   #ref [:secrets :firebase]
-               :persistence/datomic #ref [:secrets :production :persistence/datomic]
-               :nrepl/nrepl         #ref [:nrepl]
-               :logging/logging     #ref [:logging]}
+ {:production {:service/service               {:join?    false
+                                               :hostname "0.0.0.0"
+                                               :port     5000}
+               :server/server                 {:service #ig/ref :service/service}
+               :firebase/firebase             #ref [:secrets :firebase]
+               :persistence/datomic           {:datomic #ref [:secrets :production :persistence/datomic]
+                                               :data-proccesors [beatthemarket.game.persistence/track-profit-loss!]}
+               :game/games                    {:datomic #ig/ref :persistence/datomic }
+               :game/game                     #ref[:game]
+               :nrepl/nrepl                   {:port 7000}
+               :logging/logging               #ref [:logging]
+               :name-generator/name-generator {}}
 
-  :development {:service/service     #ref [:service]
-                :server/server       {:service #ig/ref :service/service}
-                :firebase/firebase   #ref [:secrets :firebase]
-                :persistence/datomic {:db-name "beaththemarket"
-                                      :config  {}}
-                :nrepl/nrepl         #ref [:nrepl]
-                :logging/logging     #ref [:logging]}
+  :development {:service/service               {:join?    false
+                                                :hostname "0.0.0.0"
+                                                :port     8080}
+                :server/server                 {:service #ig/ref :service/service}
+                :firebase/firebase             #ref [:secrets :firebase]
+                :persistence/datomic           {:datomic {:db-name "beaththemarket"
+                                                          :config  {}}
+                                                :data-proccesors [beatthemarket.game.persistence/track-profit-loss!]}
+                :game/games                    {:datomic #ig/ref :persistence/datomic}
+                :game/game                     #ref[:game]
+                :nrepl/nrepl                   {:port 7000}
+                :logging/logging               #ref [:logging]
+                :name-generator/name-generator {}}
 
-  :test {:service/service     #ref [:service]
-         :server/server       {:service #ig/ref :service/service}
-         :firebase/firebase   #ref [:secrets :firebase]
-         :persistence/datomic {:db-name "beaththemarket"
-                               :config  {}}
-         :nrepl/nrepl         #ref [:nrepl]
-         :logging/logging     #ref [:logging]}}}
+  :test {:service/service               {:join?    false
+                                         :hostname "0.0.0.0"
+                                         :port     8081}
+         :server/server                 {:service #ig/ref :service/service}
+         :firebase/firebase             #ref [:secrets :firebase]
+         :persistence/datomic           {:datomic {:db-name "beaththemarket"
+                                                   :config  {}}
+                                         :data-proccesors [beatthemarket.game.persistence/track-profit-loss!]}
+         :game/games                    {:datomic #ig/ref :persistence/datomic}
+         :game/game                     #ref[:game]
+         :nrepl/nrepl                   {:port 7001}
+         :logging/logging               #ref [:logging]
+         :name-generator/name-generator {}}}}

@@ -1,13 +1,8 @@
 [
 
- ;; USERS
+ ;; USER
 
  ;; NOTE This entity is a Firebase user, tied to an external Identity Provider
- {:db/ident       :user/id
-  :db/valueType   :db.type/uuid ;; :db.type/string
-  :db/cardinality :db.cardinality/one
-  :db/unique      :db.unique/value
-  :db/doc ""}
  {:db/ident       :user/email
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
@@ -22,11 +17,6 @@
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         "User's ID in the external Authentication system (Firebase)"}
- {:db/ident       :user/games
-  :db/valueType   :db.type/ref ;; :game
-  :db/cardinality :db.cardinality/many
-  :db/isComponent true
-  :db/doc         ""}
  {:db/ident       :user/accounts
   :db/valueType   :db.type/ref ;; List of default :account
   :db/cardinality :db.cardinality/many
@@ -45,6 +35,7 @@
  {:db/ident :game-level/eight}
  {:db/ident :game-level/nine}
  {:db/ident :game-level/ten}
+ {:db/ident :game-level/market}
 
 
  ;; GAME PROPER
@@ -62,13 +53,16 @@
   :db/valueType   :db.type/instant
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
+
+ {:db/ident       :game/users
+  :db/valueType   :db.type/ref ;; :game.user
+  :db/cardinality :db.cardinality/many
+  :db/isComponent true
+  :db/doc         ""}
+
  {:db/ident       :game/level
   :db/valueType   :db.type/ref ;; :game-level
   :db/cardinality :db.cardinality/one
-  :db/doc         ""}
- {:db/ident       :game/subscriptions
-  :db/valueType   :db.type/ref ;; List of :stock
-  :db/cardinality :db.cardinality/many
   :db/isComponent true
   :db/doc         ""}
  {:db/ident       :game/stocks
@@ -76,7 +70,20 @@
   :db/cardinality :db.cardinality/many
   :db/isComponent true
   :db/doc         ""}
- {:db/ident       :game/portfolio
+
+
+ ;; PER GAME USER Data
+ {:db/ident       :game.user/user
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
+ {:db/ident       :game.user/subscriptions
+  :db/valueType   :db.type/ref ;; List of :stock
+  :db/cardinality :db.cardinality/many
+  :db/isComponent true
+  :db/doc         ""}
+ {:db/ident       :game.user/portfolio
   :db/valueType   :db.type/ref ;; :bookkeeping.portfolio
   :db/cardinality :db.cardinality/one
   :db/isComponent true
@@ -111,7 +118,7 @@
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
  {:db/ident       :game.stock.tick/trade-time
-  :db/valueType   :db.type/instant
+  :db/valueType   :db.type/long
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
  {:db/ident       :game.stock.tick/close
@@ -176,16 +183,34 @@
  {:db/ident       :bookkeeping.account/type
   :db/valueType   :db.type/ref ;; List of :bookkeeping.account.type
   :db/cardinality :db.cardinality/one
+  :db/isComponent true
   :db/doc         ""}
+ {:db/ident       :bookkeeping.account/balance
+  :db/valueType   :db.type/float
+  :db/cardinality :db.cardinality/one
+  :db/doc         "The account's current balance value, which must
+                   i. correspond with all tentries against it and
+                   ii. balance out with all other accounts for the user"}
+ {:db/ident       :bookkeeping.account/amount
+  :db/valueType   :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/doc         "This records the counter-party unit amount"}
  {:db/ident       :bookkeeping.account/orientation
   :db/valueType   :db.type/ref ;; List of :bookkeeping.account.orientation
   :db/cardinality :db.cardinality/one
+  :db/isComponent true
   :db/doc         ""}
+ {:db/ident       :bookkeeping.account/counter-party
+  :db/valueType   :db.type/ref ;; :game.stock/id
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
+
 
 
  {:db/ident       :bookkeeping.tentry/id
   :db/valueType   :db.type/uuid
-  :db/cardinality :db.cardinality/many
+  :db/cardinality :db.cardinality/one
   :db/doc         ""}
  {:db/ident       :bookkeeping.tentry/debits
   :db/valueType   :db.type/ref ;; List of :bookkeeping.debit
@@ -208,15 +233,25 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
- {:db/ident       :bookkeeping.debit/amount
-  :db/valueType   :db.type/long
-  :db/cardinality :db.cardinality/one
-  :db/doc         ""}
  {:db/ident       :bookkeeping.debit/value
   :db/valueType   :db.type/float
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
+ {:db/ident       :bookkeeping.debit/price
+  :db/valueType   :db.type/float
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
+ {:db/ident       :bookkeeping.debit/amount
+  :db/valueType   :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
 
+ #_{:db/ident        :bookkeeping.debit/validate
+  :db.entity/attrs [:bookkeeping.debit/id :bookkeeping.debit/account :bookkeeping.debit/value]}
+
+
+ #_{:db/ident :bookkeeping.credit/validate
+  :db.entity/attrs [:bookkeeping.credit/id :bookkeeping.credit/account :bookkeeping.credit/value]}
 
  {:db/ident       :bookkeeping.credit/id
   :db/valueType   :db.type/uuid
@@ -227,12 +262,16 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
- {:db/ident       :bookkeeping.credit/amount
-  :db/valueType   :db.type/long
-  :db/cardinality :db.cardinality/one
-  :db/doc         ""}
  {:db/ident       :bookkeeping.credit/value
   :db/valueType   :db.type/float
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
+ {:db/ident       :bookkeeping.credit/price
+  :db/valueType   :db.type/float
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
+ {:db/ident       :bookkeeping.credit/amount
+  :db/valueType   :db.type/long
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
 

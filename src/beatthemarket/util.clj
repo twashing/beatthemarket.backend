@@ -1,15 +1,14 @@
 (ns beatthemarket.util
   (:require [clojure.data.json :as json]
             [clojure.pprint :as pprint]
-            [integrant.repl :refer [go halt]]
             [integrant.repl.state :as state]))
 
 
 (defn exists? [a]
   (cond
-    (nil? a) false
+    (nil? a)     false
     (seqable? a) ((comp not empty?) a)
-    :else true))
+    :else        true))
 
 (defn truthy?
   "Based on Clojure truthiness
@@ -24,7 +23,6 @@
 
 #_(defn split-namespaced-keyword [kw]
   ((juxt namespace name) kw))
-
 
 #_(defn authorization-header-value
   "Possible Authorization headers values can be below.
@@ -72,15 +70,3 @@
       :idToken
       iam.auth/check-authentication ;; verify-id-token
       pprint/pprint))
-
-
-;; Component + DB Schema Helpers
-(defn dev-fixture [transact-fn]
-
-  (halt)
-  (go)
-
-  ;; Create schema
-  (-> state/system
-      :persistence/datomic :conn
-      transact-fn))
