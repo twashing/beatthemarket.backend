@@ -283,37 +283,6 @@
         (let [vv (<! output-chan)]
 
 
-          ;; TODO >> narrow to subscription <<
-
-
-          ;; TODO Calculations
-
-          ;; >
-          ;; Complete a Level
-          ;; ... (-> repl.state/system :game/game :levels xxx :profit-threshold)
-          ;; ... user has a time-limit at each level
-
-
-          ;; >
-          ;; ... All stocks are running at the same time
-          ;;   ... stock-stream-channel -> (all) stock-stream-channel
-          ;;   ... all stock-streams save to the database
-          ;; ... User can switch their subscription at any time
-
-
-          ;; >
-          ;; ... ? Game pauses between levels (Pause | Resume a Game)
-          ;; ... ? beta distributions change on new levels (regenerate data sequences)
-
-
-          ;; > Win a Game
-          ;; ... if a user has completed level 9
-
-
-          ;; > Lose a Game
-          ;; ... if a user has either i. loses 10% of his money or ii. run out of time
-
-
           ;; (println (format "Sink value / %s" v))
           (game-loop-fn vv)
           (when vv

@@ -224,13 +224,12 @@
 
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
-      (util/attach-resolvers {:resolve-hello       graphql/resolve-hello
-                              :resolve-login       graphql/resolve-login
+      (util/attach-resolvers {:resolve-login       graphql/resolve-login
                               :resolve-create-game graphql/resolve-create-game
                               :resolve-buy-stock   graphql/resolve-buy-stock
                               :resolve-sell-stock  graphql/resolve-sell-stock})
       (util/attach-streamers {:stream-ping     graphql/stream-ping
-                              :stream-new-game graphql/stream-new-game})
+                              :stream-stock-ticks graphql/stream-stock-ticks})
       schema/compile))
 
 (defmethod ig/init-key :service/service [_ {:keys [env join? hostname port]}]

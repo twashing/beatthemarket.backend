@@ -73,13 +73,13 @@
      (as-> game gm
        (persistence.datomic/transact-entities! conn gm)
        (:db-after gm)
-       (d/q '[:find ?e
+       (d/q '[:find (pull ?e [*])
               :in $ ?id
               :where [?e :game/id ?id]]
             gm
             (:game/id game))
        (ffirst gm)
-       (persistence.core/pull-entity conn gm)))))
+       #_(persistence.core/pull-entity conn gm)))))
 
 
 (comment ;; Portfolio

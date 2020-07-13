@@ -4,7 +4,7 @@
  {:Ping
   {:description "Captures a message and a timestamp. This is used when testing Subscriptions."
    :fields
-   {:message {:type (non-null String)}
+   {:message   {:type (non-null String)}
     :timestamp {:type (non-null Int)}}}
 
   :Game
@@ -12,13 +12,17 @@
    :fields
    {:message {:type (non-null String)}}}
 
-  :Stocks
+  :Stock
   {:fields
-   {:message {:type (list (non-null String))}}}
+   {:id     {:type (non-null String)}
+    :name   {:type (non-null String)}
+    :symbol {:type (non-null String)}}}
 
   :CreateGamekAck
   {:fields
-   {:message {:type (non-null String)}}}
+   {:id            {:type (non-null String)}
+    :subscriptions {:type (list (non-null :Stock))}
+    :stocks        {:type (list (non-null :Stock))}}}
 
   :BuyStockAck
   {:fields
@@ -30,71 +34,93 @@
 
 
  ;; //
+ :enums
+ {:login
+  {:description "Possible return states from a login attempt"
+   :values      [:useradded :userexists]}}
+
+
+ ;; //
  :input-objects
  {:BuyStock
   {:description "An event to buy a stock"
    :fields
-   {:gameId {:type (non-null String)}
-    :stockId {:type (non-null String)}
+   {:gameId      {:type (non-null String)}
+    :stockId     {:type (non-null String)}
     :stockAmount {:type (non-null Int)}
-    :tickId {:type (non-null String)}
-    :tickTime {:type (non-null Int)}
-    :tickPrice {:type (non-null Float)}}}
+    :tickId      {:type (non-null String)}
+    :tickTime    {:type (non-null Int)}
+    :tickPrice   {:type (non-null Float)}}}
 
   :SellStock
   {:description "An event to sell a stock"
    :fields
-   {:gameId {:type (non-null String)}
-    :stockId {:type (non-null String)}
+   {:gameId      {:type (non-null String)}
+    :stockId     {:type (non-null String)}
     :stockAmount {:type (non-null Int)}
-    :tickId {:type (non-null String)}
-    :tickTime {:type (non-null Int)}
-    :tickPrice {:type (non-null Float)}}}}
+    :tickId      {:type (non-null String)}
+    :tickTime    {:type (non-null Int)}
+    :tickPrice   {:type (non-null Float)}}}}
 
 
  ;; //
  :queries
- {:hello
-  {:type String
-   :resolve :resolve-hello}
-
-  :login
-  {:type String
+ {:login
+  {:type    :login
    :resolve :resolve-login}}
 
 
  ;; //
  :mutations
  {:createGame
-  {:type :CreateGamekAck
+  {:type        :CreateGamekAck
    :description "Creates a new game"
-   :resolve :resolve-create-game}
+   :resolve     :resolve-create-game}
+
+  #_:startGame
+  #_ {:type        :Game
+      :description "Starts streaming that games stock data"
+      :stream      :stream-stock-ticks
+      :args
+      {:id {:type (non-null String)}}}
 
   :buyStock
-  {:type :BuyStockAck
-   :args {:input {:type :BuyStock}}
+  {:type    :BuyStockAck
+   :args    {:input {:type :BuyStock}}
    :resolve :resolve-buy-stock}
 
   :sellStock
-  {:type :SellStockAck
-   :args {:input {:type :SellStock}}
+  {:type    :SellStockAck
+   :args    {:input {:type :SellStock}}
    :resolve :resolve-sell-stock}}
 
 
  ;; //
  :subscriptions
  {:ping
-  {:type :Ping
+  {:type        :Ping
    :description "Sends the provided message a particular number of times, as a subscription."
-   :stream :stream-ping
+   :stream      :stream-ping
    :args
-   {:count {:type Int
-            :default 5}
+   {:count   {:type    Int
+              :default 5}
     :message {:type (non-null String)}}}
 
-  :startGame
-  {:type :Stocks
-   :description "Starts streaming a game's stock subscription."
-   :stream :stream-new-game
-   :args
-   {:id {:type (non-null String)}}}}}
+  #_:stockTicks
+  #_ {:type   (list (non-null :Stock))
+      :stream :stream-stock-ticks
+      :args
+      {:id {:type (non-null String)}}}
+
+
+  #_:portfolioUpdates
+  #_ {:type   :PortfolioUpdate
+      :stream :stream-portfolio-updates
+      :args
+      {:id {:type (non-null String)}}}
+
+  #_:gameEvents
+  #_ {:type   :GameEvent
+      :stream :stream-game-events
+      :args
+      {:id {:type (non-null String)}}}}}

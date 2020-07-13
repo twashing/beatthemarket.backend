@@ -139,7 +139,7 @@ async operations take a long time, and can have a closed DB when trying to write
 
 
 * ? Stream two games (Separate Users) at the same time
-* Have a mechanism to simultaneously stream multiple subscriptions (beatthemarket.graphql/stream-new-game)
+* Have a mechanism to simultaneously stream multiple subscriptions (beatthemarket.graphql/stream-stock-ticks)
 
 * Move code in `comment` blocks, to tests
 * Add git hooks to automate code checks

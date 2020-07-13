@@ -25,7 +25,7 @@
   (do
     (state.core/set-prep :development)
     (state.core/init-components)
-    (migration.core/run-migrations))
+    #_(migration.core/run-migrations))
 
 
   (pprint integrant.repl.state/config)

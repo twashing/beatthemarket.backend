@@ -13,10 +13,6 @@
   (:import [java.util UUID]))
 
 
-(defn resolve-hello
-  [_context _args _value]
-  "Hello, Clojurians!")
-
 (defn resolve-login
   [context _ _]
 
@@ -26,8 +22,8 @@
         {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
 
     (if (util/truthy? (and db-before db-after tx-data tempids))
-      "user-added"
-      "user-exists")))
+      :useradded
+      :userexists)))
 
 (defn resolve-create-game [context args _]
 
@@ -41,11 +37,10 @@
                                                                    email))
 
         ;; NOTE sink-fn updates once we start to stream a game
-        sink-fn                       identity
+        sink-fn                identity
         {{game-id :game/id
-          :as     game} :game
-         :as           game-control} (game.games/create-game! conn user-db-id sink-fn)
-        message (game.games/game->new-game-message game user-db-id)]
+          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn)
+        message                (game.games/game->new-game-message game user-db-id)]
 
     {:message message}))
 
@@ -91,7 +86,7 @@
                                                      ;; (println "sink-fn CALLED /" %)
                                                      (sink-fn {:message %}))) ))
 
-(defn stream-new-game
+(defn stream-stock-ticks
   [context {id :id :as args} source-stream]
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -119,12 +114,23 @@
          :channel-controls} (game.games/start-game! conn user-db-id game-control game-loop-fn)]
 
 
-    ;; TODO register channel-controls
+    ;; TODO
+    ;; Register channel-controls
+    ;; Make a control to :exit a game
+    ;; Make a control to :pause | :resume a game
     (core.async/<!! (core.async/timeout 10000))
     (game.games/control-streams! control-channel channel-controls :exit)
 
     ;; D Return a cleanup fn
     (constantly nil)))
+
+
+(defn stream-portfolio-updates [context args source-stream]
+  )
+
+(defn stream-game-events [context args source-stream]
+  )
+
 
 
 ;; NOTE subscription resolver
