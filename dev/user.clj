@@ -1,6 +1,8 @@
 (ns user
   (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.core :as ig]
+            [clojure.edn :as edn]
+            [clojure.data.json :as json]
             [clojure.java.io :refer [resource]]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.migration.core :as migration.core]
@@ -66,3 +68,12 @@
 
 
   (pprint (#'beatthemarket.dir/scan-all (track/tracker))))
+
+
+(comment
+
+
+  (->> "schema.lacinia.edn"
+       resource slurp edn/read-string
+       json/write-str
+       (spit "schema.lacinia.json")))

@@ -226,11 +226,14 @@
       resource slurp edn/read-string
       (util/attach-resolvers {:resolve-login       graphql/resolve-login
                               :resolve-create-game graphql/resolve-create-game
+                              :resolve-start-game  graphql/resolve-start-game
                               :resolve-buy-stock   graphql/resolve-buy-stock
                               :resolve-sell-stock  graphql/resolve-sell-stock})
-      (util/attach-streamers {:stream-ping     graphql/stream-ping
-                              :stream-stock-ticks graphql/stream-stock-ticks})
+      (util/attach-streamers {:stream-stock-ticks       graphql/stream-stock-ticks
+                              :stream-portfolio-updates graphql/stream-portfolio-updates
+                              :stream-game-events       graphql/stream-game-events})
       schema/compile))
+
 
 (defmethod ig/init-key :service/service [_ {:keys [env join? hostname port]}]
 

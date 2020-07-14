@@ -1,18 +1,7 @@
 {
  ;; //
  :objects
- {:Ping
-  {:description "Captures a message and a timestamp. This is used when testing Subscriptions."
-   :fields
-   {:message   {:type (non-null String)}
-    :timestamp {:type (non-null Int)}}}
-
-  :Game
-  {:description "Container for game events."
-   :fields
-   {:message {:type (non-null String)}}}
-
-  :Stock
+ {:Stock
   {:fields
    {:id     {:type (non-null String)}
     :name   {:type (non-null String)}
@@ -30,14 +19,28 @@
 
   :SellStockAck
   {:fields
+   {:message {:type (non-null String)}}}
+
+  :PortfolioUpdate
+  {:description "Container for portfolio updates."
+   :fields
+   {:message {:type (non-null String)}}}
+
+  :GameEvent
+  {:description "Container for game events."
+   :fields
    {:message {:type (non-null String)}}}}
 
 
  ;; //
  :enums
- {:login
+ {:LoginAck
   {:description "Possible return states from a login attempt"
-   :values      [:useradded :userexists]}}
+   :values      [:useradded :userexists]}
+
+  :StartGameAck
+  {:descriptiuon "Expected return value when starting a game"
+   :values       [:gamestarted]}}
 
 
  ;; //
@@ -64,25 +67,22 @@
 
 
  ;; //
- :queries
- {:login
-  {:type    :login
-   :resolve :resolve-login}}
-
-
- ;; //
  :mutations
- {:createGame
+ {:login
+  {:type    :LoginAck
+   :resolve :resolve-login}
+
+  :createGame
   {:type        :CreateGamekAck
    :description "Creates a new game"
    :resolve     :resolve-create-game}
 
-  #_:startGame
-  #_ {:type        :Game
-      :description "Starts streaming that games stock data"
-      :stream      :stream-stock-ticks
-      :args
-      {:id {:type (non-null String)}}}
+  :startGame
+  {:type        :StartGameAck
+   :description "Starts streaming that games stock data"
+   :resolve     :resolve-start-game
+   :args
+   {:id {:type (non-null String)}}}
 
   :buyStock
   {:type    :BuyStockAck
@@ -97,30 +97,20 @@
 
  ;; //
  :subscriptions
- {:ping
-  {:type        :Ping
-   :description "Sends the provided message a particular number of times, as a subscription."
-   :stream      :stream-ping
+ {:stockTicks
+  {:type   (list (non-null :Stock))
+   :stream :stream-stock-ticks
    :args
-   {:count   {:type    Int
-              :default 5}
-    :message {:type (non-null String)}}}
+   {:id {:type (non-null String)}}}
 
-  #_:stockTicks
-  #_ {:type   (list (non-null :Stock))
-      :stream :stream-stock-ticks
-      :args
-      {:id {:type (non-null String)}}}
+  :portfolioUpdates
+  {:type   :PortfolioUpdate
+   :stream :stream-portfolio-updates
+   :args
+   {:id {:type (non-null String)}}}
 
-
-  #_:portfolioUpdates
-  #_ {:type   :PortfolioUpdate
-      :stream :stream-portfolio-updates
-      :args
-      {:id {:type (non-null String)}}}
-
-  #_:gameEvents
-  #_ {:type   :GameEvent
-      :stream :stream-game-events
-      :args
-      {:id {:type (non-null String)}}}}}
+  :gameEvents
+  {:type   :GameEvent
+   :stream :stream-game-events
+   :args
+   {:id {:type (non-null String)}}}}}

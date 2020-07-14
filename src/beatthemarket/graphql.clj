@@ -44,6 +44,9 @@
 
     {:message message}))
 
+(defn resolve-start-game [context args _]
+  :gamestarted)
+
 (defn resolve-buy-stock [context args _]
 
   ;; (println "resolve-buy-stock CALLED /" args)
@@ -115,9 +118,19 @@
 
 
     ;; TODO
-    ;; Register channel-controls
+    ;; [ok] Register channel-controls
+
+    ;; GQL responses no longer in a :message
+
     ;; Make a control to :exit a game
     ;; Make a control to :pause | :resume a game
+
+    ;; STREAMS
+    ;; put stock ticks into a channel
+    ;; put portfoliio updates into a channel
+    ;; put game events into a channel
+
+
     (core.async/<!! (core.async/timeout 10000))
     (game.games/control-streams! control-channel channel-controls :exit)
 
