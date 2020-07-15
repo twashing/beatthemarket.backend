@@ -70,36 +70,44 @@
        json/write-str
        (spit "schema.lacinia.json")))
 
-(defn calculate-remaining-time [now end]
-  (let [interval (t/interval now end)
-        remaining-in-minutes (t/in-minutes interval)
-        remaining-in-seconds (rem (t/in-seconds interval) 60)]
-    (format "%s:%s" remaining-in-minutes remaining-in-seconds)))
+(defn format-remaining-time [{:keys [remaining-in-minutes remaining-in-seconds]}]
+  (format "%s:%s" remaining-in-minutes remaining-in-seconds))
 
-(defn stream-game! [control-channel pause-atom tick-sleep-atom level-timer-atom]
+(defn time-expired? [{:keys [remaining-in-minutes remaining-in-seconds]}]
+  (and (= 0 remaining-in-minutes) (< remaining-in-seconds 1)))
+
+(defn calculate-remaining-time [now end]
+  (let [interval (t/interval now end)]
+    {:interval interval
+     :remaining-in-minutes (t/in-minutes interval)
+     :remaining-in-seconds (rem (t/in-seconds interval) 60)}))
+
+(defn stream-game! [control-channel input-channel pause-atom tick-sleep-atom level-timer-atom]
 
   (let [start (t/now)]
 
     (go-loop [now start
-              end (t/plus start (t/minutes @level-timer-atom))]
+              end (t/plus start (t/seconds @level-timer-atom))]
 
       (let [remaining (calculate-remaining-time now end)
-            [v ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
+            [controlv ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
                                       control-channel])]
-        (match [@pause-atom v]
 
-               [true :exit] (println (format "< Paused > %s / Exiting..." remaining))
-               [true _] (let [new-end (t/plus end (t/seconds 1))
-                              remaining (calculate-remaining-time now new-end)]
-                          (println (format "< Paused > %s" remaining))
-                          (recur (t/now) new-end))
+        (match [@pause-atom controlv (time-expired? remaining)]
 
-               [_ :exit] (println (format "Running %s / Exiting" remaining))
-               [_ _] (do
-                       (println (format "Running %s" remaining))
-                       (recur  (t/now) end))
-               )
-        ))))
+               [true :exit _] (println (format "< Paused > %s / Exiting..." (format-remaining-time remaining)))
+               [true _ _] (let [new-end (t/plus end (t/seconds 1))
+                                remaining (calculate-remaining-time now new-end)]
+                            (println (format "< Paused > %s" (format-remaining-time remaining)))
+                            (recur (t/now) new-end))
+
+               [_ :exit _] (println (format "Running %s / Exiting" (format-remaining-time remaining)))
+               [_ :win _] (println (format "Win %s" (format-remaining-time remaining)))
+               [_ :lose _] (println (format "Lose %s" (format-remaining-time remaining)))
+               [_ _ false] (let [v (<! input-channel)]
+                             (println (format "Running %s / %s" (format-remaining-time remaining) v))
+                             (recur  (t/now) end))
+               [_ _ true] (println (format "Running %s / TIME'S UP!!" (format-remaining-time remaining))))))))
 
 
 (comment
@@ -138,20 +146,34 @@
   ;; // B
   (do
     (def control-channel (chan))
+    (def input-channel (core.async/to-chan (range)))
+
     (def paused? (atom false))
     (def tick-sleep-atom (atom 1000))
-    (def level-timer-atom (atom 5)))
+    (def level-timer-atom (atom 30 #_(* 5 60))))
 
-  ;; //
-  (stream-game! control-channel paused? tick-sleep-atom level-timer-atom)
+
+  ;; // C
+  (stream-game! control-channel input-channel paused? tick-sleep-atom level-timer-atom)
 
 
   (reset! paused? true)
   (reset! paused? false)
   (core.async/>!! control-channel :exit)
+  (core.async/>!! control-channel :win)
+  (core.async/>!! control-channel :lose)
 
-  :win :lose :timeout :exit
-  :next-tick
+  ;; NOTE
+  :timeout :exit
+  :win :lose :next-tick
+
+  ;; TODO
+  ;; Stream messages
+  :timer :exit :win :lose
+
+  ;; Bump timer (up or down)
+  ;; Bump tick-sleep (up or down)
+
 
   (def start (t/now))
   (def end (t/plus start (t/minutes 5)))
