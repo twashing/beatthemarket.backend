@@ -18,7 +18,7 @@
   (do
     (state.core/set-prep :development)
     (state.core/init-components)
-    (migration.core/run-migrations))
+    #_(migration.core/run-migrations))
 
   (util/pprint+identity integrant.repl.state/config)
   (util/pprint+identity integrant.repl.state/system))

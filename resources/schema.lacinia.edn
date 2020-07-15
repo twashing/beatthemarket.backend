@@ -7,6 +7,25 @@
     :name   {:type (non-null String)}
     :symbol {:type (non-null String)}}}
 
+  :StockTick
+  {:fields
+   {:stockTickId {:type (non-null String)}
+    :stockTickTime {:type (non-null Int)}
+    :stockTickClose {:type (non-null Float)}
+    :stockId {:type (non-null String)}}}
+
+  #_[{:stockTickId "d6918e67-84e8-4b97-aa99-c9c6f5e5ba95"
+      :stockTickTime 1593185675611
+      :stockTickClose 105.64
+      :stockId "a6053ea6-591a-4ec2-8312-5131d9fe2b68"}]
+
+  #_[{:game.stock.tick/id "d6918e67-84e8-4b97-aa99-c9c6f5e5ba95"
+      :game.stock.tick/trade-time 1593185675611
+      :game.stock.tick/close 105.64}
+     {:game.stock/id "a6053ea6-591a-4ec2-8312-5131d9fe2b68"
+      :game.stock/name "Honest Toe"
+      :game.stock/symbol "HONE"}]
+
   :CreateGamekAck
   {:fields
    {:id            {:type (non-null String)}
@@ -21,15 +40,32 @@
   {:fields
    {:message {:type (non-null String)}}}
 
-  :PortfolioUpdate
-  {:description "Container for portfolio updates."
+  :ProfitLoss
+  {:description "Container for portfolio updates"
    :fields
-   {:message {:type (non-null String)}}}
+   {:profitLoss  {:type (non-null Float)}
+    :stockId     {:type (non-null String)}
+    :stockAmount {:type (non-null Int)}
+    :gameId      {:type (non-null String)}
+    :tradePrice  {:type (non-null Float)}
+    :tickId      {:type (non-null String)}
+    :tickPrice   {:type (non-null Float)}}}
+
+  :AccountBalance
+  {:description "Account Balance message"
+   :fields
+   {:id           {:type (non-null String)}
+    :name         {:type (non-null String)}
+    :balance      {:type (non-null Float)}
+    :type         {:type (non-null String)}
+    :counterParty {:type String :description "Name of the stock attached to this account"}
+    :amount       {:type Int :description "The amount of units (stock shares) of the counterparty"}}}
 
   :GameEvent
-  {:description "Container for game events."
+  {:description "Game events"
    :fields
-   {:message {:type (non-null String)}}}}
+   {:message {:type (non-null :GameEventMessage)}
+    :gameId {:type (non-null String)}}}}
 
 
  ;; //
@@ -40,7 +76,17 @@
 
   :StartGameAck
   {:descriptiuon "Expected return value when starting a game"
-   :values       [:gamestarted]}}
+   :values      [:gamestarted]}
+
+  :GameEventMessage
+  {:description "Possible game event messages that can be sent to the client"
+   :values      [:pause :resume :exit]}}
+
+
+ ;; //
+ :unions
+ {:PortfolioUpdate
+  {:members [:ProfitLoss :AccountBalance]}}
 
 
  ;; //
@@ -64,6 +110,22 @@
     :tickId      {:type (non-null String)}
     :tickTime    {:type (non-null Int)}
     :tickPrice   {:type (non-null Float)}}}}
+
+
+ ;; //
+ :queries
+ {:accountBalances
+  {:type (list (non-null :AccountBalance))
+   :args {:gameId {:type (non-null String)}}
+   :resolve :resolve-account-balances}
+
+  :stockHistory
+  {:type (list (non-null :StockTick))
+   :args {:gameId {:type (non-null String)}
+          :stockId {:type (non-null String)}
+          :range {:type (list (non-null Int))}}
+   :resolve :resolve-stock-history
+   :description "Called after game is created (where stocks are created)"}}
 
 
  ;; //
@@ -98,7 +160,7 @@
  ;; //
  :subscriptions
  {:stockTicks
-  {:type   (list (non-null :Stock))
+  {:type   (list (non-null :StockTick))
    :stream :stream-stock-ticks
    :args
    {:id {:type (non-null String)}}}

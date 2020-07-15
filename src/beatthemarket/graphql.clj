@@ -13,6 +13,7 @@
   (:import [java.util UUID]))
 
 
+;; RESOLVERS
 (defn resolve-login
   [context _ _]
 
@@ -89,6 +90,13 @@
                                                      ;; (println "sink-fn CALLED /" %)
                                                      (sink-fn {:message %}))) ))
 
+(defn resolve-account-balances [context args _])
+
+(defn resolve-stock-history [context args _])
+
+
+
+;; STREAMERS
 (defn stream-stock-ticks
   [context {id :id :as args} source-stream]
 
@@ -100,20 +108,20 @@
                                                                      :where [?e :user/email ?email]]
                                                                    (d/db conn)
                                                                    email))
-        id-uuid (UUID/fromString id)
-        _ (update-sink-fn! id-uuid source-stream)
-        {game :game
+        id-uuid                                             (UUID/fromString id)
+        _                                                   (update-sink-fn! id-uuid source-stream)
+        {game            :game
          control-channel :control-channel
-         :as game-control}            (-> repl.state/system :game/games deref (get id-uuid))
-        game-user-subscription        (-> game
-                                          :game/users first
-                                          :game.user/subscriptions first)
+         :as             game-control}                                  (-> repl.state/system :game/games deref (get id-uuid))
+        game-user-subscription                              (-> game
+                                                                :game/users first
+                                                                :game.user/subscriptions first)
 
-        game-loop-fn           identity
-        {{:keys [mixer
-                 pause-chan
-                 input-chan
-                 output-chan] :as channel-controls}
+        game-loop-fn        identity
+        {{:keys               [mixer
+                               pause-chan
+                               input-chan
+                               output-chan] :as channel-controls}
          :channel-controls} (game.games/start-game! conn user-db-id game-control game-loop-fn)]
 
 
