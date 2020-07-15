@@ -18,7 +18,7 @@
   (do
     (state.core/set-prep :development)
     (state.core/init-components)
-    #_(migration.core/run-migrations))
+    (migration.core/run-migrations))
 
   (util/pprint+identity integrant.repl.state/config)
   (util/pprint+identity integrant.repl.state/system))
@@ -106,6 +106,4 @@
         #uuid "6caf0e08-34fe-458f-8c71-20bb3074033c")
 
       util/pprint+identity flatten first
-      :user/_accounts :game.user/_user :game/_users :game/id)
-
-  )
+      :user/_accounts :game.user/_user :game/_users :game/id))

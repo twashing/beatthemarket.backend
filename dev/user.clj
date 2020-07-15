@@ -6,7 +6,8 @@
             [clojure.java.io :refer [resource]]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.migration.core :as migration.core]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :as util]
+            [clojure.core.async :as core.async]))
 
 
 (comment ;; Convenience fns
@@ -27,7 +28,7 @@
   (do
     (state.core/set-prep :development)
     (state.core/init-components)
-    #_(migration.core/run-migrations))
+    (migration.core/run-migrations))
 
 
   (pprint integrant.repl.state/config)
@@ -54,26 +55,107 @@
        (#'clojure.tools.namespace.dir/find-files)
        (#'clojure.tools.namespace.dir/deleted-files (track/tracker)))
 
-  #_(binding [clojure.tools.namespace.dir/update-files
-            (fn [tracker deleted modified]
-              (let [now (System/currentTimeMillis)]
-                (-> tracker
-                    (update-in [::files] #(if % (apply disj % deleted) #{}))
-                    (file/remove-files deleted)
-                    (update-in [::files] into modified)
-                    (file/add-files modified)
-                    (assoc ::time now))))]
-
-    (pprint (#'clojure.tools.namespace.dir/scan-all (track/tracker))))
-
-
   (pprint (#'beatthemarket.dir/scan-all (track/tracker))))
-
 
 (comment
 
+  (halt)
+
+  (do
+    (state.core/set-prep :development)
+    (state.core/init-components))
 
   (->> "schema.lacinia.edn"
        resource slurp edn/read-string
        json/write-str
        (spit "schema.lacinia.json")))
+
+(defn calculate-remaining-time [now end]
+  (let [interval (t/interval now end)
+        remaining-in-minutes (t/in-minutes interval)
+        remaining-in-seconds (rem (t/in-seconds interval) 60)]
+    (format "%s:%s" remaining-in-minutes remaining-in-seconds)))
+
+(defn stream-game! [control-channel pause-atom tick-sleep-atom level-timer-atom]
+
+  (let [start (t/now)]
+
+    (go-loop [now start
+              end (t/plus start (t/minutes @level-timer-atom))]
+
+      (let [remaining (calculate-remaining-time now end)
+            [v ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
+                                      control-channel])]
+        (match [@pause-atom v]
+
+               [true :exit] (println (format "< Paused > %s / Exiting..." remaining))
+               [true _] (let [new-end (t/plus end (t/seconds 1))
+                              remaining (calculate-remaining-time now new-end)]
+                          (println (format "< Paused > %s" remaining))
+                          (recur (t/now) new-end))
+
+               [_ :exit] (println (format "Running %s / Exiting" remaining))
+               [_ _] (do
+                       (println (format "Running %s" remaining))
+                       (recur  (t/now) end))
+               )
+        ))))
+
+
+(comment
+
+  (require '[clojure.core.async :as core.async
+             :refer [go-loop chan close! timeout alts! >! <! >!!]]
+           '[clojure.core.match :refer [match]]
+           '[clj-time.core :as t])
+
+
+  ;; // A
+  (def level-message
+    {:level 1
+
+     ;; :win :lose :timeout
+     :status :win
+     :profitLoss 10000.0})
+
+  (def control-message
+
+    ;; :pause :resume :exit
+    :exit)
+
+
+  #_(let [a (timeout 999)
+        b (timeout 998)
+        [v ch] (core.async/alts!! [a b])]
+
+    (println [v ch])
+    (cond
+      (= ch b) "B"
+      (= ch a) "A"
+      :default "Unknown"))
+
+
+  ;; // B
+  (do
+    (def control-channel (chan))
+    (def paused? (atom false))
+    (def tick-sleep-atom (atom 1000))
+    (def level-timer-atom (atom 5)))
+
+  ;; //
+  (stream-game! control-channel paused? tick-sleep-atom level-timer-atom)
+
+
+  (reset! paused? true)
+  (reset! paused? false)
+  (core.async/>!! control-channel :exit)
+
+  :win :lose :timeout :exit
+  :next-tick
+
+  (def start (t/now))
+  (def end (t/plus start (t/minutes 5)))
+  ;; now
+  ;; remaining (t/in-seconds (t/interval 'now end))
+
+  )

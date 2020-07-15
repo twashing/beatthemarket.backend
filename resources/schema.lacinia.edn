@@ -14,18 +14,6 @@
     :stockTickClose {:type (non-null Float)}
     :stockId {:type (non-null String)}}}
 
-  #_[{:stockTickId "d6918e67-84e8-4b97-aa99-c9c6f5e5ba95"
-      :stockTickTime 1593185675611
-      :stockTickClose 105.64
-      :stockId "a6053ea6-591a-4ec2-8312-5131d9fe2b68"}]
-
-  #_[{:game.stock.tick/id "d6918e67-84e8-4b97-aa99-c9c6f5e5ba95"
-      :game.stock.tick/trade-time 1593185675611
-      :game.stock.tick/close 105.64}
-     {:game.stock/id "a6053ea6-591a-4ec2-8312-5131d9fe2b68"
-      :game.stock/name "Honest Toe"
-      :game.stock/symbol "HONE"}]
-
   :CreateGamekAck
   {:fields
    {:id            {:type (non-null String)}
@@ -64,8 +52,22 @@
   :GameEvent
   {:description "Game events"
    :fields
-   {:message {:type (non-null :GameEventMessage)}
-    :gameId {:type (non-null String)}}}}
+   {:type {:type (non-null :GameEventType)}
+    :gameId {:type (non-null String)}
+    :message {:type (non-null :GameEventMessage)}}}
+
+  :LevelTimer
+  {:description "The amount of time a user has left in a given level"
+   :fields
+   {:level {:type (non-null Int)}
+    :timeRemaining {:type (non-null Int)}}}
+
+  :LevelStatus
+  {:description "Tells user if they've won or lost a level"
+   :fields
+   {:level {:type (non-null Int)}
+    :status {:type (non-null :LevelStatusMessage)}
+    :profitLoss {:type (non-null Float)}}}}
 
 
  ;; //
@@ -78,9 +80,18 @@
   {:descriptiuon "Expected return value when starting a game"
    :values      [:gamestarted]}
 
+  :GameEventType
+  {:values [:control :levelStatus :levelTimer]}
+
   :GameEventMessage
+  {:values [:ControlMessage :LevelTimer :LevelStatus]}
+
+  :ControlMessage
   {:description "Possible game event messages that can be sent to the client"
-   :values      [:pause :resume :exit]}}
+   :values      [:pause :resume :exit]}
+
+  :LevelStatusMessage
+  {:values [:win :lose]}}
 
 
  ;; //
@@ -163,16 +174,16 @@
   {:type   (list (non-null :StockTick))
    :stream :stream-stock-ticks
    :args
-   {:id {:type (non-null String)}}}
+   {:gameId {:type (non-null String)}}}
 
   :portfolioUpdates
   {:type   :PortfolioUpdate
    :stream :stream-portfolio-updates
    :args
-   {:id {:type (non-null String)}}}
+   {:gameId {:type (non-null String)}}}
 
   :gameEvents
   {:type   :GameEvent
    :stream :stream-game-events
    :args
-   {:id {:type (non-null String)}}}}}
+   {:gameId {:type (non-null String)}}}}}
