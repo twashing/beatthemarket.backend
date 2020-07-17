@@ -67,7 +67,7 @@
 ;; DATABASE
 (defn transact! [conn data]
 
-  (let [data-proccesors (->> integrant.repl.state/system :persistence/datomic :data-proccesors)]
+  #_(let [data-proccesors (->> integrant.repl.state/system :persistence/datomic :data-proccesors)]
     (data-proccesors data))
 
   (d/transact conn {:tx-data data}))

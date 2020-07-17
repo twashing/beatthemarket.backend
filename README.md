@@ -112,11 +112,13 @@ lein nvd check
 
 ### C
 
+
+* Control to bump level timer (up or down)
+
 * Integration Test
   * Apollo client, login, new game, stream to client
   * Buy a stock sell a stock
   * Complete level 1
-
 
 * Need a mechanism to stop data-subscription ticks -> db transact, when Channel or DB is closed
 goo-loop and closed? on core.async channels are not a good enough control mechanism

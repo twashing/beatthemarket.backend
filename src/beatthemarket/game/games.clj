@@ -189,19 +189,33 @@
 
    (let [stocks            (game.core/generate-stocks! 4)
          game              (game.core/initialize-game! conn user-entity stocks)
-         blocking-transact (fn [entities]
-                             (persistence.datomic/transact-entities! conn entities)
-                             entities)
-
          stocks                (:game/stocks game)
          stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
          game-control          {:game                  game
                                 :profit-loss           {}
-                                :tick-sleep-ms         (-> integrant.repl.state/config :game/game :tick-sleep-ms)
                                 :stocks-with-tick-data stocks-with-tick-data
 
-                                ;; B. transact-entities in xform
-                                :stock-stream-channel (chan 1 (map blocking-transact))
+                                :paused? (atom false)
+                                :tick-sleep-atom (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
+                                :level-timer-atom (atom (-> integrant.repl.state/config :game/game :level-timer-sec))
+
+                                :stock-tick-xf (map (fn [tick] (println (format ">> STREAM tick / %s" tick)) tick))
+                                :calculate-profit-loss-xf (map #_beatthemarket.game.persistence/track-profit-loss!
+                                                               (fn [a]
+                                                                 (println (format ">> CALCAULATE profit-loss-xf %s" a))
+                                                                 a))
+                                :portfolio-update-xf (map (fn [profit-loss] (println (format ">> STREAM portfolio-update / %s" profit-loss)) profit-loss))
+
+
+                                :transact-tick-xf (map #_(partial beatthemarket.persistence.datomic/transact-entities! conn)
+                                                       (fn [a]
+                                                         (println (format "transact-tick-xf %s" a))
+                                                         a))
+                                :transact-profit-loss-xf (map #_(partial beatthemarket.persistence.datomic/transact-entities! conn)
+                                                              (fn [a]
+                                                                (println (format "transact-profit-loss-xf %s" a))
+                                                                a))
+
                                 :control-channel      (chan 1)
                                 :close-sink-fn        (partial sink-fn nil)
                                 :sink-fn              #(sink-fn {:message %})}]
@@ -267,7 +281,7 @@
     :resume (core.async/toggle mixer {pause-chan { :pause false} })
     (throw (ex-info (format "Invalid command %s" command {})))))
 
-(defn stream-stocks! [{:keys [tick-sleep-ms control-channel] :as game-control}
+#_(defn stream-stocks! [{:keys [tick-sleep-ms control-channel] :as game-control}
                       {:keys [mixer pause-chan output-chan] :as channel-controls}
                       {:keys [close-sink-fn sink-fn] :as output-fns}
                       game-loop-fn]
@@ -289,7 +303,7 @@
             (sink-fn vv)
             (recur)))))))
 
-(defn stream-subscription!
+#_(defn stream-subscription!
 
   ([game-control channel-controls output-fns]
    (let [game-loop-fn identity]
@@ -445,7 +459,122 @@
        stocks->partitioned-entities
        (map partitioned-entities->transaction-entities)))
 
-(defn chain-stock-sequence-controls! [conn
+(defn chain-control-pipeline [{:keys [game stocks-with-tick-data
+
+                                      stock-tick-xf calculate-profit-loss-xf portfolio-update-xf
+                                      transact-tick-xf transact-profit-loss-xf]}
+                              {:keys [conn user-db-id]}]
+
+  (let [;; stream-buffer 40
+        ;; stock-tick-stream (core.async/chan stream-buffer)
+        ;; portfolio-update-stream (core.async/chan stream-buffer)
+        ;; game-event-stream (core.async/chan stream-buffer)
+
+        concurrent 1
+        plbuffer 1
+        ticks-from (core.async/chan plbuffer)
+        ticks-to (core.async/chan plbuffer stock-tick-xf) ;; NOTE stream tick
+        profit-loss-to (core.async/chan plbuffer)
+        profit-loss-transact-to (core.async/chan plbuffer portfolio-update-xf) ;; NOTE stream PL
+        ;; game-event-from (core.async/chan plbuffer)
+        ;; game-event-to (core.async/chan plbuffer)
+        input-seq                       (stocks->stock-sequences conn game user-db-id stocks-with-tick-data)]
+
+
+    (println "A /" (take 5 stocks-with-tick-data))
+    (println "B /" (take 5 input-seq))
+
+    ;; stock-tick-stream
+    ;; portfolio-update-stream
+    ;; game-event-stream
+
+    ;; A
+    ;; (< ticks)       transact-xf              (< ticks)
+    ;;                 calculate-profit-loss-xf (< profit-loss)
+    ;; (< profit-loss) transact-xf              (< profit-loss)
+
+
+    (core.async/onto-chan ticks-from input-seq)
+
+    ;; P/L
+    (core.async/pipeline-blocking concurrent ticks-to                transact-tick-xf         ticks-from)
+    (core.async/pipeline-blocking concurrent profit-loss-to          calculate-profit-loss-xf ticks-to)
+    (core.async/pipeline-blocking concurrent profit-loss-transact-to transact-profit-loss-xf  profit-loss-to)
+    profit-loss-transact-to))
+
+(defn format-remaining-time [{:keys [remaining-in-minutes remaining-in-seconds]}]
+  (format "%s:%s" remaining-in-minutes remaining-in-seconds))
+
+(defn time-expired? [{:keys [remaining-in-minutes remaining-in-seconds]}]
+  (and (= 0 remaining-in-minutes) (< remaining-in-seconds 1)))
+
+(defn calculate-remaining-time [now end]
+  (let [interval (t/interval now end)]
+    {:interval interval
+     :remaining-in-minutes (t/in-minutes interval)
+     :remaining-in-seconds (rem (t/in-seconds interval) 60)}))
+
+(defn pause-game? [{paused? :paused?} pause?]
+
+  ;; TODO stream a :game-event
+  (reset! paused? pause?))
+
+(defn handle-control-event [control remaining]
+
+  ;; TODO stream
+  ;; :game-event
+  ;; :timer-event
+
+  ;; TODO handle events
+  ;; :exit :win :lose :timeout
+  )
+
+(defn run-game! [{:keys [control-channel profit-loss-transact-to]} pause-atom tick-sleep-atom level-timer-atom]
+
+  (let [start (t/now)]
+
+    (go-loop [now start
+              end (t/plus start (t/seconds @level-timer-atom))]
+
+      (let [remaining (calculate-remaining-time now end)
+            [controlv ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
+                                             control-channel])
+
+            ;; pause
+            ;; control
+            ;; timer
+            [nowA endA] (match [@pause-atom controlv (time-expired? remaining)]
+
+                               [true :exit _] (do
+                                                (handle-control-event controlv remaining)
+                                                (println (format "< Paused > %s / Exiting..." (format-remaining-time remaining))))
+                               [true _ _] (let [new-end (t/plus end (t/seconds 1))
+                                                remaining (calculate-remaining-time now new-end)]
+                                            (println (format "< Paused > %s" (format-remaining-time remaining)))
+                                            [(t/now) new-end])
+
+                               [_ :exit _] (do (handle-control-event controlv remaining)
+                                               (println (format "Running %s / Exiting" (format-remaining-time remaining))))
+                               [_ :win _] (do (handle-control-event controlv remaining)
+                                              (println (format "Win %s" (format-remaining-time remaining))))
+                               [_ :lose _] (do (handle-control-event controlv remaining)
+                                               (println (format "Lose %s" (format-remaining-time remaining))))
+                               [_ _ false] (let [v (<! profit-loss-transact-to)]
+
+                                             ;; TODO stream
+                                             ;; :stock-tick
+                                             ;; :timer-event
+
+                                             (println (format "Running %s / %s" (format-remaining-time remaining) v))
+                                             (when v
+                                               [(t/now) end]))
+                               [_ _ true] (do (handle-control-event :timeout remaining)
+                                              (println (format "Running %s / TIME'S UP!!" (format-remaining-time remaining)))))]
+
+        (when (and nowA endA)
+          (recur nowA endA))))))
+
+#_(defn chain-stock-sequence-controls! [conn
                                       {:keys [game stocks-with-tick-data tick-sleep-ms
                                               control-channel stock-stream-channel
                                               close-sink-fn sink-fn] :as game-control}
@@ -470,25 +599,16 @@
    (start-game! conn user-db-id game-control identity))
 
   ([conn user-db-id game-control game-loop-fn]
-   (let [{:keys [game stocks-with-tick-data
-                 tick-sleep-ms control-channel
-                 close-sink-fn sink-fn]} game-control
-         input-seq                       (stocks->stock-sequences conn game user-db-id stocks-with-tick-data)
-         {:keys [mixer
-                 input-chan
-                 output-chan]}           (chain-stock-sequence-controls! conn game-control input-seq)
-         channel-controls                {:mixer           mixer
-                                          :input-chan      input-chan
-                                          :output-chan     output-chan
-                                          :pause-chan      input-chan}]
 
-     (stream-subscription! game-control
-                           channel-controls
-                           {:close-sink-fn close-sink-fn
-                            :sink-fn       sink-fn}
-                           game-loop-fn)
-     {:game-control     game-control
-      :channel-controls channel-controls})))
+   (let [{:keys [control-channel
+                 paused?
+                 tick-sleep-atom
+                 level-timer-atom]} game-control]
+
+     (as-> game-control gc
+       (chain-control-pipeline gc {:conn conn :user-db-id user-db-id})
+       (assoc game-control :profit-loss-transact-to gc)
+       (run-game! gc paused? tick-sleep-atom level-timer-atom)))))
 
 ;; CALCULATION
 (defn collect-realized-profit-loss [game-id]

@@ -1,5 +1,7 @@
 (ns workbench.games
-  (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
+  (:require [clojure.core.async :as core.async
+             :refer [go-loop chan close! timeout alts! >! <! >!!]]
+            [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.core :as ig]
             [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
@@ -26,46 +28,65 @@
 (comment ;; i. Create Game, ii. buy and sell stocks, iii. calculate profit/loss
 
 
-  ;; A
-  (def conn (-> repl.state/system :persistence/datomic :opts :conn))
-  (def user (test-util/generate-user! conn))
-  (def result-user-id (:db/id user))
-  (def userId         (:user/external-uid user))
+  (do
 
-  ;; B
-  (def data-sequence-B [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
-  (def tick-length     (count data-sequence-B))
+    ;; A
+    (def conn (-> repl.state/system :persistence/datomic :opts :conn))
+    (def user (test-util/generate-user! conn))
+    (def result-user-id (:db/id user))
+    (def userId         (:user/external-uid user))
 
-  ;; C create-game!
-  (def sink-fn identity)
-
-  (def game-control (game.games/create-game! conn result-user-id sink-fn data-sequence-B))
-
-  (def game (:game game-control))
-  (def gameId (:game/id game))
-  (def game-db-id (:db/id game))
+    ;; B
+    (def data-sequence-B [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+    (def tick-length     (count data-sequence-B)))
 
 
-  (def control-channel (:control-channel game-control))
-  (def stock-stream-channel (:stock-stream-channel game-control))
-  (def stocks-with-tick-data (:stocks-with-tick-data game-control))
+  (do
 
-  (def test-chan (core.async/chan))
-  (def game-loop-fn (fn [a]
-                      (when a (core.async/>!! test-chan a))))
+    ;; C create-game!
+    (def sink-fn identity)
+
+    (def game-control (game.games/create-game! conn result-user-id sink-fn data-sequence-B))
+    (def game (:game game-control))
+    (def gameId (:game/id game))
+    (def game-db-id (:db/id game))
+
+
+    (def control-channel (:control-channel game-control))
+    ;; (def stock-stream-channel (:stock-stream-channel game-control))
+    (def tick-sleep-atom (:tick-sleep-atom game-control))
+    ;; (def stocks-with-tick-data (:stocks-with-tick-data game-control))
+    ;; (def test-chan (core.async/chan))
+    #_(def game-loop-fn (fn [a]
+                          (when a (core.async/>!! test-chan a)))))
+
 
   ;; D start-game!
-  (def start-game-result (game.games/start-game! conn result-user-id game-control game-loop-fn))
-  {{:keys [mixer
-           pause-chan
-           input-chan
-           output-chan]}
-   :channel-controls}
+  (def start-game-result (game.games/start-game! conn result-user-id game-control))
 
-  (def game-user-subscription (-> game
-                                  :game/users first
-                                  :game.user/subscriptions first))
-  (def stockId (:game.stock/id game-user-subscription))
+  (core.async/>!! control-channel :exit)
+
+
+  ;; :pause :resume
+  (game.games/pause-game? game-control true)
+  (game.games/pause-game? game-control false)
+
+  ;; bump tick sleep (up or down)
+  (reset! tick-sleep-atom 500)
+  (reset! tick-sleep-atom 1000)
+  (reset! tick-sleep-atom 1500)
+
+  ;; :win :lose :exit
+  (core.async/>!! control-channel :exit)
+  (core.async/>!! control-channel :win)
+  (core.async/>!! control-channel :lose)
+
+
+
+  ;; (def game-user-subscription (-> game
+  ;;                                 :game/users first
+  ;;                                 :game.user/subscriptions first))
+  ;; (def stockId (:game.stock/id game-user-subscription))
 
 
   ;; ;; E subscription price history
@@ -85,25 +106,27 @@
   ;;                           :noop))
 
   ;; TODO lookup game-id
-  :game/id
-  :game/users
-  :game.user/user
-  :user/accounts
-  :bookkeeping.account/id
+  ;; :game/id
+  ;; :game/users
+  ;; :game.user/user
+  ;; :user/accounts
+  ;; :bookkeeping.account/id
+  ;;
+  ;; (def conn (-> integrantrepl.state/system :persistence/datomic :opts :conn))
+  ;;
+  ;; (-> (persistence.core/pull-entity conn game-db-id)
+  ;;     util/pprint+identity)
+  ;;
+  ;; (-> (d/q '[:find (pull ?e [{:user/_accounts
+  ;;                             [{:game.user/_user
+  ;;                               [{:game/_users [:game/id]}]}]}])
+  ;;         :in $ ?account-id
+  ;;         :where
+  ;;         [?e :bookkeeping.account/id ?account-id]]
+  ;;       (d/db conn)
+  ;;       #uuid "6caf0e08-34fe-458f-8c71-20bb3074033c")
+  ;;
+  ;;     util/pprint+identity flatten first
+  ;;     :user/_accounts :game.user/_user :game/_users :game/id)
 
-  (def conn (-> integrantrepl.state/system :persistence/datomic :opts :conn))
-
-  (-> (persistence.core/pull-entity conn game-db-id)
-      util/pprint+identity)
-
-  (-> (d/q '[:find (pull ?e [{:user/_accounts
-                              [{:game.user/_user
-                                [{:game/_users [:game/id]}]}]}])
-          :in $ ?account-id
-          :where
-          [?e :bookkeeping.account/id ?account-id]]
-        (d/db conn)
-        #uuid "6caf0e08-34fe-458f-8c71-20bb3074033c")
-
-      util/pprint+identity flatten first
-      :user/_accounts :game.user/_user :game/_users :game/id))
+  )

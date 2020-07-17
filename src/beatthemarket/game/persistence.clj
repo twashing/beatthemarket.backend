@@ -5,11 +5,7 @@
   (:import [java.util UUID]))
 
 
-(defn track-profit-loss-by-stock-id! [game-id stock-id updated-profit-loss-calculations]
-  (swap! (:game/games repl.state/system)
-         #(update-in % [game-id :profit-loss stock-id] (constantly updated-profit-loss-calculations))))
-
-(defn track-profit-loss-by-stock-id2! [game-id updated-profit-loss-calculations]
+(defn track-profit-loss-by-stock-id! [game-id updated-profit-loss-calculations]
   (swap! (:game/games repl.state/system)
          (fn [gs]
            (update-in gs [game-id :profit-loss]
@@ -115,7 +111,7 @@
               (:profit-loss gs)
               (assoc gs game-stock-id (get gs game-stock-id [])))
 
-            updated-profit-loss-calculations2
+            updated-profit-loss-calculations
             (->> profit-loss
                  (map (fn [[k v]]
 
@@ -129,7 +125,7 @@
                                   flatten)])))
                  (map #(apply hash-map %)))]
 
-        (track-profit-loss-by-stock-id2! game-id updated-profit-loss-calculations2)))))
+        (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
 
@@ -184,7 +180,7 @@
                          (Float.))]
                 (concat buys [(assoc sell :realized-profit-loss realized-profit-loss)])))
 
-            updated-profit-loss-calculations2
+            updated-profit-loss-calculations
             (->> profit-loss
                  (map (fn [[k v]]
                         (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
@@ -198,7 +194,7 @@
                                   flatten)])))
                  (map #(apply hash-map %)))]
 
-        (track-profit-loss-by-stock-id2! game-id updated-profit-loss-calculations2)))))
+        (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
 
 
 ;; > Profit Calculation Use Cases
@@ -217,4 +213,6 @@
       (buys-fn data) (calculate-running-aggregate-profit-loss-on-BUY! data)
 
       ;; collect SELLS by stock account
-      (sells-fn data) (calculate-running-aggregate-profit-loss-on-SELL! data))))
+      (sells-fn data) (calculate-running-aggregate-profit-loss-on-SELL! data))
+
+    data))
