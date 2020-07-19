@@ -140,7 +140,7 @@
 
 
     (core.async/<!! (core.async/timeout 10000))
-    (game.games/control-streams! control-channel channel-controls :exit)
+    ;; (game.games/control-streams! control-channel channel-controls :exit)
 
     ;; D Return a cleanup fn
     (constantly nil)))

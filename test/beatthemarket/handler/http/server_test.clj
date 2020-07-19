@@ -286,7 +286,7 @@
            :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)]
 
       (core.async/<!! (core.async/timeout 7000))
-      (game.games/control-streams! control-channel channel-controls :exit)
+      #_(game.games/control-streams! control-channel channel-controls :exit)
 
       (let [{tick-price :game.stock.tick/close
              tick-time  :game.stock.tick/trade-time
@@ -352,7 +352,7 @@
            :channel-controls}               (game.games/start-game! conn user-id game-control game-loop-fn)]
 
       (core.async/<!! (core.async/timeout 7000))
-      (game.games/control-streams! control-channel channel-controls :exit)
+      #_(game.games/control-streams! control-channel channel-controls :exit)
 
       (let [{tick-price :game.stock.tick/close
              tick-time  :game.stock.tick/trade-time

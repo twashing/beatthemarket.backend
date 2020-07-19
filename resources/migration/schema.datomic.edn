@@ -78,6 +78,11 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
+ {:db/ident       :game.user/profit-loss
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
  {:db/ident       :game.user/subscriptions
   :db/valueType   :db.type/ref ;; List of :stock
   :db/cardinality :db.cardinality/many

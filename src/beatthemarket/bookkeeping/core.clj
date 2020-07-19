@@ -3,6 +3,7 @@
             [com.rpl.specter :refer [select pred ALL MAP-VALS]]
             [rop.core :as rop]
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
+            [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.iam.persistence :as iam.persistence]
@@ -318,7 +319,9 @@
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                ent
                (-> tentry :bookkeeping.tentry/id))
-          (ffirst ent))))))
+          (ffirst ent)
+          (game.persistence/track-profit-loss! ent)
+          (identity ent))))))
 
 (defn sell-stock! [conn game-id user-id stock-id stock-amount stock-price]
 
@@ -377,7 +380,9 @@
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                ent
                (-> tentry :bookkeeping.tentry/id))
-          (ffirst ent))))))
+          (ffirst ent)
+          (game.persistence/track-profit-loss! ent)
+          (identity ent))))))
 
 (comment
 

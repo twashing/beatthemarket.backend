@@ -114,7 +114,6 @@
             updated-profit-loss-calculations
             (->> profit-loss
                  (map (fn [[k v]]
-
                         (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
                                                                  (concat v)
                                                                  profit-loss->chunks

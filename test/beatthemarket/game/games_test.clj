@@ -24,6 +24,153 @@
 
 (deftest create-game!-test
 
+  (testing "Creating a game returns the expected game control keys"
+
+    (let [conn           (-> repl.state/system :persistence/datomic :opts :conn)
+          result-user-id (:db/id (test-util/generate-user! conn))
+          sink-fn        identity
+          game-control   (game.games/create-game! conn result-user-id sink-fn)
+
+          expected-game-control-keys #{:game
+                                       :profit-loss
+                                       :stocks-with-tick-data
+                                       :control-channel
+
+                                       :paused?
+                                       :level-timer-atom
+                                       :tick-sleep-atom
+
+                                       :transact-tick-xf
+                                       :stream-stock-tick-xf
+                                       :calculate-profit-loss-xf
+                                       :transact-profit-loss-xf
+                                       :stream-portfolio-update-xf
+
+                                       :close-sink-fn
+                                       :sink-fn}]
+
+      (->> (keys game-control)
+           (into #{})
+           (= expected-game-control-keys )
+           is))))
+
+(deftest start-game!-test
+
+  (let [conn                 (-> repl.state/system :persistence/datomic :opts :conn)
+        result-user-id       (:db/id (test-util/generate-user! conn))
+        data-sequence-B      [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
+        sink-fn              identity
+
+        test-stock-ticks (atom [])
+        test-portfolio-updates (atom [])
+
+        stream-stock-tick-xf (map (fn [a]
+                                    (swap! test-stock-ticks
+                                           (fn [b]
+                                             (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                               (conj b stock-ticks))))))
+        stream-portfolio-update-xf (map (fn [a]
+                                          (swap! test-portfolio-updates (fn [b] (conj b a)))))
+
+        {{gameId :game/id
+          game-db-id :db/id :as game} :game
+         control-channel :control-channel
+
+         paused? :paused?
+         tick-sleep-atom :tick-sleep-atom
+         level-timer-atom :level-timer-atom
+         :as game-control}
+        (game.games/create-game! conn result-user-id sink-fn data-sequence-B stream-stock-tick-xf stream-portfolio-update-xf)]
+
+    (testing "Chaining the control pipeline, produces the correct value"
+
+      ;; "Starting a game correctly chains the control pipeline"
+      ;; (def start-game-result (game.games/start-game! conn result-user-id game-control))
+      ;; (core.async/>!! control-channel :exit)
+
+      (let [data-sequence-count (count data-sequence-B)
+            profit-loss-transact-to (game.games/chain-control-pipeline game-control {:conn conn :user-db-id result-user-id})]
+
+        (run! (fn [_]
+                (core.async/go
+                  (core.async/<! profit-loss-transact-to)))
+              data-sequence-B)
+
+        (Thread/sleep 1000)
+
+        (testing "Correct number of stock-tick AND portfolio-update values were streamed"
+
+          (are [x y] (= x y)
+            data-sequence-count (count @test-stock-ticks)
+            data-sequence-count (count @test-portfolio-updates))
+
+          (->> @test-stock-ticks
+               (map #(map keys %))
+               (map #(map (fn [a] (into #{} a)) %))
+               (map #(every? (fn [a]
+                               (= #{:game.stock.tick/id :game.stock.tick/trade-time :game.stock.tick/close
+                                    :game.stock/id :game.stock/name}
+                                  a)) %))
+               (every? true?)
+               is))
+
+        (testing "The correct ticks were saved"
+
+          (let [stockId (-> game :game/stocks first :game.stock/id)
+                price-history (d/q '[:find (pull ?ph [*])
+                                     :in $ ?game-id ?stock-id
+                                     :where
+                                     [?e :game/id ?game-id]
+                                     [?e :game/stocks ?gs]
+                                     [?gs :game.stock/id ?stock-id]
+                                     [?gs :game.stock/price-history ?ph]]
+                                   (d/db conn)
+                                   gameId stockId)]
+
+            (are [x y] (= x y)
+
+              data-sequence-count (count price-history)
+
+              (->> data-sequence-B
+                   (map #(Float. %))
+                   (into #{}))
+
+              (->> price-history
+                   (map (comp :game.stock.tick/close first))
+                   (into #{})))))))))
+
+
+
+
+;; :StockTick
+;; {:fields
+;;  {:stockTickId {:type (non-null String)}
+;;   :stockTickTime {:type (non-null Int)}
+;;   :stockTickClose {:type (non-null Float)}
+;;   :stockId {:type (non-null String)}}}
+;;
+;; {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
+;;  :game.stock.tick/trade-time 1595175003845
+;;  :game.stock.tick/close 100.0
+;;  :game.stock/id #uuid "b5986d10-c88a-44db-bca0-fec65e4d479b"
+;;  :game.stock/name "Dominant Pencil"}
+;;
+;; {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
+;;  :game.stock.tick/trade-time 1595175003845
+;;  :db/id "56525e39-3b2f-4bab-a183-465dbfd77d32"
+;;  :game.stock.tick/close 100.0}
+;;
+;; {:db/id 17592186045441
+;;  :game.stock/id #uuid "b5986d10-c88a-44db-bca0-fec65e4d479b"
+;;  :game.stock/name "Dominant Pencil"
+;;  :game.stock/symbol "DOMI"
+;;  :game.stock/price-history {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
+;;                             :game.stock.tick/trade-time 1595175003845
+;;                             :db/id "56525e39-3b2f-4bab-a183-465dbfd77d32"
+;;                             :game.stock.tick/close 100.0}}
+
+#_(deftest create-game!-test
+
   (testing "We get an expected game-control struct"
 
     (let [conn               (-> repl.state/system :persistence/datomic :opts :conn)
@@ -115,9 +262,9 @@
                              (= 2)
                              is)))))))
 
-          (game.games/control-streams! control-channel channel-controls :exit))))))
+          #_(game.games/control-streams! control-channel channel-controls :exit))))))
 
-(deftest buy-stock!-test
+#_(deftest buy-stock!-test
 
   (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)
         {result-user-id :db/id
@@ -156,7 +303,7 @@
             first
             second)]
 
-    (game.games/control-streams! control-channel channel-controls :exit)
+    #_(game.games/control-streams! control-channel channel-controls :exit)
 
     (testing "We are checking game is current and belongs to the user"
       (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
@@ -200,7 +347,7 @@
           expected-debit-value         debit-value
           expected-debit-account-name  debit-account-name)))))
 
-(deftest sell-stock!-test
+#_(deftest sell-stock!-test
 
   (let [conn                                      (-> repl.state/system :persistence/datomic :opts :conn)
         {result-user-id :db/id
@@ -239,7 +386,7 @@
             first
             second)]
 
-    (game.games/control-streams! control-channel channel-controls :exit)
+    #_(game.games/control-streams! control-channel channel-controls :exit)
 
     (testing "We are checking game is current and belongs to the user"
       (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
@@ -305,7 +452,7 @@
     :sell (game.games/sell-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
     :noop))
 
-(deftest calculate-profit-loss-single-buy-sell-test
+#_(deftest calculate-profit-loss-single-buy-sell-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -366,7 +513,7 @@
                  {:op :sell :stockAmount 200}])
            (run! (partial local-transact-stock! opts)))
 
-      (game.games/control-streams! control-channel channel-controls :exit)
+      #_(game.games/control-streams! control-channel channel-controls :exit)
 
       (testing "Chunks Realized profit/losses are correctly calculated, for single buy/sell (multiple times)"
 
@@ -391,7 +538,7 @@
             (= 3000.0)
             is)))))
 
-(deftest calculate-profit-loss-multiple-buy-single-sell-test
+#_(deftest calculate-profit-loss-multiple-buy-single-sell-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -458,7 +605,7 @@
                  {:op :sell :stockAmount 200}])
            (run! (partial local-transact-stock! opts)))
 
-      (game.games/control-streams! control-channel channel-controls :exit)
+      #_(game.games/control-streams! control-channel channel-controls :exit)
 
       (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, single sell (multiple times)"
 
@@ -493,7 +640,7 @@
             (= (.floatValue 9675.21))
             is)))))
 
-(deftest calculate-profit-loss-multiple-buy-multiple-sell-test
+#_(deftest calculate-profit-loss-multiple-buy-multiple-sell-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -573,7 +720,7 @@
                  {:op :sell :stockAmount 128}])
            (run! (partial local-transact-stock! opts)))
 
-      (game.games/control-streams! control-channel channel-controls :exit)
+      ;; #_(game.games/control-streams! control-channel channel-controls :exit)
 
       (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, multiple sells (multiple times)"
 

@@ -137,7 +137,7 @@
                                [true _ _] (let [new-end (t/plus end (t/seconds 1))
                                                 remaining (calculate-remaining-time now new-end)]
                                             (println (format "< Paused > %s" (format-remaining-time remaining)))
-                                            [(t/now) new-end] #_(recur (t/now) new-end))
+                                            [(t/now) new-end])
 
                                [_ :exit _] (do (handle-control-event controlv remaining)
                                                (println (format "Running %s / Exiting" (format-remaining-time remaining))))
@@ -152,7 +152,7 @@
                                              ;; :timer-event
 
                                              (println (format "Running %s / %s" (format-remaining-time remaining) v))
-                                             [(t/now) end] #_(recur (t/now) end))
+                                             [(t/now) end])
                                [_ _ true] (do (handle-control-event :timeout remaining)
                                               (println (format "Running %s / TIME'S UP!!" (format-remaining-time remaining)))))]
 
