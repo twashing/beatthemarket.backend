@@ -26,7 +26,7 @@
         A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
 
     (assoc calculation
-           :latest-trade-price->price     [latest-trade-price trade-price]
+           :latest-price->trade-price     [latest-trade-price trade-price]
            :pershare-gain-or-loss         pershare-gain-or-loss)))
 
 (defn recalculate-profit-loss-on-sell [old-account-amount updated-stock-account-amount latest-trade-price

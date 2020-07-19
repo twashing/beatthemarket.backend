@@ -527,7 +527,9 @@
                                               (println (format "Running %s / TIME'S UP!!" (format-remaining-time remaining)))))]
 
         (when (and nowA endA)
-          (recur nowA endA))))))
+          (recur nowA endA)))))
+
+  profit-loss-transact-to)
 
 (defn start-game! [conn user-db-id game-control]
 

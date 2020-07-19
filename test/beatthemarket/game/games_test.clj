@@ -137,286 +137,131 @@
 
               (->> price-history
                    (map (comp :game.stock.tick/close first))
-                   (into #{})))))))))
+                   (into #{})))
 
+            (testing "Subscription ticks are in correct time order"
 
+              (let
 
+                  [{tickTime0 :game.stock.tick/trade-time
+                    ;; tickPrice0 :game.stock.tick/close
+                    tickId0    :game.stock.tick/id}
+                   (->> @test-stock-ticks
+                        first
+                        (filter #(= stockId (:game.stock/id %)))
+                        first)
 
-;; :StockTick
-;; {:fields
-;;  {:stockTickId {:type (non-null String)}
-;;   :stockTickTime {:type (non-null Int)}
-;;   :stockTickClose {:type (non-null Float)}
-;;   :stockId {:type (non-null String)}}}
-;;
-;; {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
-;;  :game.stock.tick/trade-time 1595175003845
-;;  :game.stock.tick/close 100.0
-;;  :game.stock/id #uuid "b5986d10-c88a-44db-bca0-fec65e4d479b"
-;;  :game.stock/name "Dominant Pencil"}
-;;
-;; {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
-;;  :game.stock.tick/trade-time 1595175003845
-;;  :db/id "56525e39-3b2f-4bab-a183-465dbfd77d32"
-;;  :game.stock.tick/close 100.0}
-;;
-;; {:db/id 17592186045441
-;;  :game.stock/id #uuid "b5986d10-c88a-44db-bca0-fec65e4d479b"
-;;  :game.stock/name "Dominant Pencil"
-;;  :game.stock/symbol "DOMI"
-;;  :game.stock/price-history {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
-;;                             :game.stock.tick/trade-time 1595175003845
-;;                             :db/id "56525e39-3b2f-4bab-a183-465dbfd77d32"
-;;                             :game.stock.tick/close 100.0}}
+                   {tickTime1 :game.stock.tick/trade-time
+                    ;; tickPrice1 :game.stock.tick/close
+                    tickId1    :game.stock.tick/id}
+                   (->> @test-stock-ticks
+                        second
+                        (filter #(= stockId (:game.stock/id %)))
+                        first)]
 
-#_(deftest create-game!-test
+                (is (t/after?
+                      (c/from-long tickTime1)
+                      (c/from-long tickTime0)))
 
-  (testing "We get an expected game-control struct"
+                (testing "Two ticks streamed to client, got saved to the DB"
 
-    (let [conn               (-> repl.state/system :persistence/datomic :opts :conn)
-          result-user-id     (:db/id (test-util/generate-user! conn))
-          sink-fn            identity
-          {:keys [game tick-sleep-ms control-channel]
-           :as   game-control} (game.games/create-game! conn result-user-id sink-fn)
+                  (->> (d/q '[:find ?e
+                              :in $ [?tick-id ...]
+                              :where
+                              [?e :game.stock.tick/id ?tick-id]]
+                            (-> repl.state/system :persistence/datomic :opts :conn d/db)
+                            [tickId0 tickId1])
+                       count
+                       (= 2)
+                       is))))))))))
 
-          expected-game-control-keys
-          #{:game :stocks-with-tick-data :tick-sleep-ms
-            :stock-stream-channel :control-channel
-            :close-sink-fn :sink-fn :profit-loss}]
+(deftest buy-stock!-test
 
-      (->> game-control
-           keys
-           (into #{})
-           (= expected-game-control-keys)
-           is)
-
-      (testing "Streaming subscription flows through the correct value"
-
-        (let [test-chan    (core.async/chan)
-              game-loop-fn (fn [a]
-                             (core.async/>!! test-chan a))
-
-              {{:keys [mixer
-                       pause-chan
-                       input-chan
-                       output-chan] :as channel-controls}
-               :channel-controls} (game.games/start-game! conn result-user-id game-control game-loop-fn)
-
-              output                     (<!! test-chan)
-              expected-transaction-count 8
-              expected-stock-count       4
-              expected-stock-tick-count  expected-stock-count]
-
-          (are [x y] (= x y)
-            expected-transaction-count (count output)
-            expected-stock-tick-count  (count (filter :game.stock.tick/id output))
-            expected-stock-count       (count (filter :game.stock/id output)))
-
-
-          (testing "We are getting subscription as part of our stocks"
-
-            (let [game-user-subscription (-> game
-                                             :game/users first
-                                             :game.user/subscriptions first)
-                  [{{stock-tick :game.stock.tick/id} :game.stock/price-history}
-                   {tick :game.stock.tick/id}]
-                  (game.games/narrow-stock-tick-pairs-by-subscription output game-user-subscription)]
-
-              (is (= stock-tick tick))
-
-
-              (testing "Subscription ticks are in correct time order"
-
-                (let [{t0-time :game.stock.tick/trade-time
-                       id0 :game.stock.tick/id}
-                      (-> (<!! test-chan)
-                          (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
-                          first
-                          second)
-
-                      {t1-time :game.stock.tick/trade-time
-                       id1 :game.stock.tick/id}
-                      (-> (<!! test-chan)
-                          (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
-                          first
-                          second)]
-
-                  (is (t/after?
-                        (c/from-long t1-time)
-                        (c/from-long t0-time)))
-
-                  (testing "Two ticks streamed to client, got saved to the DB"
-
-                      (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-
-                            tick-id0 id0
-                            tick-id1 id1]
-
-                        (->> (d/q '[:find ?e
-                                    :in $ [?tick-id ...]
-                                    :where
-                                    [?e :game.stock.tick/id ?tick-id]]
-                                  (d/db conn)
-                                  [tick-id0 tick-id1])
-                             count
-                             (= 2)
-                             is)))))))
-
-          #_(game.games/control-streams! control-channel channel-controls :exit))))))
-
-#_(deftest buy-stock!-test
-
+  ;; A
   (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)
         {result-user-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
+        data-sequence-B                     [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
         sink-fn                             identity
-        {{gameId :game/id :as game} :game
-         control-channel            :control-channel
-         stock-stream-channel       :stock-stream-channel
-         stocks-with-tick-data      :stocks-with-tick-data
-         :as                        game-control}                  (game.games/create-game! conn result-user-id sink-fn)
-        test-chan                           (core.async/chan)
-        game-loop-fn                        (fn [a]
-                                              (core.async/>!! test-chan a))
-        {{:keys                             [mixer
-                                             pause-chan
-                                             input-chan
-                                             output-chan] :as channel-controls}
-         :channel-controls}                 (game.games/start-game! conn result-user-id game-control game-loop-fn)
-        game-user-subscription              (-> game
-                                                :game/users first
-                                                :game.user/subscriptions first)
-        stockId                             (:game.stock/id game-user-subscription)
-        stockAmount                         100
 
-        {tickPrice0 :game.stock.tick/close
-         tickId0    :game.stock.tick/id}
-        (-> (<!! test-chan)
-            (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
-            first
-            second)
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
 
-        {tickPrice1 :game.stock.tick/close
-         tickId1    :game.stock.tick/id}
-        (-> (<!! test-chan)
-            (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
-            first
-            second)]
+        stream-stock-tick-xf       (map (fn [a]
+                                          (swap! test-stock-ticks
+                                                 (fn [b]
+                                                   (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                     (conj b stock-ticks))))))
+        stream-portfolio-update-xf (map (fn [a]
+                                          (swap! test-portfolio-updates (fn [b] (conj b a)))))
 
-    #_(game.games/control-streams! control-channel channel-controls :exit)
+        {{gameId     :game/id
+          game-db-id :db/id :as game} :game
+         control-channel              :control-channel
 
-    (testing "We are checking game is current and belongs to the user"
-      (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
+         paused?          :paused?
+         tick-sleep-atom  :tick-sleep-atom
+         level-timer-atom :level-timer-atom
+         :as              game-control}
+        (game.games/create-game! conn result-user-id sink-fn data-sequence-B stream-stock-tick-xf stream-portfolio-update-xf)
 
-    (testing "Error is thrown when submitted price does not match price from tickId"
-      (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
+        profit-loss-transact-to (game.games/start-game! conn result-user-id game-control)
+        game-user-subscription  (-> game
+                                    :game/users first
+                                    :game.user/subscriptions first)
+        stockId                 (:game.stock/id game-user-subscription)
+        stockAmount             100]
 
-    (testing "Error is thrown when submitted tick is no the latest"
-      (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
+    ;; B
+    (run! (fn [_]
+            (core.async/go
+              (core.async/<! profit-loss-transact-to)))
+          data-sequence-B)
+    (Thread/sleep 1000)
 
-    (testing "Returned Tentry matches what was submitted"
-      (let [expected-credit-value        (Float. (format "%.2f" (* stockAmount tickPrice1)))
-            expected-credit-account-name (->> game
-                                              :game/users first
-                                              :game.user/subscriptions first
-                                              :game.stock/name
-                                              (format "STOCK.%s"))
+    ;; C
+    (let [{tickPrice0 :game.stock.tick/close
+           tickId0    :game.stock.tick/id}
+          (->> @test-stock-ticks
+               first
+               (filter #(= stockId (:game.stock/id %)))
+               first)
 
-            expected-debit-value        (- (-> repl.state/config :game/game :starting-balance) expected-credit-value)
-            expected-debit-account-name "Cash"
+          {tickPrice1 :game.stock.tick/close
+           tickId1    :game.stock.tick/id}
+          (->> @test-stock-ticks
+               second
+               (filter #(= stockId (:game.stock/id %)))
+               first)]
 
-            result-tentry (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
+      (testing "We are checking game is current and belongs to the user"
+        (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
 
-            {debit-account-name :bookkeeping.account/name
-             debit-value        :bookkeeping.account/balance}
-            (-> result-tentry
-                :bookkeeping.tentry/debits first
-                :bookkeeping.debit/account
-                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))
+      (testing "Error is thrown when submitted price does not match price from tickId"
+        (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
 
-            {credit-account-name :bookkeeping.account/name
-             credit-value        :bookkeeping.account/balance}
-            (-> result-tentry
-                :bookkeeping.tentry/credits first
-                :bookkeeping.credit/account
-                (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
-
-        (are [x y] (= x y)
-          expected-credit-value        credit-value
-          expected-credit-account-name credit-account-name
-          expected-debit-value         debit-value
-          expected-debit-account-name  debit-account-name)))))
-
-#_(deftest sell-stock!-test
-
-  (let [conn                                      (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
-         userId         :user/external-uid}       (test-util/generate-user! conn)
-        sink-fn                                   identity
-        {{gameId :game/id :as game} :game
-         control-channel            :control-channel
-         stock-stream-channel       :stock-stream-channel
-         stocks-with-tick-data      :stocks-with-tick-data
-         :as                        game-control} (game.games/create-game! conn result-user-id sink-fn)
-        test-chan                                 (core.async/chan)
-        game-loop-fn                              (fn [a]
-                                                    (core.async/>!! test-chan a))
-        {{:keys                                           [mixer
-                                                           pause-chan
-                                                           input-chan
-                                                           output-chan] :as channel-controls}
-         :channel-controls}                       (game.games/start-game! conn result-user-id game-control game-loop-fn)
-        game-user-subscription                    (-> game
-                                                      :game/users first
-                                                      :game.user/subscriptions first)
-        stockId                                   (:game.stock/id game-user-subscription)
-        stockAmount                               100
-
-        {tickPrice0 :game.stock.tick/close
-         tickId0    :game.stock.tick/id}
-        (-> (<!! test-chan)
-            (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
-            first
-            second)
-
-        {tickPrice1 :game.stock.tick/close
-         tickId1    :game.stock.tick/id}
-        (-> (<!! test-chan)
-            (game.games/narrow-stock-tick-pairs-by-subscription game-user-subscription)
-            first
-            second)]
-
-    #_(game.games/control-streams! control-channel channel-controls :exit)
-
-    (testing "We are checking game is current and belongs to the user"
-      (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
-
-    (testing "Error is thrown when submitted price does not match price from tickId"
-      (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
-
-    (testing "Error is thrown when submitted tick is no the latest"
-      (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
-
-    (testing "Ensure we have the stock on hand before selling"
-
-      (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
+      (testing "Error is thrown when submitted tick is no the latest"
+        (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
 
       (testing "Returned Tentry matches what was submitted"
+        (let [{tickPriceL :game.stock.tick/close
+               tickIdL    :game.stock.tick/id}
+              (->> @test-stock-ticks
+                   last
+                   (filter #(= stockId (:game.stock/id %)))
+                   first)
 
-        (let [initial-debit-value         0.0
-              debit-value-change          (Float. (format "%.2f" (* stockAmount tickPrice1)))
-              expected-debit-value        (- (+ initial-debit-value debit-value-change) debit-value-change)
-              expected-debit-account-name (->> game
-                                               :game/users first
-                                               :game.user/subscriptions first
-                                               :game.stock/name
-                                               (format "STOCK.%s"))
+              expected-credit-value        (Float. (format "%.2f" (* stockAmount tickPriceL)))
+              expected-credit-account-name (->> game
+                                                :game/users first
+                                                :game.user/subscriptions first
+                                                :game.stock/name
+                                                (format "STOCK.%s"))
 
-              expected-credit-value        (- (+ (-> repl.state/config :game/game :starting-balance) debit-value-change)
-                                              debit-value-change)
-              expected-credit-account-name "Cash"
+              expected-debit-value        (- (-> repl.state/config :game/game :starting-balance) expected-credit-value)
+              expected-debit-account-name "Cash"
 
-              result-tentry (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. tickPrice1))
+              result-tentry (game.games/buy-stock! conn userId gameId stockId stockAmount tickIdL (Float. tickPriceL))
 
               {debit-account-name :bookkeeping.account/name
                debit-value        :bookkeeping.account/balance}
@@ -432,11 +277,141 @@
                   :bookkeeping.credit/account
                   (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
 
-          (are [x y] (= x y)
-            expected-debit-value         debit-value
-            expected-debit-account-name  debit-account-name
-            expected-credit-value        credit-value
-            expected-credit-account-name credit-account-name))))))
+        (are [x y] (= x y)
+          expected-credit-value        credit-value
+          expected-credit-account-name credit-account-name
+          expected-debit-value         debit-value
+          expected-debit-account-name  debit-account-name))))))
+
+(deftest sell-stock!-test
+
+  ;; A
+  (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid} (test-util/generate-user! conn)
+        data-sequence-B                     [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
+        sink-fn                             identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        stream-stock-tick-xf       (map (fn [a]
+                                          (swap! test-stock-ticks
+                                                 (fn [b]
+                                                   (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                     (conj b stock-ticks))))))
+        stream-portfolio-update-xf (map (fn [a]
+                                          (swap! test-portfolio-updates (fn [b] (conj b a)))))
+
+        {{gameId     :game/id
+          game-db-id :db/id :as game} :game
+         control-channel              :control-channel
+
+         paused?          :paused?
+         tick-sleep-atom  :tick-sleep-atom
+         level-timer-atom :level-timer-atom
+         :as              game-control}
+        (game.games/create-game! conn result-user-id sink-fn data-sequence-B stream-stock-tick-xf stream-portfolio-update-xf)
+
+        profit-loss-transact-to (game.games/start-game! conn result-user-id game-control)
+        game-user-subscription  (-> game
+                                    :game/users first
+                                    :game.user/subscriptions first)
+        stockId                 (:game.stock/id game-user-subscription)
+        stockAmount             100]
+
+    ;; B
+    (run! (fn [_]
+            (core.async/go
+              (core.async/<! profit-loss-transact-to)))
+          data-sequence-B)
+    (Thread/sleep 1000)
+
+    ;; C
+    (let [{tickPrice0 :game.stock.tick/close
+           tickId0    :game.stock.tick/id}
+          (->> @test-stock-ticks
+               first
+               (filter #(= stockId (:game.stock/id %)))
+               first)
+
+          {tickPrice1 :game.stock.tick/close
+           tickId1    :game.stock.tick/id}
+          (->> @test-stock-ticks
+               second
+               (filter #(= stockId (:game.stock/id %)))
+               first)]
+
+      (testing "We are checking game is current and belongs to the user"
+        (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
+
+      (testing "Error is thrown when submitted price does not match price from tickId"
+        (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
+
+      (testing "Error is thrown when submitted tick is no the latest"
+        (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
+
+      (testing "Ensure we have the stock on hand before selling"
+
+        (let [{tickPriceL :game.stock.tick/close
+               tickIdL    :game.stock.tick/id}
+              (->> @test-stock-ticks
+                   last
+                   (filter #(= stockId (:game.stock/id %)))
+                   first)]
+
+          (game.games/buy-stock! conn userId gameId stockId stockAmount tickIdL (Float. tickPriceL))
+
+          (testing "Returned Tentry matches what was submitted"
+
+            (let [initial-debit-value         0.0
+                  debit-value-change          (Float. (format "%.2f" (* stockAmount tickPriceL)))
+                  expected-debit-value        (- (+ initial-debit-value debit-value-change) debit-value-change)
+                  expected-debit-account-name (->> game
+                                                   :game/users first
+                                                   :game.user/subscriptions first
+                                                   :game.stock/name
+                                                   (format "STOCK.%s"))
+
+                  expected-credit-value        (- (+ (-> repl.state/config :game/game :starting-balance) debit-value-change)
+                                                  debit-value-change)
+                  expected-credit-account-name "Cash"
+
+                  result-tentry (game.games/sell-stock! conn userId gameId stockId stockAmount tickIdL (Float. tickPriceL))
+
+                  {debit-account-name :bookkeeping.account/name
+                   debit-value        :bookkeeping.account/balance}
+                  (-> result-tentry
+                      :bookkeeping.tentry/debits first
+                      :bookkeeping.debit/account
+                      (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))
+
+                  {credit-account-name :bookkeeping.account/name
+                   credit-value        :bookkeeping.account/balance}
+                  (-> result-tentry
+                      :bookkeeping.tentry/credits first
+                      :bookkeeping.credit/account
+                      (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
+
+              (are [x y] (= x y)
+                expected-debit-value         debit-value
+                expected-debit-account-name  debit-account-name
+                expected-credit-value        credit-value
+                expected-credit-account-name credit-account-name))))))))
+
+;; TODO
+;; calculate P/L on buy
+;; save P/L to DB (not component)
+;; calculate P/L on tick
+
+;; calculate P/L on sell
+
+
+;; {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
+;;  :game.stock.tick/trade-time 1595175003845
+;;  :game.stock.tick/close 100.0
+;;  :game.stock/id #uuid "b5986d10-c88a-44db-bca0-fec65e4d479b"
+;;  :game.stock/name "Dominant Pencil"}
 
 (defn- local-transact-stock! [{conn :conn
                               userId :userId
