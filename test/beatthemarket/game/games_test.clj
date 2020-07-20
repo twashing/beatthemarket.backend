@@ -369,20 +369,6 @@
                 expected-credit-value        credit-value
                 expected-credit-account-name credit-account-name))))))))
 
-;; TODO
-;; calculate P/L on buy
-;; save P/L to DB (not component)
-;; calculate P/L on tick
-
-;; calculate P/L on sell
-
-
-;; {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
-;;  :game.stock.tick/trade-time 1595175003845
-;;  :game.stock.tick/close 100.0
-;;  :game.stock/id #uuid "b5986d10-c88a-44db-bca0-fec65e4d479b"
-;;  :game.stock/name "Dominant Pencil"}
-
 (defn- local-transact-stock! [{conn :conn
                                userId :userId
                                gameId :gameId
@@ -470,7 +456,6 @@
         (let [profit-loss (-> repl.state/system
                               :game/games deref (get gameId)
                               :profit-loss
-                              util/pprint+identity
                               (get stockId))
 
               [{gl1 :pershare-gain-or-loss} {gl2 :pershare-gain-or-loss}] (filter #(= :BUY (:op %)) profit-loss)
@@ -600,20 +585,20 @@
 
     (testing "Testing buy / sells with this pattern
 
-            + 75
-            + 25
-            - 13
-            - 52
-            - 35
+              + 75
+              + 25
+              - 13
+              - 52
+              - 35
 
-            + 120
-            + 43
-            - 10
-            - 20
-            - 42
+              + 120
+              + 43
+              - 10
+              - 20
+              - 42
 
-            + 37
-            - 128"
+              + 37
+              - 128"
 
       (let [;; A
             conn                 (-> repl.state/system :persistence/datomic :opts :conn)
@@ -621,8 +606,6 @@
              userId         :user/external-uid} (test-util/generate-user! conn)
 
             ;; B
-            ;; data-sequence-A [100.0 110.0 , 120.0 130.0]
-            ;; tick-length (count data-sequence-A)
             tick-length 12
             data-sequence-A (take tick-length (iterate (partial + 10) 100.00))
 
@@ -686,8 +669,6 @@
                      {:op :sell :stockAmount 128}])
                (run! (partial local-transact-stock! opts))))
 
-        ;; #_(game.games/control-streams! control-channel channel-controls :exit)
-
         (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, multiple sells (multiple times)"
 
           (let [profit-loss (-> repl.state/system
@@ -747,3 +728,267 @@
               (get stockId)
               (= (.floatValue 17729.78))
               is)))))
+
+(def updated-profit-loss
+  '({:amount 75
+     :latest-price->trade-price [140.0 100.0]
+     :A 0.0
+     :stock-account-amount 75
+     :credit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :op :BUY
+     :credit-account-name "STOCK.Happy Forehead"
+     :trade-price 100.0
+     :pershare-gain-or-loss 40.0
+     :pershare-purchase-ratio 25/29}
+    {:amount 25
+     :latest-price->trade-price [140.0 110.0]
+     :A 0.0
+     :stock-account-amount 100
+     :credit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :op :BUY
+     :credit-account-name "STOCK.Happy Forehead"
+     :trade-price 110.0
+     :pershare-gain-or-loss 30.0
+     :pershare-purchase-ratio 25/87}
+    {:amount 13
+     :realized-profit-loss 227.5
+     :latest-price->trade-price [140.0 120.0]
+     :debit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :stock-account-amount 87
+     :op :SELL
+     :debit-account-name "STOCK.Happy Forehead"
+     :trade-price 120.0
+     :pershare-gain-or-loss 20.0
+     :pershare-purchase-ratio 13/87}
+    {:amount 52
+     :realized-profit-loss 1721.38
+     :latest-price->trade-price [140.0 130.0]
+     :debit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :stock-account-amount 35
+     :op :SELL
+     :debit-account-name "STOCK.Happy Forehead"
+     :trade-price 130.0
+     :pershare-gain-or-loss 10.0
+     :pershare-purchase-ratio 52/87}
+    {:amount 35
+     :realized-profit-loss 1822.41
+     :latest-price->trade-price [140.0 140.0]
+     :debit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :stock-account-amount 0
+     :op :SELL
+     :debit-account-name "STOCK.Happy Forehead"
+     :trade-price 140.0
+     :pershare-gain-or-loss 0.0}
+    {:amount 120
+     :latest-price->trade-price [210.0 150.0]
+     :A 0.0
+     :stock-account-amount 120
+     :credit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :op :BUY
+     :credit-account-name "STOCK.Happy Forehead"
+     :trade-price 150.0
+     :pershare-gain-or-loss 60.0
+     :pershare-purchase-ratio 120/133}
+    {:amount 43
+     :latest-price->trade-price [210.0 160.0]
+     :A 0.0
+     :stock-account-amount 163
+     :credit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :op :BUY
+     :credit-account-name "STOCK.Happy Forehead"
+     :trade-price 160.0
+     :pershare-gain-or-loss 50.0
+     :pershare-purchase-ratio 43/133}
+    {:amount 10
+     :realized-profit-loss 173.62
+     :latest-price->trade-price [210.0 170.0]
+     :debit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :stock-account-amount 153
+     :op :SELL
+     :debit-account-name "STOCK.Happy Forehead"
+     :trade-price 170.0
+     :pershare-gain-or-loss 40.0
+     :pershare-purchase-ratio 10/133}
+    {:amount 20
+     :realized-profit-loss 596.08
+     :latest-price->trade-price [210.0 180.0]
+     :debit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :stock-account-amount 133
+     :op :SELL
+     :debit-account-name "STOCK.Happy Forehead"
+     :trade-price 180.0
+     :pershare-gain-or-loss 30.0
+     :pershare-purchase-ratio 20/133}
+    {:amount 42
+     :realized-profit-loss 2049.47
+     :latest-price->trade-price [210.0 190.0]
+     :debit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :stock-account-amount 91
+     :op :SELL
+     :debit-account-name "STOCK.Happy Forehead"
+     :trade-price 190.0
+     :pershare-gain-or-loss 20.0
+     :pershare-purchase-ratio 6/19}
+    {:amount 37
+     :latest-price->trade-price [210.0 200.0]
+     :A 0.0
+     :stock-account-amount 128
+     :credit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :op :BUY
+     :credit-account-name "STOCK.Happy Forehead"
+     :trade-price 200.0
+     :pershare-gain-or-loss 10.0
+     :pershare-purchase-ratio 37/128}
+    {:amount 128
+     :realized-profit-loss 11139.32
+     :latest-price->trade-price [210.0 210.0]
+     :debit-account-id #uuid "f43d1a7c-3a15-412f-93e5-6de18f065528"
+     :stock-account-amount 0
+     :op :SELL
+     :debit-account-name "STOCK.Happy Forehead"
+     :trade-price 210.0
+     :pershare-gain-or-loss 0.0}))
+
+(deftest calculate-profit-loss-on-tick-test
+
+  (testing "Calculate and update P/L on streaming ticks. These are previous purchase patterns.
+
+              + 75
+              + 25
+              - 13
+              - 52
+              - 35
+
+              + 120
+              + 43
+              - 10
+              - 20
+              - 42
+
+              + 37
+              - 128"
+
+      (let [;; A
+            conn                 (-> repl.state/system :persistence/datomic :opts :conn)
+            {result-user-id :db/id
+             userId         :user/external-uid} (test-util/generate-user! conn)
+
+            ;; B
+            tick-length 2
+            data-sequence-A (take tick-length (iterate (partial + 10) 250.00))
+
+            ;; C create-game!
+            sink-fn              identity
+
+            test-stock-ticks (atom [])
+            test-portfolio-updates (atom [])
+
+            stream-stock-tick-xf (map (fn [a]
+                                        (-> (swap! test-stock-ticks
+                                                   (fn [b]
+                                                     (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                       (conj b stock-ticks))))
+                                            last)))
+            stream-portfolio-update-xf (map (fn [a]
+                                              (-> (swap! test-portfolio-updates (fn [b] (conj b a)))
+                                                  last)))
+
+            {{gameId :game/id
+              game-db-id :db/id :as game} :game
+             control-channel :control-channel
+             :as game-control}
+            (game.games/create-game! conn result-user-id sink-fn data-sequence-A stream-stock-tick-xf stream-portfolio-update-xf)
+
+            ;; D start-game!
+            profit-loss-transact-to (game.games/start-game! conn result-user-id game-control)
+            game-user-subscription  (-> game
+                                        :game/users first
+                                        :game.user/subscriptions first)
+            stockId (:game.stock/id game-user-subscription)]
+
+
+        ;; E reset a P/L structure
+        (swap! (:game/games repl.state/system)
+               (fn [gs]
+                 (update-in gs [gameId :profit-loss stockId] (constantly updated-profit-loss))))
+
+
+        (run! (fn [_]
+                (core.async/go
+                  (core.async/<! profit-loss-transact-to)))
+              data-sequence-A)
+        (Thread/sleep 1000)
+
+
+        (is false)
+
+        #_(testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, multiple sells (multiple times)"
+
+          (let [profit-loss (-> repl.state/system
+                                :game/games deref (get gameId)
+                                :profit-loss
+                                (get stockId))
+
+                [{gl1 :pershare-gain-or-loss}
+                 {gl2 :pershare-gain-or-loss}
+                 {gl3 :pershare-gain-or-loss}
+                 {gl4 :pershare-gain-or-loss}
+                 {gl5 :pershare-gain-or-loss}
+                 {gl6 :pershare-gain-or-loss}
+                 {gl7 :pershare-gain-or-loss}
+                 {gl8 :pershare-gain-or-loss}
+                 {gl9 :pershare-gain-or-loss}
+                 {gl10 :pershare-gain-or-loss}
+                 {gl11 :pershare-gain-or-loss}
+                 {gl12 :pershare-gain-or-loss}] (util/pprint+identity profit-loss)
+
+                [{pl1 :realized-profit-loss}
+                 {pl2 :realized-profit-loss}
+                 {pl3 :realized-profit-loss}
+                 {pl4 :realized-profit-loss}
+                 {pl5 :realized-profit-loss}
+                 {pl6 :realized-profit-loss}
+                 {pl7 :realized-profit-loss}] (filter #(= :SELL (:op %)) profit-loss)]
+
+            (are [x y] (= x y)
+
+              40.0 gl1
+              30.0 gl2
+              20.0 gl3
+              10.0 gl4
+              0.0 gl5
+
+              60.0 gl6
+              50.0 gl7
+              40.0 gl8
+              30.0 gl9
+              20.0 gl10
+
+              10.0 gl11
+              0.0 gl12
+
+              227.5 pl1
+              (.floatValue 1721.38) pl2
+              (.floatValue 1822.41) pl3
+              (.floatValue 173.62) pl4
+              (.floatValue 596.08) pl5
+              (.floatValue 2049.47) pl6
+              (.floatValue 11139.32) pl7)))
+
+        #_(testing "We correct game.games/collect-realized-profit-loss"
+
+          (-> (game.games/collect-realized-profit-loss gameId)
+              (get stockId)
+              (= (.floatValue 17729.78))
+              is)))))
+
+
+;; TODO
+;; save P/L to DB (not component)
+;; calculate P/L on tick
+
+;; {:game.stock.tick/id #uuid "cb5ff770-435a-4b4f-bf0c-b16f34a088e5"
+;;  :game.stock.tick/trade-time 1595175003845
+;;  :game.stock.tick/close 100.0
+;;  :game.stock/id #uuid "b5986d10-c88a-44db-bca0-fec65e4d479b"
+;;  :game.stock/name "Dominant Pencil"}

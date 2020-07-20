@@ -5,6 +5,12 @@
   (:import [java.util UUID]))
 
 
+(defn track-profit-loss-wholesale! [game-id updated-profit-loss-calculations]
+  (swap! (:game/games repl.state/system)
+         (fn [gs]
+           (update-in gs [game-id :profit-loss]
+                      (constantly updated-profit-loss-calculations)))))
+
 (defn track-profit-loss-by-stock-id! [game-id updated-profit-loss-calculations]
   (swap! (:game/games repl.state/system)
          (fn [gs]
@@ -17,13 +23,32 @@
                                     %)
                             (apply hash-map))))))
 
+(defn recalculate-profit-loss-on-tick [latest-price
+                                       {:keys [trade-price
+                                               stock-account-amount
+                                               pershare-purchase-ratio] :as calculation}]
+
+  (if (and trade-price stock-account-amount pershare-purchase-ratio)
+
+    (let [pershare-gain-or-loss (- latest-price trade-price)
+          A                     (* pershare-gain-or-loss pershare-purchase-ratio)
+          running-profit-loss   (* A stock-account-amount)]
+
+      (assoc calculation
+             :latest-price->trade-price [latest-price trade-price]
+             :pershare-gain-or-loss     pershare-gain-or-loss
+             :running-profit-loss       running-profit-loss))
+
+    calculation))
+
 (defn recalculate-profit-loss-on-buy [updated-stock-account-amount
                                       latest-trade-price
                                       {:keys [amount trade-price] :as calculation}]
 
   (let [pershare-purchase-ratio (/ amount updated-stock-account-amount)
         pershare-gain-or-loss   (- latest-trade-price trade-price)
-        A                       (* pershare-gain-or-loss pershare-purchase-ratio)]
+        ;; A                       (* pershare-gain-or-loss pershare-purchase-ratio)
+        ]
 
     (assoc calculation
            :latest-price->trade-price     [latest-trade-price trade-price]
