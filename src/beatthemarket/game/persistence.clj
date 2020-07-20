@@ -69,18 +69,13 @@
 
 (defn calculate-running-aggregate-profit-loss-on-BUY! [data]
 
-  (let [tentry-buys-by-account
-        (filter (comp :bookkeeping.account/counter-party :bookkeeping.credit/account :bookkeeping.tentry/credits)
-                data)
-
-        [{{{{price-history :game.stock/price-history
+  (let [{[{{{price-history :game.stock/price-history
              game-stock-id :game.stock/id} :bookkeeping.account/counter-party
             credit-account-id              :bookkeeping.account/id
             stock-account-amount           :bookkeeping.account/amount
             credit-account-name            :bookkeeping.account/name} :bookkeeping.credit/account
            price                                                      :bookkeeping.credit/price
-           amount                                                     :bookkeeping.credit/amount} :bookkeeping.tentry/credits}]
-        tentry-buys-by-account]
+           amount                                                     :bookkeeping.credit/amount}] :bookkeeping.tentry/credits} data]
 
     ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
     (when credit-account-id
@@ -128,18 +123,13 @@
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
 
-  (let [tentry-sells-by-account
-        (filter (comp :bookkeeping.account/counter-party :bookkeeping.debit/account :bookkeeping.tentry/debits)
-                data)
-
-        [{{{{price-history :game.stock/price-history
+  (let [{[{{{price-history :game.stock/price-history
              game-stock-id :game.stock/id}           :bookkeeping.account/counter-party
             debit-account-id                         :bookkeeping.account/id
             stock-account-amount                     :bookkeeping.account/amount
             debit-account-name                       :bookkeeping.account/name} :bookkeeping.debit/account
            price                                               :bookkeeping.debit/price
-           amount                                              :bookkeeping.debit/amount} :bookkeeping.tentry/debits}]
-        tentry-sells-by-account]
+           amount                                              :bookkeeping.debit/amount}] :bookkeeping.tentry/debits} data]
 
     ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
     (when debit-account-id
@@ -203,9 +193,11 @@
 ;; Multiple buy / multiple sell (multiple times)
 (defn track-profit-loss! [data]
 
-  (let [buys-fn (comp :bookkeeping.account/counter-party :bookkeeping.credit/account :bookkeeping.tentry/credits first)
-        sells-fn (comp :bookkeeping.account/counter-party :bookkeeping.debit/account :bookkeeping.tentry/debits first)]
+  (let [buys-fn (comp :bookkeeping.account/counter-party :bookkeeping.credit/account first :bookkeeping.tentry/credits)
+        sells-fn (comp :bookkeeping.account/counter-party :bookkeeping.debit/account first :bookkeeping.tentry/debits)]
 
+    ;; (println "B.buys /" (buys-fn data))
+    ;; (println "B.sells /" (sells-fn data))
     (cond
 
       ;; collect BUYS by stock account

@@ -75,18 +75,10 @@
         {{gameId :game/id
           game-db-id :db/id :as game} :game
          control-channel :control-channel
-
-         paused? :paused?
-         tick-sleep-atom :tick-sleep-atom
-         level-timer-atom :level-timer-atom
          :as game-control}
         (game.games/create-game! conn result-user-id sink-fn data-sequence-B stream-stock-tick-xf stream-portfolio-update-xf)]
 
     (testing "Chaining the control pipeline, produces the correct value"
-
-      ;; "Starting a game correctly chains the control pipeline"
-      ;; (def start-game-result (game.games/start-game! conn result-user-id game-control))
-      ;; (core.async/>!! control-channel :exit)
 
       (let [data-sequence-count (count data-sequence-B)
             profit-loss-transact-to (game.games/chain-control-pipeline game-control {:conn conn :user-db-id result-user-id})]
@@ -144,7 +136,6 @@
               (let
 
                   [{tickTime0 :game.stock.tick/trade-time
-                    ;; tickPrice0 :game.stock.tick/close
                     tickId0    :game.stock.tick/id}
                    (->> @test-stock-ticks
                         first
@@ -152,7 +143,6 @@
                         first)
 
                    {tickTime1 :game.stock.tick/trade-time
-                    ;; tickPrice1 :game.stock.tick/close
                     tickId1    :game.stock.tick/id}
                    (->> @test-stock-ticks
                         second
@@ -198,10 +188,6 @@
         {{gameId     :game/id
           game-db-id :db/id :as game} :game
          control-channel              :control-channel
-
-         paused?          :paused?
-         tick-sleep-atom  :tick-sleep-atom
-         level-timer-atom :level-timer-atom
          :as              game-control}
         (game.games/create-game! conn result-user-id sink-fn data-sequence-B stream-stock-tick-xf stream-portfolio-update-xf)
 
@@ -222,17 +208,13 @@
     ;; C
     (let [{tickPrice0 :game.stock.tick/close
            tickId0    :game.stock.tick/id}
-          (->> @test-stock-ticks
-               first
-               (filter #(= stockId (:game.stock/id %)))
-               first)
+          (->> @test-stock-ticks first
+               (filter #(= stockId (:game.stock/id %))) first)
 
           {tickPrice1 :game.stock.tick/close
            tickId1    :game.stock.tick/id}
-          (->> @test-stock-ticks
-               second
-               (filter #(= stockId (:game.stock/id %)))
-               first)]
+          (->> @test-stock-ticks second
+               (filter #(= stockId (:game.stock/id %))) first)]
 
       (testing "We are checking game is current and belongs to the user"
         (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
@@ -246,10 +228,8 @@
       (testing "Returned Tentry matches what was submitted"
         (let [{tickPriceL :game.stock.tick/close
                tickIdL    :game.stock.tick/id}
-              (->> @test-stock-ticks
-                   last
-                   (filter #(= stockId (:game.stock/id %)))
-                   first)
+              (->> @test-stock-ticks last
+                   (filter #(= stockId (:game.stock/id %))) first)
 
               expected-credit-value        (Float. (format "%.2f" (* stockAmount tickPriceL)))
               expected-credit-account-name (->> game
@@ -277,11 +257,11 @@
                   :bookkeeping.credit/account
                   (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
 
-        (are [x y] (= x y)
-          expected-credit-value        credit-value
-          expected-credit-account-name credit-account-name
-          expected-debit-value         debit-value
-          expected-debit-account-name  debit-account-name))))))
+          (are [x y] (= x y)
+            expected-credit-value        credit-value
+            expected-credit-account-name credit-account-name
+            expected-debit-value         debit-value
+            expected-debit-account-name  debit-account-name))))))
 
 (deftest sell-stock!-test
 
@@ -306,10 +286,6 @@
         {{gameId     :game/id
           game-db-id :db/id :as game} :game
          control-channel              :control-channel
-
-         paused?          :paused?
-         tick-sleep-atom  :tick-sleep-atom
-         level-timer-atom :level-timer-atom
          :as              game-control}
         (game.games/create-game! conn result-user-id sink-fn data-sequence-B stream-stock-tick-xf stream-portfolio-update-xf)
 
@@ -330,17 +306,13 @@
     ;; C
     (let [{tickPrice0 :game.stock.tick/close
            tickId0    :game.stock.tick/id}
-          (->> @test-stock-ticks
-               first
-               (filter #(= stockId (:game.stock/id %)))
-               first)
+          (->> @test-stock-ticks first
+               (filter #(= stockId (:game.stock/id %))) first)
 
           {tickPrice1 :game.stock.tick/close
            tickId1    :game.stock.tick/id}
-          (->> @test-stock-ticks
-               second
-               (filter #(= stockId (:game.stock/id %)))
-               first)]
+          (->> @test-stock-ticks second
+               (filter #(= stockId (:game.stock/id %))) first)]
 
       (testing "We are checking game is current and belongs to the user"
         (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId "non-existant-game-id" stockId stockAmount tickId1 tickPrice1))))
@@ -355,10 +327,8 @@
 
         (let [{tickPriceL :game.stock.tick/close
                tickIdL    :game.stock.tick/id}
-              (->> @test-stock-ticks
-                   last
-                   (filter #(= stockId (:game.stock/id %)))
-                   first)]
+              (->> @test-stock-ticks last
+                   (filter #(= stockId (:game.stock/id %))) first)]
 
           (game.games/buy-stock! conn userId gameId stockId stockAmount tickIdL (Float. tickPriceL))
 
@@ -414,20 +384,20 @@
 ;;  :game.stock/name "Dominant Pencil"}
 
 (defn- local-transact-stock! [{conn :conn
-                              userId :userId
-                              gameId :gameId
-                              stockId :stockId}
-                             {tickId      :game.stock.tick/id
-                              tickPrice   :game.stock.tick/close
-                              op          :op
-                              stockAmount :stockAmount}]
+                               userId :userId
+                               gameId :gameId
+                               stockId :stockId}
+                              {tickId      :game.stock.tick/id
+                               tickPrice   :game.stock.tick/close
+                               op          :op
+                               stockAmount :stockAmount}]
 
   (case op
     :buy (game.games/buy-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
     :sell (game.games/sell-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
     :noop))
 
-#_(deftest calculate-profit-loss-single-buy-sell-test
+(deftest calculate-profit-loss-single-buy-sell-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -438,63 +408,69 @@
             -200"
 
     (let [;; A
-          conn                                      (-> repl.state/system :persistence/datomic :opts :conn)
+          conn                 (-> repl.state/system :persistence/datomic :opts :conn)
           {result-user-id :db/id
-           userId         :user/external-uid}       (test-util/generate-user! conn)
+           userId         :user/external-uid} (test-util/generate-user! conn)
 
           ;; B
           data-sequence-A [100.0 110.0 , 120.0 130.0]
           tick-length (count data-sequence-A)
 
           ;; C create-game!
-          sink-fn                                   identity
-          {{gameId :game/id :as game} :game
-           control-channel            :control-channel
-           stock-stream-channel       :stock-stream-channel
-           stocks-with-tick-data      :stocks-with-tick-data
-           :as                        game-control} (game.games/create-game! conn result-user-id sink-fn data-sequence-A)
-          test-chan                                 (core.async/chan)
-          game-loop-fn                              (fn [a]
-                                                      (when a (core.async/>!! test-chan a)))
+          sink-fn              identity
 
-          ;; D start-game!
-          {{:keys                                           [mixer
-                                                             pause-chan
-                                                             input-chan
-                                                             output-chan] :as channel-controls}
-           :channel-controls}                       (game.games/start-game! conn result-user-id game-control game-loop-fn)
-          game-user-subscription                    (-> game
-                                                        :game/users first
-                                                        :game.user/subscriptions first)
-          stockId                                   (:game.stock/id game-user-subscription)
+          test-stock-ticks (atom [])
+          test-portfolio-updates (atom [])
 
+          stream-stock-tick-xf (map (fn [a]
+                                      (swap! test-stock-ticks
+                                             (fn [b]
+                                               (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                 (conj b stock-ticks))))))
+          stream-portfolio-update-xf (map (fn [a]
+                                            (swap! test-portfolio-updates (fn [b] (conj b a)))))
 
-          ;; E subscription price history
-          subscription-ticks (->> (repeatedly #(<!! test-chan))
-                                  (take tick-length)
-                                  (map #(second (first (game.games/narrow-stock-tick-pairs-by-subscription % game-user-subscription)))))
+          {{gameId :game/id
+            game-db-id :db/id :as game} :game
+           control-channel :control-channel
+           :as game-control}
+          (game.games/create-game! conn result-user-id sink-fn data-sequence-A stream-stock-tick-xf stream-portfolio-update-xf)
 
+          profit-loss-transact-to (game.games/start-game! conn result-user-id game-control)
+          game-user-subscription  (-> game
+                                      :game/users first
+                                      :game.user/subscriptions first)
+          stockId (:game.stock/id game-user-subscription)
           opts {:conn conn
                 :userId userId
                 :gameId gameId
                 :stockId stockId}]
 
-      ;; F buy & sell
-      (->> (map #(merge %1 %2)
-                subscription-ticks
-                [{:op :buy :stockAmount 100}
-                 {:op :sell :stockAmount 100}
-                 {:op :buy :stockAmount 200}
-                 {:op :sell :stockAmount 200}])
-           (run! (partial local-transact-stock! opts)))
+      (run! (fn [_]
+              (core.async/go
+                (core.async/<! profit-loss-transact-to)))
+            data-sequence-A)
+      (Thread/sleep 1000)
 
-      #_(game.games/control-streams! control-channel channel-controls :exit)
+      (let [stock-ticks (->> @test-stock-ticks
+                             (map (fn [a] (filter #(= stockId (:game.stock/id %)) a)))
+                             flatten)]
+
+        ;; F buy & sell
+        (->> (map #(merge %1 %2)
+                  stock-ticks
+                  [{:op :buy :stockAmount 100}
+                   {:op :sell :stockAmount 100}
+                   {:op :buy :stockAmount 200}
+                   {:op :sell :stockAmount 200}])
+             (run! (partial local-transact-stock! opts))))
 
       (testing "Chunks Realized profit/losses are correctly calculated, for single buy/sell (multiple times)"
 
         (let [profit-loss (-> repl.state/system
                               :game/games deref (get gameId)
                               :profit-loss
+                              util/pprint+identity
                               (get stockId))
 
               [{gl1 :pershare-gain-or-loss} {gl2 :pershare-gain-or-loss}] (filter #(= :BUY (:op %)) profit-loss)
@@ -513,9 +489,9 @@
             (= 3000.0)
             is)))))
 
-#_(deftest calculate-profit-loss-multiple-buy-single-sell-test
+(deftest calculate-profit-loss-multiple-buy-single-sell-test
 
-  (testing "Testing buy / sells with this pattern
+    (testing "Testing buy / sells with this pattern
 
             + 75
             + 25
@@ -526,98 +502,103 @@
             + 37
             - 200"
 
-    (let [;; A
-          conn                                      (-> repl.state/system :persistence/datomic :opts :conn)
-          {result-user-id :db/id
-           userId         :user/external-uid}       (test-util/generate-user! conn)
+      (let [;; A
+            conn                 (-> repl.state/system :persistence/datomic :opts :conn)
+            {result-user-id :db/id
+             userId         :user/external-uid} (test-util/generate-user! conn)
 
-          ;; B
-          tick-length 7
-          data-sequence-A (take tick-length (iterate (partial + 10) 100.00))
+            ;; B
+            tick-length 7
+            data-sequence-A (take tick-length (iterate (partial + 10) 100.00))
 
-          ;; C create-game!
-          sink-fn                                   identity
-          {{gameId :game/id :as game} :game
-           control-channel            :control-channel
-           stock-stream-channel       :stock-stream-channel
-           stocks-with-tick-data      :stocks-with-tick-data
-           :as                        game-control} (game.games/create-game! conn result-user-id sink-fn data-sequence-A)
-          test-chan                                 (core.async/chan)
-          game-loop-fn                              (fn [a]
-                                                      (when a (core.async/>!! test-chan a)))
+            ;; C create-game!
+            sink-fn              identity
 
-          ;; D start-game!
-          {{:keys                                           [mixer
-                                                             pause-chan
-                                                             input-chan
-                                                             output-chan] :as channel-controls}
-           :channel-controls}                       (game.games/start-game! conn result-user-id game-control game-loop-fn)
-          game-user-subscription                    (-> game
-                                                        :game/users first
-                                                        :game.user/subscriptions first)
-          stockId                                   (:game.stock/id game-user-subscription)
+            test-stock-ticks (atom [])
+            test-portfolio-updates (atom [])
 
+            stream-stock-tick-xf (map (fn [a]
+                                        (swap! test-stock-ticks
+                                               (fn [b]
+                                                 (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                   (conj b stock-ticks))))))
+            stream-portfolio-update-xf (map (fn [a]
+                                              (swap! test-portfolio-updates (fn [b] (conj b a)))))
 
-          ;; E subscription price history
-          subscription-ticks (->> (repeatedly #(<!! test-chan))
-                                  (take tick-length)
-                                  (map #(second (first (game.games/narrow-stock-tick-pairs-by-subscription % game-user-subscription)))))
+            {{gameId :game/id
+              game-db-id :db/id :as game} :game
+             control-channel :control-channel
+             :as game-control}
+            (game.games/create-game! conn result-user-id sink-fn data-sequence-A stream-stock-tick-xf stream-portfolio-update-xf)
 
-          opts {:conn conn
-                :userId userId
-                :gameId gameId
-                :stockId stockId}]
+            profit-loss-transact-to (game.games/start-game! conn result-user-id game-control)
+            game-user-subscription  (-> game
+                                        :game/users first
+                                        :game.user/subscriptions first)
+            stockId (:game.stock/id game-user-subscription)
+            opts {:conn conn
+                  :userId userId
+                  :gameId gameId
+                  :stockId stockId}]
 
-      ;; F buy & sell
-      (->> (map #(merge %1 %2)
-                subscription-ticks
-                [{:op :buy :stockAmount 75}
-                 {:op :buy :stockAmount 25}
-                 {:op :sell :stockAmount 100}
-                 {:op :buy :stockAmount 120}
-                 {:op :buy :stockAmount 43}
-                 {:op :buy :stockAmount 37}
-                 {:op :sell :stockAmount 200}])
-           (run! (partial local-transact-stock! opts)))
+        (run! (fn [_]
+                (core.async/go
+                  (core.async/<! profit-loss-transact-to)))
+              data-sequence-A)
+        (Thread/sleep 1000)
 
-      #_(game.games/control-streams! control-channel channel-controls :exit)
+        ;; F buy & sell
+        (let [stock-ticks (->> @test-stock-ticks
+                               (map (fn [a] (filter #(= stockId (:game.stock/id %)) a)))
+                               flatten)]
 
-      (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, single sell (multiple times)"
+          (->> (map #(merge %1 %2)
+                    stock-ticks
+                    [{:op :buy :stockAmount 75}
+                     {:op :buy :stockAmount 25}
+                     {:op :sell :stockAmount 100}
+                     {:op :buy :stockAmount 120}
+                     {:op :buy :stockAmount 43}
+                     {:op :buy :stockAmount 37}
+                     {:op :sell :stockAmount 200}])
+               (run! (partial local-transact-stock! opts)))
 
-        (let [profit-loss (-> repl.state/system
-                              :game/games deref (get gameId)
-                              :profit-loss
-                              (get stockId))
+          (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, single sell (multiple times)"
 
-              [{gl1 :pershare-gain-or-loss}
-               {gl2 :pershare-gain-or-loss}
+            (let [profit-loss (-> repl.state/system
+                                  :game/games deref (get gameId)
+                                  :profit-loss
+                                  (get stockId))
 
-               {gl3 :pershare-gain-or-loss}
-               {gl4 :pershare-gain-or-loss}
-               {gl5 :pershare-gain-or-loss}] (filter #(= :BUY (:op %)) profit-loss)
+                  [{gl1 :pershare-gain-or-loss}
+                   {gl2 :pershare-gain-or-loss}
 
-              [{pl1 :realized-profit-loss}
-               {pl2 :realized-profit-loss}] (filter #(= :SELL (:op %)) profit-loss)]
+                   {gl3 :pershare-gain-or-loss}
+                   {gl4 :pershare-gain-or-loss}
+                   {gl5 :pershare-gain-or-loss}] (filter #(= :BUY (:op %)) profit-loss)
 
-          (are [x y] (= x y)
-            20.0 gl1
-            10.0 gl2
-            30.0 gl3
-            20.0 gl4
-            10.0 gl5
-            2250.0 pl1
-            (.floatValue 7425.21) pl2)))
+                  [{pl1 :realized-profit-loss}
+                   {pl2 :realized-profit-loss}] (filter #(= :SELL (:op %)) profit-loss)]
 
-      (testing "We correct game.games/collect-realized-profit-loss"
+              (are [x y] (= x y)
+                20.0 gl1
+                10.0 gl2
+                30.0 gl3
+                20.0 gl4
+                10.0 gl5
+                2250.0 pl1
+                (.floatValue 7425.21) pl2))))
 
-        (-> (game.games/collect-realized-profit-loss gameId)
-            (get stockId)
-            (= (.floatValue 9675.21))
-            is)))))
+        (testing "We correct game.games/collect-realized-profit-loss"
 
-#_(deftest calculate-profit-loss-multiple-buy-multiple-sell-test
+          (-> (game.games/collect-realized-profit-loss gameId)
+              (get stockId)
+              (= (.floatValue 9675.21))
+              is)))))
 
-  (testing "Testing buy / sells with this pattern
+(deftest calculate-profit-loss-multiple-buy-multiple-sell-test
+
+    (testing "Testing buy / sells with this pattern
 
             + 75
             + 25
@@ -634,125 +615,135 @@
             + 37
             - 128"
 
-    (let [;; A
-          conn                                      (-> repl.state/system :persistence/datomic :opts :conn)
-          {result-user-id :db/id
-           userId         :user/external-uid}       (test-util/generate-user! conn)
+      (let [;; A
+            conn                 (-> repl.state/system :persistence/datomic :opts :conn)
+            {result-user-id :db/id
+             userId         :user/external-uid} (test-util/generate-user! conn)
 
-          ;; B
-          tick-length 12
-          data-sequence-A (take tick-length (iterate (partial + 10) 100.00))
-
-          ;; C create-game!
-          sink-fn                                   identity
-          {{gameId :game/id :as game} :game
-           control-channel            :control-channel
-           stock-stream-channel       :stock-stream-channel
-           stocks-with-tick-data      :stocks-with-tick-data
-           :as                        game-control} (game.games/create-game! conn result-user-id sink-fn data-sequence-A)
-          test-chan                                 (core.async/chan)
-          game-loop-fn                              (fn [a]
-                                                      (when a (core.async/>!! test-chan a)))
-
-          ;; D start-game!
-          {{:keys                                           [mixer
-                                                             pause-chan
-                                                             input-chan
-                                                             output-chan] :as channel-controls}
-           :channel-controls}                       (game.games/start-game! conn result-user-id game-control game-loop-fn)
-          game-user-subscription                    (-> game
-                                                        :game/users first
-                                                        :game.user/subscriptions first)
-          stockId                                   (:game.stock/id game-user-subscription)
+            ;; B
+            ;; data-sequence-A [100.0 110.0 , 120.0 130.0]
+            ;; tick-length (count data-sequence-A)
+            tick-length 12
+            data-sequence-A (take tick-length (iterate (partial + 10) 100.00))
 
 
-          ;; E subscription price history
-          subscription-ticks (->> (repeatedly #(<!! test-chan))
-                                  (take tick-length)
-                                  (map #(second (first (game.games/narrow-stock-tick-pairs-by-subscription % game-user-subscription)))))
+            ;; C create-game!
+            sink-fn              identity
 
-          opts {:conn conn
-                :userId userId
-                :gameId gameId
-                :stockId stockId}]
+            test-stock-ticks (atom [])
+            test-portfolio-updates (atom [])
 
-      ;; F buy & sell
-      (->> (map #(merge %1 %2)
-                subscription-ticks
-                [{:op :buy :stockAmount 75}
-                 {:op :buy :stockAmount 25}
-                 {:op :sell :stockAmount 13}
-                 {:op :sell :stockAmount 52}
-                 {:op :sell :stockAmount 35}
+            stream-stock-tick-xf (map (fn [a]
+                                        (swap! test-stock-ticks
+                                               (fn [b]
+                                                 (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                   (conj b stock-ticks))))))
+            stream-portfolio-update-xf (map (fn [a]
+                                              (swap! test-portfolio-updates (fn [b] (conj b a)))))
 
-                 {:op :buy :stockAmount 120}
-                 {:op :buy :stockAmount 43}
-                 {:op :sell :stockAmount 10}
-                 {:op :sell :stockAmount 20}
-                 {:op :sell :stockAmount 42}
+            {{gameId :game/id
+              game-db-id :db/id :as game} :game
+             control-channel :control-channel
+             :as game-control}
+            (game.games/create-game! conn result-user-id sink-fn data-sequence-A stream-stock-tick-xf stream-portfolio-update-xf)
 
-                 {:op :buy :stockAmount 37}
-                 {:op :sell :stockAmount 128}])
-           (run! (partial local-transact-stock! opts)))
+            profit-loss-transact-to (game.games/start-game! conn result-user-id game-control)
+            game-user-subscription  (-> game
+                                        :game/users first
+                                        :game.user/subscriptions first)
+            stockId (:game.stock/id game-user-subscription)
+            opts {:conn conn
+                  :userId userId
+                  :gameId gameId
+                  :stockId stockId}]
 
-      ;; #_(game.games/control-streams! control-channel channel-controls :exit)
+        (run! (fn [_]
+                (core.async/go
+                  (core.async/<! profit-loss-transact-to)))
+              data-sequence-A)
+        (Thread/sleep 1000)
 
-      (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, multiple sells (multiple times)"
+        (let [stock-ticks (->> @test-stock-ticks
+                               (map (fn [a] (filter #(= stockId (:game.stock/id %)) a)))
+                               flatten)]
 
-        (let [profit-loss (-> repl.state/system
-                              :game/games deref (get gameId)
-                              :profit-loss
-                              (get stockId))
+          ;; F buy & sell
+          (->> (map #(merge %1 %2)
+                    stock-ticks
+                    [{:op :buy :stockAmount 75}
+                     {:op :buy :stockAmount 25}
+                     {:op :sell :stockAmount 13}
+                     {:op :sell :stockAmount 52}
+                     {:op :sell :stockAmount 35}
 
-              [{gl1 :pershare-gain-or-loss}
-               {gl2 :pershare-gain-or-loss}
-               {gl3 :pershare-gain-or-loss}
-               {gl4 :pershare-gain-or-loss}
-               {gl5 :pershare-gain-or-loss}
-               {gl6 :pershare-gain-or-loss}
-               {gl7 :pershare-gain-or-loss}
-               {gl8 :pershare-gain-or-loss}
-               {gl9 :pershare-gain-or-loss}
-               {gl10 :pershare-gain-or-loss}
-               {gl11 :pershare-gain-or-loss}
-               {gl12 :pershare-gain-or-loss}] profit-loss
+                     {:op :buy :stockAmount 120}
+                     {:op :buy :stockAmount 43}
+                     {:op :sell :stockAmount 10}
+                     {:op :sell :stockAmount 20}
+                     {:op :sell :stockAmount 42}
 
-              [{pl1 :realized-profit-loss}
-               {pl2 :realized-profit-loss}
-               {pl3 :realized-profit-loss}
-               {pl4 :realized-profit-loss}
-               {pl5 :realized-profit-loss}
-               {pl6 :realized-profit-loss}
-               {pl7 :realized-profit-loss}] (filter #(= :SELL (:op %)) profit-loss)]
+                     {:op :buy :stockAmount 37}
+                     {:op :sell :stockAmount 128}])
+               (run! (partial local-transact-stock! opts))))
 
-          (are [x y] (= x y)
+        ;; #_(game.games/control-streams! control-channel channel-controls :exit)
 
-            40.0 gl1
-            30.0 gl2
-            20.0 gl3
-            10.0 gl4
-            0.0 gl5
+        (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, multiple sells (multiple times)"
 
-            60.0 gl6
-            50.0 gl7
-            40.0 gl8
-            30.0 gl9
-            20.0 gl10
+          (let [profit-loss (-> repl.state/system
+                                :game/games deref (get gameId)
+                                :profit-loss
+                                (get stockId))
 
-            10.0 gl11
-            0.0 gl12
+                [{gl1 :pershare-gain-or-loss}
+                 {gl2 :pershare-gain-or-loss}
+                 {gl3 :pershare-gain-or-loss}
+                 {gl4 :pershare-gain-or-loss}
+                 {gl5 :pershare-gain-or-loss}
+                 {gl6 :pershare-gain-or-loss}
+                 {gl7 :pershare-gain-or-loss}
+                 {gl8 :pershare-gain-or-loss}
+                 {gl9 :pershare-gain-or-loss}
+                 {gl10 :pershare-gain-or-loss}
+                 {gl11 :pershare-gain-or-loss}
+                 {gl12 :pershare-gain-or-loss}] profit-loss
 
-            227.5 pl1
-            (.floatValue 1721.38) pl2
-            (.floatValue 1822.41) pl3
-            (.floatValue 173.62) pl4
-            (.floatValue 596.08) pl5
-            (.floatValue 2049.47) pl6
-            (.floatValue 11139.32) pl7)))
+                [{pl1 :realized-profit-loss}
+                 {pl2 :realized-profit-loss}
+                 {pl3 :realized-profit-loss}
+                 {pl4 :realized-profit-loss}
+                 {pl5 :realized-profit-loss}
+                 {pl6 :realized-profit-loss}
+                 {pl7 :realized-profit-loss}] (filter #(= :SELL (:op %)) profit-loss)]
 
-      (testing "We correct game.games/collect-realized-profit-loss"
+            (are [x y] (= x y)
 
-        (-> (game.games/collect-realized-profit-loss gameId)
-            (get stockId)
-            (= (.floatValue 17729.78))
-            is)))))
+              40.0 gl1
+              30.0 gl2
+              20.0 gl3
+              10.0 gl4
+              0.0 gl5
+
+              60.0 gl6
+              50.0 gl7
+              40.0 gl8
+              30.0 gl9
+              20.0 gl10
+
+              10.0 gl11
+              0.0 gl12
+
+              227.5 pl1
+              (.floatValue 1721.38) pl2
+              (.floatValue 1822.41) pl3
+              (.floatValue 173.62) pl4
+              (.floatValue 596.08) pl5
+              (.floatValue 2049.47) pl6
+              (.floatValue 11139.32) pl7)))
+
+        (testing "We correct game.games/collect-realized-profit-loss"
+
+          (-> (game.games/collect-realized-profit-loss gameId)
+              (get stockId)
+              (= (.floatValue 17729.78))
+              is)))))
