@@ -78,8 +78,7 @@
               :where [?e :game/id ?id]]
             gm
             (:game/id game))
-       (ffirst gm)
-       #_(persistence.core/pull-entity conn gm)))))
+       (ffirst gm)))))
 
 
 (comment ;; Portfolio

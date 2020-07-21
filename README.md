@@ -115,6 +115,8 @@ lein nvd check
 
 * Control to bump level timer (up or down)
 
+* Save P/L to DB (not component)
+
 * Integration Test
   * Apollo client, login, new game, stream to client
   * Buy a stock sell a stock

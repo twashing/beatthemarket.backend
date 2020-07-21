@@ -94,7 +94,7 @@
 
 (defn calculate-running-aggregate-profit-loss-on-BUY! [data]
 
-  (let [{[{{{price-history :game.stock/price-history
+  (let [{[{{{;; price-history :game.stock/price-history
              game-stock-id :game.stock/id} :bookkeeping.account/counter-party
             credit-account-id              :bookkeeping.account/id
             stock-account-amount           :bookkeeping.account/amount
@@ -148,7 +148,7 @@
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
 
-  (let [{[{{{price-history :game.stock/price-history
+  (let [{[{{{;; price-history :game.stock/price-history
              game-stock-id :game.stock/id}           :bookkeeping.account/counter-party
             debit-account-id                         :bookkeeping.account/id
             stock-account-amount                     :bookkeeping.account/amount

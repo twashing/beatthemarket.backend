@@ -189,7 +189,6 @@
               (merge (select-keys tick [:game.stock.tick/id :game.stock.tick/trade-time :game.stock.tick/close])
                      (select-keys stock [:game.stock/id :game.stock/name]))))))
 
-
 (defn recalculate-profit-loss-on-tick-perstock [price profit-loss-perstock]
 
   (let [[butlast-chunks latest-chunk] (->> (game.persistence/profit-loss->chunks profit-loss-perstock)
@@ -203,23 +202,26 @@
 
   ([conn user-entity sink-fn]
 
-   (initialize-game! conn user-entity sink-fn (->data-sequence) nil nil))
+   (initialize-game! conn user-entity sink-fn (->data-sequence) nil nil nil))
 
-  ([conn user-entity sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf]
+  ([conn user-entity sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
 
    (let [stocks                (game.core/generate-stocks! 4)
          {game-id :game/id
           stocks  :game/stocks
           :as     game}        (game.core/initialize-game! conn user-entity stocks)
          stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
-         transact-xf           (fn [data]
-                                 (beatthemarket.persistence.datomic/transact-entities! conn data)
-                                 data)
+         stock-tick-by-id      (fn [id stock-ticks]
+                                 (first (filter #(= id (:game.stock/id %))
+                                                stock-ticks)))
 
-         stock-tick-by-id (fn [id stock-ticks]
-                            (first (filter #(= id (:game.stock/id %))
-                                           stock-ticks)))
-
+         stream-buffer           1
+         stock-tick-stream       (core.async/chan stream-buffer)
+         portfolio-update-stream (core.async/chan stream-buffer)
+         game-event-stream       (core.async/chan stream-buffer)
+         transact-xf             (fn [data]
+                                   (beatthemarket.persistence.datomic/transact-entities! conn data)
+                                   data)
          game-control
          {:game                  game
           :profit-loss           {}
@@ -229,40 +231,48 @@
           :tick-sleep-atom  (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
           :level-timer-atom (atom (-> integrant.repl.state/config :game/game :level-timer-sec))
 
-          :transact-tick-xf           (map transact-xf)
-          :stream-stock-tick-xf       (or stream-stock-tick-xf
-                                          (map (fn [stock-tick-pairs]
-                                                 (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
-                                                   ;; (println (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
-                                                   stock-ticks))))
-          :calculate-profit-loss-xf   (map (fn [stock-ticks]
-                                             (let [recalculate-perstock-fn
-                                                   (fn [profit-loss]
-                                                     (reduce-kv (fn [m k v]
-                                                                  (if-let [{price :game.stock.tick/close}
-                                                                           (stock-tick-by-id k stock-ticks)]
-                                                                    (assoc
-                                                                      m k
-                                                                      (recalculate-profit-loss-on-tick-perstock price v))
-                                                                    m))
-                                                                {}
-                                                                profit-loss))
+          :stock-tick-stream       stock-tick-stream
+          :portfolio-update-stream portfolio-update-stream
+          :game-event-stream       game-event-stream
 
-                                                   updated-profit-loss-calculations (-> repl.state/system :game/games
-                                                                                        deref
-                                                                                        (get game-id) :profit-loss
-                                                                                        recalculate-perstock-fn)]
+          :transact-tick-xf         (map transact-xf)
+          :stream-stock-tick-xf     (or stream-stock-tick-xf
+                                        (map (fn [stock-tick-pairs]
+                                               (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
+                                                 ;; (println (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
+                                                 (core.async/go (core.async/>! stock-tick-stream stock-ticks))
+                                                 stock-ticks))))
+          :calculate-profit-loss-xf (map (fn [stock-ticks]
+                                           (let [recalculate-perstock-fn
+                                                 (fn [profit-loss]
+                                                   (reduce-kv (fn [m k v]
+                                                                (if-let [{price :game.stock.tick/close}
+                                                                         (stock-tick-by-id k stock-ticks)]
+                                                                  (assoc
+                                                                    m k
+                                                                    (recalculate-profit-loss-on-tick-perstock price v))
+                                                                  m))
+                                                              {}
+                                                              profit-loss))
 
-                                               (util/pprint+identity
-                                                 (game.persistence/track-profit-loss-wholesale!
-                                                   game-id updated-profit-loss-calculations))
-                                               (util/pprint+identity (collect-running-profit-loss game-id)))))
-          :transact-profit-loss-xf    (map transact-xf)
+                                                 updated-profit-loss-calculations
+                                                 (-> repl.state/system :game/games
+                                                     deref
+                                                     (get game-id) :profit-loss
+                                                     recalculate-perstock-fn)]
+
+                                             (->> updated-profit-loss-calculations
+                                                  (game.persistence/track-profit-loss-wholesale! game-id)
+                                                  (#(get % game-id))
+                                                  :profit-loss))))
+          :collect-profit-loss-xf     (or collect-profit-loss-xf
+                                          (map (fn [profit-loss] (collect-running-profit-loss game-id profit-loss))))
+          :transact-profit-loss-xf    (map identity) ;; (map transact-xf)
           :stream-portfolio-update-xf (or stream-portfolio-update-xf
-                                          (map (fn [profit-loss]
-
-                                                 ;; if P/L
-                                                 (println (format ">> STREAM portfolio-update / %s" profit-loss)) profit-loss)))
+                                          (map (fn [running-profit-loss]
+                                                 ;; (println (format ">> STREAM portfolio-update / %s" running-profit-loss))
+                                                 (core.async/go (core.async/>! portfolio-update-stream running-profit-loss))
+                                                 running-profit-loss)))
 
           :control-channel (chan 1)
           :close-sink-fn   (partial sink-fn nil)
@@ -274,11 +284,11 @@
 (defn create-game!
 
   ([conn user-id sink-fn]
-   (create-game! conn user-id sink-fn (->data-sequence) nil nil))
+   (create-game! conn user-id sink-fn (->data-sequence) nil nil nil))
 
-  ([conn user-id sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf]
+  ([conn user-id sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
    (let [user-entity (hash-map :db/id user-id)]
-     (initialize-game! conn user-entity sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf))))
+     (initialize-game! conn user-entity sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf))))
 
 ;; START
 (defn game->new-game-message [game user-id]
@@ -449,37 +459,27 @@
        (map partitioned-entities->transaction-entities)))
 
 (defn chain-control-pipeline [{:keys [game stocks-with-tick-data
-                                      stream-stock-tick-xf calculate-profit-loss-xf stream-portfolio-update-xf
+                                      stream-stock-tick-xf calculate-profit-loss-xf
+                                      collect-profit-loss-xf stream-portfolio-update-xf
                                       transact-tick-xf transact-profit-loss-xf]}
                               {:keys [conn user-db-id]}]
 
-  (let [;; stream-buffer 40
-        ;; stock-tick-stream (core.async/chan stream-buffer)
-        ;; portfolio-update-stream (core.async/chan stream-buffer)
-        ;; game-event-stream (core.async/chan stream-buffer)
-
-        concurrent              1
+  (let [concurrent              1
         plbuffer                1
         input-seq               (stocks->stock-sequences conn game user-db-id stocks-with-tick-data)
 
         ticks-from              (core.async/chan plbuffer)
         ticks-to                (core.async/chan plbuffer stream-stock-tick-xf)       ;; NOTE stream tick
-        profit-loss-to          (core.async/chan plbuffer)
+        profit-loss-to          (core.async/chan plbuffer collect-profit-loss-xf)
         profit-loss-transact-to (core.async/chan plbuffer stream-portfolio-update-xf) ;; NOTE stream PL
-        ;; game-event-from (core.async/chan plbuffer)
-        ;; game-event-to (core.async/chan plbuffer)
         ]
-
-    ;; stock-tick-stream
-    ;; portfolio-update-stream
-    ;; game-event-stream
 
     ;; P/L
     (core.async/onto-chan ticks-from input-seq)
 
     (core.async/pipeline-blocking concurrent ticks-to                transact-tick-xf         ticks-from)
     (core.async/pipeline-blocking concurrent profit-loss-to          calculate-profit-loss-xf ticks-to)
-    (core.async/pipeline-blocking concurrent profit-loss-transact-to (map identity) #_transact-profit-loss-xf profit-loss-to)
+    (core.async/pipeline-blocking concurrent profit-loss-transact-to transact-profit-loss-xf  profit-loss-to)
     profit-loss-transact-to))
 
 (defn- format-remaining-time [{:keys [remaining-in-minutes remaining-in-seconds]}]
@@ -570,21 +570,33 @@
 
 ;; CALCULATION
 
-(defn collect-profit-loss [profit-loss-type game-id]
+(defn collect-profit-loss
 
-  (let [profit-loss (-> repl.state/system :game/games deref (get game-id) :profit-loss)]
-    (->> (for [[k vs] profit-loss]
-           [k (->> (filter profit-loss-type vs)
-                   (reduce (fn [ac {pl profit-loss-type}]
-                             (+ ac pl))
-                           0.0)
-                   (format "%.2f")
-                   (Float.))])
-         flatten
-         (apply hash-map))))
+  ([profit-loss-type game-id]
+   (collect-profit-loss profit-loss-type game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
 
-(defn collect-realized-profit-loss [game-id]
-  (collect-profit-loss :realized-profit-loss game-id))
+  ([profit-loss-type game-id profit-loss]
+   (->> (for [[k vs] profit-loss]
+          [k (->> (filter profit-loss-type vs)
+                  (reduce (fn [ac {pl profit-loss-type}]
+                            (+ ac pl))
+                          0.0)
+                  (format "%.2f") (Float.))])
+        flatten
+        (apply hash-map))))
 
-(defn collect-running-profit-loss [game-id]
-  (collect-profit-loss :running-profit-loss game-id))
+(defn collect-realized-profit-loss
+
+  ([game-id]
+   (collect-realized-profit-loss game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
+
+  ([game-id profit-loss]
+   (collect-profit-loss :realized-profit-loss game-id profit-loss)))
+
+(defn collect-running-profit-loss
+
+  ([game-id]
+   (collect-running-profit-loss game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
+
+  ([game-id profit-loss]
+   (collect-profit-loss :running-profit-loss game-id profit-loss)))
