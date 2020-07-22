@@ -6,7 +6,6 @@
             [clj-time.core :as t]
             [clojure.data.json :as json]
             [datomic.client.api :as d]
-            [datascript.core :as ds]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [rop.core :as rop]
             [integrant.core :as ig]
@@ -16,6 +15,7 @@
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.game.core :as game.core]
+            [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.iam.user :as iam.user]
@@ -26,9 +26,6 @@
             [beatthemarket.bookkeeping.core :as bookkeeping])
   (:import [java.util UUID]))
 
-
-(declare collect-realized-profit-loss)
-(declare collect-running-profit-loss)
 
 (defmethod ig/init-key :game/games [_ _]
   (atom {}))
@@ -266,7 +263,7 @@
                                                   (#(get % game-id))
                                                   :profit-loss))))
           :collect-profit-loss-xf     (or collect-profit-loss-xf
-                                          (map (fn [profit-loss] (collect-running-profit-loss game-id profit-loss))))
+                                          (map (fn [profit-loss] (game.calculation/collect-running-profit-loss game-id profit-loss))))
           :transact-profit-loss-xf    (map identity) ;; (map transact-xf)
           :stream-portfolio-update-xf (or stream-portfolio-update-xf
                                           (map (fn [running-profit-loss]
@@ -567,36 +564,3 @@
       (chain-control-pipeline gc {:conn conn :user-db-id user-db-id})
       (assoc game-control :profit-loss-transact-to gc)
       (run-game! gc paused? tick-sleep-atom level-timer-atom))))
-
-;; CALCULATION
-
-(defn collect-profit-loss
-
-  ([profit-loss-type game-id]
-   (collect-profit-loss profit-loss-type game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
-
-  ([profit-loss-type game-id profit-loss]
-   (->> (for [[k vs] profit-loss]
-          [k (->> (filter profit-loss-type vs)
-                  (reduce (fn [ac {pl profit-loss-type}]
-                            (+ ac pl))
-                          0.0)
-                  (format "%.2f") (Float.))])
-        flatten
-        (apply hash-map))))
-
-(defn collect-realized-profit-loss
-
-  ([game-id]
-   (collect-realized-profit-loss game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
-
-  ([game-id profit-loss]
-   (collect-profit-loss :realized-profit-loss game-id profit-loss)))
-
-(defn collect-running-profit-loss
-
-  ([game-id]
-   (collect-running-profit-loss game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
-
-  ([game-id profit-loss]
-   (collect-profit-loss :running-profit-loss game-id profit-loss)))

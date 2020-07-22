@@ -2,12 +2,15 @@
   (:require [datomic.client.api :as d]
             [com.rpl.specter :refer [select pred ALL MAP-VALS]]
             [rop.core :as rop]
+            [integrant.repl.state :as repl.state]
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
             [beatthemarket.game.persistence :as game.persistence]
+            [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.iam.persistence :as iam.persistence]
-            [beatthemarket.util :as util :refer [exists?]])
+            [beatthemarket.util :as util :refer [exists?]]
+            [clojure.core.async :as core.async])
   (:import [java.util UUID]))
 
 
@@ -268,6 +271,26 @@
       (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
                inputs))))
 
+(defn track-profit-loss+stream-portfolio-update! [conn gameId game-db-id user-id tentry]
+
+  (game.persistence/track-profit-loss! tentry)
+
+  (let [portfolio-update-stream (-> repl.state/system :game/games deref
+                                    (get gameId) :portfolio-update-stream)
+
+        running-profit-loss (->> repl.state/system :game/games
+                                 deref
+                                 (#(get % gameId)) :profit-loss
+                                 (game.calculation/collect-running-profit-loss gameId))
+
+        account-balances (game.calculation/collect-account-balances conn game-db-id user-id)]
+
+    (core.async/go
+      (core.async/>! portfolio-update-stream running-profit-loss)
+      (core.async/>! portfolio-update-stream account-balances)))
+
+  tentry)
+
 (defn buy-stock! [conn game-id user-id stock-id stock-amount stock-price]
 
   (let [validation-inputs {:conn         conn
@@ -300,14 +323,15 @@
                                        (update-in [:bookkeeping.account/amount] + stock-amount))
 
             ;; T-ENTRY + JOURNAL ENTRIES
-            debits+credits          [(->debit updated-debit-account debit-value nil nil)
-                                     (->credit updated-credit-account credit-value stock-price stock-amount)]
-            tentry                  (apply ->tentry debits+credits)
-            updated-journal-entries (-> (persistence.core/pull-entity conn game-id)
-                                        :game/users first
-                                        :game.user/portfolio
-                                        :bookkeeping.portfolio/journals first
-                                        (assoc :bookkeeping.journal/entries tentry))
+            debits+credits                    [(->debit updated-debit-account debit-value nil nil)
+                                               (->credit updated-credit-account credit-value stock-price stock-amount)]
+            tentry                            (apply ->tentry debits+credits)
+            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-id)
+            updated-journal-entries           (-> game-entity
+                                                  :game/users first
+                                                  :game.user/portfolio
+                                                  :bookkeeping.portfolio/journals first
+                                                  (assoc :bookkeeping.journal/entries tentry))
 
             entities [tentry updated-journal-entries]]
 
@@ -320,7 +344,8 @@
                ent
                (-> tentry :bookkeeping.tentry/id))
           (ffirst ent)
-          (game.persistence/track-profit-loss! ent)
+          ;; (game.persistence/track-profit-loss! ent)
+          (track-profit-loss+stream-portfolio-update! conn gameId game-id user-id ent)
           (identity ent))))))
 
 (defn sell-stock! [conn game-id user-id stock-id stock-amount stock-price]
@@ -361,14 +386,15 @@
                                               [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
-            debits+credits          [(->debit updated-debit-account debit-value stock-price stock-amount)
-                                     (->credit updated-credit-account credit-value nil nil)]
-            tentry                  (apply ->tentry debits+credits)
-            updated-journal-entries (-> (persistence.core/pull-entity conn game-id)
-                                        :game/users first
-                                        :game.user/portfolio
-                                        :bookkeeping.portfolio/journals first
-                                        (assoc :bookkeeping.journal/entries tentry))
+            debits+credits                  [(->debit updated-debit-account debit-value stock-price stock-amount)
+                                             (->credit updated-credit-account credit-value nil nil)]
+            tentry                          (apply ->tentry debits+credits)
+            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-id)
+            updated-journal-entries         (-> game-entity
+                                                :game/users first
+                                                :game.user/portfolio
+                                                :bookkeeping.portfolio/journals first
+                                                (assoc :bookkeeping.journal/entries tentry))
 
             entities [tentry updated-journal-entries]]
 
@@ -381,7 +407,8 @@
                ent
                (-> tentry :bookkeeping.tentry/id))
           (ffirst ent)
-          (game.persistence/track-profit-loss! ent)
+          ;; (game.persistence/track-profit-loss! ent)
+          (track-profit-loss+stream-portfolio-update! conn gameId game-id user-id ent)
           (identity ent))))))
 
 (comment

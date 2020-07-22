@@ -117,7 +117,6 @@
                    org.eclipse.jetty/jetty-io
                    org.eclipse.jetty/jetty-client
                    org.eclipse.jetty/jetty-util]]
-                 [datascript "0.18.13"]
                  [com.rpl/specter "1.1.3"]
                  [rop "0.4.1"]
                  [orchestra "2018.12.06-2"]

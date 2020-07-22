@@ -117,6 +117,10 @@ lein nvd check
 
 * Save P/L to DB (not component)
 
+* :game/users > :game/user points to a User's core set of accounts
+  Those accounts should belong to a specific game (Single Player)
+  A User can also have a Market set of accounts (Market Player)
+
 * Integration Test
   * Apollo client, login, new game, stream to client
   * Buy a stock sell a stock

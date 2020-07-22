@@ -7,6 +7,7 @@
             [clj-time.coerce :as c]
             [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
+            [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.games :as game.games]
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
             [beatthemarket.persistence.core :as persistence.core]
@@ -20,7 +21,6 @@
 (use-fixtures :each
   test-util/component-fixture
   test-util/migration-fixture)
-
 
 (deftest create-game!-test
 
@@ -264,6 +264,11 @@
                   :bookkeeping.credit/account
                   (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
 
+          ;; TODO
+          ;; Check portfolio-update-stream for
+          ;; running-profit-loss
+          ;; account-balances
+
           (are [x y] (= x y)
             expected-credit-value        credit-value
             expected-credit-account-name credit-account-name
@@ -478,7 +483,7 @@
 
       (testing "We correct game.games/collect-realized-profit-loss"
 
-        (-> (game.games/collect-realized-profit-loss gameId)
+        (-> (game.calculation/collect-realized-profit-loss gameId)
             (get stockId)
             (= 3000.0)
             is)))))
@@ -584,9 +589,9 @@
                 2250.0 pl1
                 (.floatValue 7425.21) pl2))))
 
-        (testing "We correct game.games/collect-realized-profit-loss"
+        (testing "game.calculation game.games/collect-realized-profit-loss"
 
-          (-> (game.games/collect-realized-profit-loss gameId)
+          (-> (game.calculation/collect-realized-profit-loss gameId)
               (get stockId)
               (= (.floatValue 9675.21))
               is)))))
@@ -733,9 +738,9 @@
               (.floatValue 2049.47) pl6
               (.floatValue 11139.32) pl7)))
 
-        (testing "We correct game.games/collect-realized-profit-loss"
+        (testing "game.calculation game.games/collect-realized-profit-loss"
 
-          (-> (game.games/collect-realized-profit-loss gameId)
+          (-> (game.calculation/collect-realized-profit-loss gameId)
               (get stockId)
               (= (.floatValue 17729.78))
               is)))))
@@ -898,7 +903,7 @@
             kludgeGameId* (atom nil)
             collect-profit-loss-xf (map (fn [profit-loss]
                                           (swap! profit-loss-history #(conj % profit-loss))
-                                          (game.games/collect-running-profit-loss @kludgeGameId* profit-loss)))
+                                          (game.calculation/collect-running-profit-loss @kludgeGameId* profit-loss)))
 
             {{gameId     :game/id
               game-db-id :db/id :as game} :game
@@ -976,3 +981,115 @@
                       (extract-pl pl1))
                  (every? true?)
                  is))))))
+
+(deftest stream-portfolio-update-on-transact-test
+
+  ;; A
+  (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid} (test-util/generate-user! conn)
+        data-sequence-B                     [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
+        sink-fn                             identity
+
+        ;; test-stock-ticks       (atom [])
+        ;; test-portfolio-updates (atom [])
+        ;; stream-stock-tick-xf       (map (fn [a]
+        ;;                                   (swap! test-stock-ticks
+        ;;                                          (fn [b]
+        ;;                                            (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+        ;;                                              (conj b stock-ticks))))))
+        ;; stream-portfolio-update-xf (map (fn [a]
+        ;;                                   (swap! test-portfolio-updates (fn [b] (conj b a)))))
+
+        {{gameId :game/id :as game} :game
+         control-channel            :control-channel
+         stock-tick-stream          :stock-tick-stream
+         portfolio-update-stream    :portfolio-update-stream
+         :as                        game-control}
+        (game.games/create-game! conn result-user-id sink-fn data-sequence-B
+                                 nil nil nil)
+
+        portfolio-update-result (atom [])
+        profit-loss-transact-to (game.games/start-game! conn result-user-id game-control)
+        stockId (-> game
+                    :game/users first
+                    :game.user/subscriptions first
+                    :game.stock/id)
+        stockAmount             100]
+
+    (core.async/go-loop []
+      (let [a (core.async/<! portfolio-update-stream)]
+        (when a
+          (swap! portfolio-update-result #(conj % a))
+          (recur))))
+
+    ;; B
+    (run! (fn [_]
+            (core.async/go
+              (core.async/<! profit-loss-transact-to)))
+          data-sequence-B)
+
+    ;; C
+    (let [test-stock-ticks       (atom [])
+          f (fn [a]
+              (swap! test-stock-ticks
+                     #(conj % a)))]
+
+      ;; D Collect stock-tick-stream values
+      (run! (fn [_]
+              (core.async/go
+                (f (core.async/<! stock-tick-stream))))
+            data-sequence-B)
+      (Thread/sleep 1000)
+
+
+      (testing "We are correctly streaming running-profit-loss and account-balances updates"
+
+        (let [{tickPriceL :game.stock.tick/close
+               tickIdL    :game.stock.tick/id}
+              (->> @test-stock-ticks last
+                   (filter #(= stockId (:game.stock/id %))) first)]
+
+          (game.games/buy-stock! conn userId gameId stockId stockAmount tickIdL (Float. tickPriceL) false)
+          (Thread/sleep 1000)
+
+          ;; profit-loss and account-balances shapes should look like this
+          '(({:game-id #uuid "afffbd97-4a26-4e6c-aa68-e63945f77e8e"
+              :stock-id #uuid "8c8518e9-0601-443d-a26a-af3c45e5ac21"
+              :profit-loss-type :running-profit-loss
+              :profit-loss 0.0})
+
+            (#{:bookkeeping.account/id #uuid "113c18ef-ccf3-4b2d-bf4e-a8bcb9869f05"
+               :bookkeeping.account/name "STOCK.Relative Waste"
+               :bookkeeping.account/balance 10500.0
+               :bookkeeping.account/amount 100
+               :bookkeeping.account/counter-party #:game.stock{:name "Relative Waste"}}
+              #{:bookkeeping.account/id #uuid "a99ee1be-da48-401f-af63-e84fb1058a7c"
+                :bookkeeping.account/name "Cash"
+                :bookkeeping.account/balance 89500.0
+                :bookkeeping.account/amount 0}
+              #{:bookkeeping.account/id #uuid "e47c40e0-18c8-41f9-afd1-5eeae5e92472"
+                :bookkeeping.account/name "Equity"
+                :bookkeeping.account/balance 100000.0
+                :bookkeeping.account/amount 0}))
+
+          (let [expected-profit-loss-count 1
+                expected-account-balance-count 3
+                [profit-loss account-balances] (util/pprint+identity (filter (comp not empty?) @portfolio-update-result))]
+
+            (are [x y] (= x y)
+              expected-account-balance-count (count account-balances)
+              expected-profit-loss-count (count profit-loss))
+
+            (->> (map keys account-balances)
+                 (map #(into #{} %))
+                 (every? #(or (= #{:bookkeeping.account/id :bookkeeping.account/name :bookkeeping.account/balance
+                                   :bookkeeping.account/amount} %)
+                              (= #{:bookkeeping.account/id :bookkeeping.account/name :bookkeeping.account/balance
+                                   :bookkeeping.account/amount :bookkeeping.account/counter-party} %)))
+                 is)
+
+            (->> (map keys profit-loss)
+                 (map #(into #{} %))
+                 (every? #(= #{:game-id :stock-id :profit-loss-type :profit-loss} %))
+                 is)))))))

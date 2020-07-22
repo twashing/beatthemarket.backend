@@ -12,7 +12,8 @@
    {:stockTickId {:type (non-null String)}
     :stockTickTime {:type (non-null Int)}
     :stockTickClose {:type (non-null Float)}
-    :stockId {:type (non-null String)}}}
+    :stockId {:type (non-null String)}
+    :stockName {:type (non-null String)}}}
 
   :CreateGamekAck
   {:fields
@@ -31,13 +32,11 @@
   :ProfitLoss
   {:description "Container for portfolio updates"
    :fields
-   {:profitLoss  {:type (non-null Float)}
-    :stockId     {:type (non-null String)}
-    :stockAmount {:type (non-null Int)}
-    :gameId      {:type (non-null String)}
-    :tradePrice  {:type (non-null Float)}
-    :tickId      {:type (non-null String)}
-    :tickPrice   {:type (non-null Float)}}}
+   {:profitLoss     {:type (non-null Float)}
+    :stockId        {:type (non-null String)}
+    :gameId         {:type (non-null String)}
+    ;; :profitLossType {:type (non-null :ProfitLossType)}
+    }}
 
   :AccountBalance
   {:description "Account Balance message"
@@ -45,7 +44,6 @@
    {:id           {:type (non-null String)}
     :name         {:type (non-null String)}
     :balance      {:type (non-null Float)}
-    :type         {:type (non-null String)}
     :counterParty {:type String :description "Name of the stock attached to this account"}
     :amount       {:type Int :description "The amount of units (stock shares) of the counterparty"}}}
 
@@ -79,6 +77,9 @@
   :StartGameAck
   {:descriptiuon "Expected return value when starting a game"
    :values      [:gamestarted]}
+
+  :ProfitLossType
+  {:values      [:running :realized]}
 
   :GameEventType
   {:values [:control :levelStatus :levelTimer]}
