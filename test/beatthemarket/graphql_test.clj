@@ -52,7 +52,7 @@
         (testing "Subsequent logins find an existing user"
 
           (let [expected-status 200
-                expected-body {:data {:login "user-exists"}}
+                expected-body {:data {:login {:message "userexists"}}}
                 expected-headers {"Content-Type" "application/json"}
 
                 {status :status
@@ -60,7 +60,7 @@
                  headers :headers}
                 (response-for service
                               :post "/api"
-                              :body "{\"query\": \"{ login }\"}"
+                              :body "{\"query\": \"mutation Login { login { message }} \" }"
                               :headers {"Content-Type" "application/json"
                                         "Authorization" (format "Bearer %s" id-token)})
 

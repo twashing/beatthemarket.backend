@@ -15,6 +15,11 @@
     :stockId {:type (non-null String)}
     :stockName {:type (non-null String)}}}
 
+  :LoginAck
+  {:description "Possible return states from a login attempt"
+   :fields
+   {:message {:type (non-null :LoginAckMessage)}}}
+
   :CreateGamekAck
   {:fields
    {:id            {:type (non-null String)}
@@ -70,9 +75,8 @@
 
  ;; //
  :enums
- {:LoginAck
-  {:description "Possible return states from a login attempt"
-   :values      [:useradded :userexists]}
+ {:LoginAckMessage
+  {:values      [:useradded :userexists]}
 
   :StartGameAck
   {:descriptiuon "Expected return value when starting a game"
@@ -142,7 +146,8 @@
 
  ;; //
  :mutations
- {:login
+ {
+  :login
   {:type    :LoginAck
    :resolve :resolve-login}
 

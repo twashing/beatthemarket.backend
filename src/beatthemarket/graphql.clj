@@ -23,8 +23,8 @@
         {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
 
     (if (util/truthy? (and db-before db-after tx-data tempids))
-      :useradded
-      :userexists)))
+      {:message :useradded}
+      {:message :userexists})))
 
 (defn resolve-create-game [context args _]
 

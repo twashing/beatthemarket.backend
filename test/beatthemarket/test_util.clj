@@ -85,7 +85,7 @@
 (defn login-assertion [service id-token]
 
   (let [expected-status 200
-        expected-body {:data {:login "user-added"}}
+        expected-body {:data {:login {:message "useradded"}}}
         expected-headers {"Content-Type" "application/json"}
 
         {status :status
@@ -93,11 +93,11 @@
          headers :headers}
         (response-for service
                       :post "/api"
-                      :body "{\"query\": \"{ login }\"}"
+                      :body "{\"query\": \"mutation Login { login { message }} \" }"
                       :headers {"Content-Type" "application/json"
                                 "Authorization" (format "Bearer %s" id-token)})
 
-        body-parsed (json/read-str body :key-fn keyword)]
+        body-parsed (json/read-str (util/pprint+identity body) :key-fn keyword)]
 
     (t/are [x y] (= x y)
       expected-status status
@@ -219,7 +219,7 @@
            session (try
                      (g/connect uri
                        :on-receive (fn [message-text]
-                                     (log/debug :reason ::receive :message (util/pprint+identity message-text))
+                                     (log/debug :reason ::receive :message message-text)
                                      (put! messages-ch (json/read-str message-text :key-fn keyword)))
                        :on-connect (fn [a]
                                      (log/debug :reason ::connected))
