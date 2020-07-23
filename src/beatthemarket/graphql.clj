@@ -40,10 +40,23 @@
         ;; NOTE sink-fn updates once we start to stream a game
         sink-fn                identity
         {{game-id :game/id
-          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn)
-        message                (game.games/game->new-game-message game user-db-id)]
+          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn)]
 
-    {:message message}))
+    (game.games/game->new-game-message game user-db-id)
+    #_{:id "A"
+     :stocks [{:id "A"
+               :name "B"
+               :symbol "C"}]}
+    ))
+
+#_(defn create-game!
+
+  ([conn user-id sink-fn]
+   (create-game! conn user-id sink-fn (->data-sequence) nil nil nil))
+
+  ([conn user-id sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
+   (let [user-entity (hash-map :db/id user-id)]
+     (initialize-game! conn user-entity sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf))))
 
 (defn resolve-start-game [context args _]
   :gamestarted)
@@ -145,36 +158,8 @@
     ;; D Return a cleanup fn
     (constantly nil)))
 
-
 (defn stream-portfolio-updates [context args source-stream]
   )
 
 (defn stream-game-events [context args source-stream]
   )
-
-
-
-;; NOTE subscription resolver
-(def *ping-subscribes (atom 0))
-(def *ping-cleanups (atom 0))
-(def *ping-context (atom nil))
-
-(defn stream-ping
-  [context args source-stream]
-
-  (swap! *ping-subscribes inc)
-  (reset! *ping-context context)
-  (let [{:keys [message count]} args
-        runnable                ^Runnable (fn []
-                                            (dotimes [i count]
-
-                                              ;; (println "Sanity check / stream-ping / " [i count])
-                                              (source-stream (util/pprint+identity {:message   (str message " #" (inc i))
-                                                                                    :timestamp (System/currentTimeMillis)}))
-                                              (Thread/sleep 50))
-
-                                            (source-stream nil))]
-    (.start (Thread. runnable "stream-ping-thread")))
-
-  ;; Return a cleanup fn:
-  #(swap! *ping-cleanups inc))

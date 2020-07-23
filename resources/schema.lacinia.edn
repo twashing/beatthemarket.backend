@@ -1,7 +1,27 @@
 {
  ;; //
  :objects
- {:Stock
+ {:LoginAck
+  {:description "Possible return states from a login attempt"
+   :fields
+   {:message {:type (non-null :LoginAckMessage)}}}
+
+  :CreateGamekAck
+  {:fields
+   {:id            {:type (non-null String)}
+    :stocks        {:type (list (non-null String))}
+    ;; :stocks        {:type (non-null (list :Stock))}
+    }}
+
+  :BuyStockAck
+  {:fields
+   {:message {:type (non-null String)}}}
+
+  :SellStockAck
+  {:fields
+   {:message {:type (non-null String)}}}
+
+  :Stock
   {:fields
    {:id     {:type (non-null String)}
     :name   {:type (non-null String)}
@@ -14,25 +34,6 @@
     :stockTickClose {:type (non-null Float)}
     :stockId {:type (non-null String)}
     :stockName {:type (non-null String)}}}
-
-  :LoginAck
-  {:description "Possible return states from a login attempt"
-   :fields
-   {:message {:type (non-null :LoginAckMessage)}}}
-
-  :CreateGamekAck
-  {:fields
-   {:id            {:type (non-null String)}
-    :subscriptions {:type (list (non-null :Stock))}
-    :stocks        {:type (list (non-null :Stock))}}}
-
-  :BuyStockAck
-  {:fields
-   {:message {:type (non-null String)}}}
-
-  :SellStockAck
-  {:fields
-   {:message {:type (non-null String)}}}
 
   :ProfitLoss
   {:description "Container for portfolio updates"
@@ -149,6 +150,7 @@
  {
   :login
   {:type    :LoginAck
+   :description "Logs a user in, using Firebase's ID JWT"
    :resolve :resolve-login}
 
   :createGame

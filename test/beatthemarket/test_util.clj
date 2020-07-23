@@ -97,7 +97,7 @@
                       :headers {"Content-Type" "application/json"
                                 "Authorization" (format "Bearer %s" id-token)})
 
-        body-parsed (json/read-str (util/pprint+identity body) :key-fn keyword)]
+        body-parsed (json/read-str body :key-fn keyword)]
 
     (t/are [x y] (= x y)
       expected-status status

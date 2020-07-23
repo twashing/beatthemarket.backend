@@ -29,40 +29,6 @@
   test-util/migration-fixture
   (test-util/subscriptions-fixture "ws://localhost:8081/ws"))
 
-
-(deftest basic-handler-test
-
-  (with-redefs [auth/auth-request-handler identity]
-
-    (testing "Basic GraphQL call"
-      (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-
-            expected-status 200
-            expected-body "{\"data\":{\"hello\":\"Hello, Clojurians!\"}}"
-            expected-headers {"Content-Type" "application/json"}
-            {:keys [status body headers]} (response-for service
-                                                        :post "/api"
-                                                        :body "{\"query\": \"{ hello }\"}"
-                                                        :headers {"Content-Type" "application/json"})]
-
-        (are [x y] (= x y)
-          expected-status status
-          expected-body body
-          expected-headers headers)))
-
-    (testing "Basic REST call"
-      (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-
-            expected-status 200
-            expected-body "Hello World!"
-            expected-headers {"Content-Type" "text/html;charset=UTF-8"}
-            {:keys [status body headers]} (response-for service :get "/")]
-
-        (are [x y] (= x y)
-          expected-status status
-          expected-body body
-          expected-headers headers)))))
-
 (deftest subscription-handler-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)]
@@ -103,30 +69,9 @@
             expected-headers headers))))))
 
 (deftest subscriptions-ws-request
-
   (testing "Basic WS connection"
     (test-util/send-init)
     (test-util/expect-message {:type "connection_ack"})))
-
-(deftest subscription-resolver-test
-
-  ;; REST Login (not WebSocket) ; creates a user
-  (let [service  (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)]
-
-    (test-util/login-assertion service id-token))
-
-  (test-util/send-init)
-  (test-util/expect-message {:type "connection_ack"})
-
-  (test-util/send-data {:id 987
-                        :type :start
-                        :payload
-                        {:query "subscription { ping(message: \"short\", count: 2 ) { message }}"}})
-
-  (test-util/expect-message {:id 987
-                             :payload {:data {:ping {:message "short #1"}}}
-                             :type "data"}))
 
 (deftest create-game-resolver-test
 
@@ -146,13 +91,17 @@
                             :payload
                             {:query "mutation CreateGame {
                                        createGame {
-                                         message
+                                         id
+                                         stocks
                                        }
                                      }"}}))
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
-      (let [result  (test-util/<message!! 1000)
+      (util/pprint+identity (test-util/<message!! 1000))
+      (is false)
+
+      #_(let [result  (util/pprint+identity (test-util/<message!! 1000))
             {:keys [stocks subscriptions id]} (-> result :payload :data :createGame :message read-string)]
 
         (is (UUID/fromString id))
@@ -173,7 +122,7 @@
                  (= expected-component-game-keys)
                  is)))))))
 
-(deftest start-game-subscription-test
+#_(deftest start-game-subscription-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)]
@@ -251,7 +200,7 @@
                      (= 2)
                      is)))))))))
 
-(deftest buy-stock-test
+#_(deftest buy-stock-test
 
   ;; A. REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
@@ -317,7 +266,7 @@
     (is (= {:type "data" :id 987 :payload {:data {:buyStock {:message "Ack"}}}}
            ack))))
 
-(deftest sell-stock-test
+#_(deftest sell-stock-test
 
   ;; A. REST Login (not WebSocket) ; creates a user
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)

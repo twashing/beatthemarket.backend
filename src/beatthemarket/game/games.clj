@@ -294,8 +294,7 @@
         game-subscriptions (:game.user/subscriptions (game.core/game-user-by-user-id game user-id))]
 
     (-> (transform [MAP-VALS ALL :game.stock/id] str
-                   {:stocks        game-stocks
-                    :subscriptions game-subscriptions})
+                   {:stocks        game-stocks})
         (assoc :id (str (:game/id game))))))
 
 (defn narrow-stock-tick-pairs-by-subscription [stock-tick-pairs {input-stock-id :game.stock/id}]
