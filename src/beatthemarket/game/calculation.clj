@@ -1,6 +1,7 @@
 (ns beatthemarket.game.calculation
   (:require [integrant.repl.state :as repl.state]
-            [datomic.client.api :as d]))
+            [datomic.client.api :as d]
+            [beatthemarket.util :as util]))
 
 
 (defn collect-profit-loss
@@ -18,8 +19,7 @@
                                             (+ ac pl))
                                           0.0)
                                   (format "%.2f") (Float.))})
-        flatten
-        #_(apply hash-map))))
+        flatten)))
 
 (defn collect-realized-profit-loss
 

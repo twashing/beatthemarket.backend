@@ -117,15 +117,6 @@ lein nvd check
 
 * Save P/L to DB (not component)
 
-* :game/users > :game/user points to a User's core set of accounts
-  Those accounts should belong to a specific game (Single Player)
-  A User can also have a Market set of accounts (Market Player)
-
-* Integration Test
-  * Apollo client, login, new game, stream to client
-  * Buy a stock sell a stock
-  * Complete level 1
-
 * Need a mechanism to stop data-subscription ticks -> db transact, when Channel or DB is closed
 goo-loop and closed? on core.async channels are not a good enough control mechanism
 async operations take a long time, and can have a closed DB when trying to write
@@ -142,12 +133,8 @@ async operations take a long time, and can have a closed DB when trying to write
 * fn specs for all game and bookkeeping artifacts
   Use [Orchestra](https://github.com/jeaye/orchestra)
 
-* UI workbench for Integration test
 * Replace clj-time with juxt/tick (https://github.com/juxt/tick)
 
-
-* ? Stream two games (Separate Users) at the same time
-* Have a mechanism to simultaneously stream multiple subscriptions (beatthemarket.graphql/stream-stock-ticks)
 
 * Move code in `comment` blocks, to tests
 * Add git hooks to automate code checks

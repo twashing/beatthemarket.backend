@@ -484,7 +484,8 @@
       (testing "We correct game.games/collect-realized-profit-loss"
 
         (-> (game.calculation/collect-realized-profit-loss gameId)
-            (get stockId)
+            first
+            :profit-loss
             (= 3000.0)
             is)))))
 
@@ -592,7 +593,8 @@
         (testing "game.calculation game.games/collect-realized-profit-loss"
 
           (-> (game.calculation/collect-realized-profit-loss gameId)
-              (get stockId)
+              first
+              :profit-loss
               (= (.floatValue 9675.21))
               is)))))
 
@@ -740,10 +742,11 @@
 
         (testing "game.calculation game.games/collect-realized-profit-loss"
 
-          (-> (game.calculation/collect-realized-profit-loss gameId)
-              (get stockId)
-              (= (.floatValue 17729.78))
-              is)))))
+          (->> (game.calculation/collect-realized-profit-loss gameId)
+               first
+               :profit-loss
+               (= (.floatValue 17729.78))
+               is)))))
 
 (def updated-profit-loss
   '({:amount 75
@@ -952,7 +955,8 @@
 
         (testing "Correctly streaming stock-tick and profit-loss events"
 
-          (let [[m0 m1] ((juxt first second) @portfolio-update-result)]
+          (let [[[{m0 :profit-loss}]
+                 [{m1 :profit-loss}]] ((juxt first second) @portfolio-update-result)]
 
             (->> @stock-tick-result
                  (map #(map keys %))
@@ -965,8 +969,8 @@
                  is)
 
             (are [x y] (= x y)
-              (.floatValue 21464.51) (-> m0 seq first second)
-              (.floatValue 24046.62) (-> m1 seq first second))))
+              (.floatValue 21464.51) m0
+              (.floatValue 24046.62) m1)))
 
         (testing "Correctly recalculating profit-loss on a tick update (:running-profit-loss increases)"
 
@@ -990,16 +994,6 @@
          userId         :user/external-uid} (test-util/generate-user! conn)
         data-sequence-B                     [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
         sink-fn                             identity
-
-        ;; test-stock-ticks       (atom [])
-        ;; test-portfolio-updates (atom [])
-        ;; stream-stock-tick-xf       (map (fn [a]
-        ;;                                   (swap! test-stock-ticks
-        ;;                                          (fn [b]
-        ;;                                            (let [stock-ticks (game.games/group-stock-tick-pairs a)]
-        ;;                                              (conj b stock-ticks))))))
-        ;; stream-portfolio-update-xf (map (fn [a]
-        ;;                                   (swap! test-portfolio-updates (fn [b] (conj b a)))))
 
         {{gameId :game/id :as game} :game
          control-channel            :control-channel
@@ -1075,7 +1069,7 @@
 
           (let [expected-profit-loss-count 1
                 expected-account-balance-count 3
-                [profit-loss account-balances] (util/pprint+identity (filter (comp not empty?) @portfolio-update-result))]
+                [profit-loss account-balances] (filter (comp not empty?) @portfolio-update-result)]
 
             (are [x y] (= x y)
               expected-account-balance-count (count account-balances)
