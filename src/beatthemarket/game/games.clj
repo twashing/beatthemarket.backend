@@ -562,4 +562,10 @@
     (as-> game-control gc
       (chain-control-pipeline gc {:conn conn :user-db-id user-db-id})
       (assoc game-control :profit-loss-transact-to gc)
-      (run-game! gc paused? tick-sleep-atom level-timer-atom))))
+      (run-game! gc paused? tick-sleep-atom level-timer-atom))
+
+    ;; NOTE
+    (core.async/go
+      (core.async/>! control-channel :exit))
+
+    ))

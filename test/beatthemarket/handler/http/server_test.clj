@@ -98,7 +98,7 @@
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
-      (let [result (util/pprint+identity (test-util/<message!! 1000))
+      (let [result (test-util/<message!! 1000)
             {:keys [stocks id]} (-> result :payload :data :createGame)]
 
         (is (UUID/fromString id))
@@ -141,7 +141,7 @@
                  (= expected-component-game-keys)
                  is)))))))
 
-#_(deftest start-game-subscription-test
+(deftest start-game-subscription-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)]
@@ -159,65 +159,88 @@
                             :payload
                             {:query "mutation CreateGame {
                                        createGame {
-                                         message
+                                         id
+                                         stocks
                                        }
                                      }"}}))
 
+    ;; (util/pprint+identity (test-util/<message!! 1000))
+    ;; (util/pprint+identity (test-util/<message!! 1000))
 
-    (testing "Expected data when we start streaming a new game"
+    (testing "Start a Game"
 
-      (let [create-result                     (test-util/<message!! 1000)
-            _                                 (test-util/<message!! 1000)
-            {:keys [stocks subscriptions id]} (-> create-result :payload :data :createGame :message read-string)]
-
+      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
         (test-util/send-data {:id   987
                               :type :start
                               :payload
-                              {:query "subscription StartGame($id: String!) {
+                              {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
                                            message
                                          }
                                        }"
                                :variables {:id id}}})
 
-        (core.async/<!! (core.async/timeout 2000))
+        (let [result (util/pprint+identity (test-util/<message!! 1000))]
+          result)))
 
-        (testing "Subscription is being streamed to client"
+    (is false)
 
-          (let [parse-startGame-message (fn [a]
-                                          (->> a :payload :data :startGame :message
-                                               (map read-string)))
 
-                ;; NOTE I (unfortunately) have to futz around with the timing of collecting messages
-                {id0     :game.stock.tick/id
-                 t0-time :game.stock.tick/trade-time}
-                (first (parse-startGame-message (test-util/<message!! 10000)))
+    #_(testing "Expected data when we start streaming a new game"
 
-                {id1     :game.stock.tick/id
-                 t1-time :game.stock.tick/trade-time}
-                (first (parse-startGame-message (test-util/<message!! 5000)))]
+        (let [create-result                     (test-util/<message!! 1000)
+              _                                 (test-util/<message!! 1000)
+              {:keys [stocks subscriptions id]} (-> create-result :payload :data :createGame :message read-string)]
 
-            (is (t/after?
-                  (c/from-long t1-time)
-                  (c/from-long t0-time)))
 
-            (testing "Two ticks streamed to client, got saved to the DB"
+          (test-util/send-data {:id   987
+                                :type :start
+                                :payload
+                                {:query "subscription StartGame($id: String!) {
+                                         startGame(id: $id) {
+                                           message
+                                         }
+                                       }"
+                                 :variables {:id id}}})
 
-              (let [conn (-> state/system :persistence/datomic :opts :conn)
+          (core.async/<!! (core.async/timeout 2000))
 
-                    tick-id0 id0
-                    tick-id1 id1]
+          (testing "Subscription is being streamed to client"
 
-                (->> (d/q '[:find ?e
-                            :in $ [?tick-id ...]
-                            :where
-                            [?e :game.stock.tick/id ?tick-id]]
-                          (d/db conn)
-                          [tick-id0 tick-id1])
-                     count
-                     (= 2)
-                     is)))))))))
+            (let [parse-startGame-message (fn [a]
+                                            (->> a :payload :data :startGame :message
+                                                 (map read-string)))
+
+                  ;; NOTE I (unfortunately) have to futz around with the timing of collecting messages
+                  {id0     :game.stock.tick/id
+                   t0-time :game.stock.tick/trade-time}
+                  (first (parse-startGame-message (test-util/<message!! 10000)))
+
+                  {id1     :game.stock.tick/id
+                   t1-time :game.stock.tick/trade-time}
+                  (first (parse-startGame-message (test-util/<message!! 5000)))]
+
+              (is (t/after?
+                    (c/from-long t1-time)
+                    (c/from-long t0-time)))
+
+              (testing "Two ticks streamed to client, got saved to the DB"
+
+                (let [conn (-> state/system :persistence/datomic :opts :conn)
+
+                      tick-id0 id0
+                      tick-id1 id1]
+
+                  (->> (d/q '[:find ?e
+                              :in $ [?tick-id ...]
+                              :where
+                              [?e :game.stock.tick/id ?tick-id]]
+                            (d/db conn)
+                            [tick-id0 tick-id1])
+                       count
+                       (= 2)
+                       is)))))))))
 
 #_(deftest buy-stock-test
 

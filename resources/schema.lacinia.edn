@@ -13,6 +13,11 @@
     ;; :stocks        {:type (non-null (list :Stock))}
     }}
 
+  :StartGameAck
+  {:fields
+   {;; :message {:type (non-null :StartGameAckMessage)}
+    :message {:type (non-null String)}}}
+
   :BuyStockAck
   {:fields
    {:message {:type (non-null String)}}}
@@ -79,7 +84,7 @@
  {:LoginAckMessage
   {:values      [:useradded :userexists]}
 
-  :StartGameAck
+  :StartGameAckMessage
   {:descriptiuon "Expected return value when starting a game"
    :values      [:gamestarted]}
 

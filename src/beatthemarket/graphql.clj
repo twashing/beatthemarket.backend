@@ -45,8 +45,27 @@
     (->> (game.games/game->new-game-message game user-db-id)
          (transform [:stocks ALL] #(json/write-str (dissoc % :db/id))))))
 
-(defn resolve-start-game [context args _]
-  :gamestarted)
+(defn resolve-start-game [context {game-id :id} _]
+
+  (let [{{{email :email} :checked-authentication} :request} context
+        conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
+        user-db-id                                          (ffirst
+                                                              (d/q '[:find ?e
+                                                                     :in $ ?email
+                                                                     :where [?e :user/email ?email]]
+                                                                   (d/db conn)
+                                                                   email))
+        gameId (UUID/fromString game-id)
+        ;; _ (trace ["Sanity Check /" gameId])
+        game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
+
+    #_(-> game-control
+        (dissoc :stocks-with-tick-data)
+        util/pprint+identity)
+
+    (game.games/start-game! conn user-db-id game-control))
+
+  {:message :gamestarted})
 
 (defn resolve-buy-stock [context args _]
 
