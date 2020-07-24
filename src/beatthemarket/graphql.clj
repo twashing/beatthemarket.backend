@@ -42,21 +42,8 @@
         {{game-id :game/id
           :as     game} :game} (game.games/create-game! conn user-db-id sink-fn)]
 
-    (game.games/game->new-game-message game user-db-id)
-    #_{:id "A"
-     :stocks [{:id "A"
-               :name "B"
-               :symbol "C"}]}
-    ))
-
-#_(defn create-game!
-
-  ([conn user-id sink-fn]
-   (create-game! conn user-id sink-fn (->data-sequence) nil nil nil))
-
-  ([conn user-id sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
-   (let [user-entity (hash-map :db/id user-id)]
-     (initialize-game! conn user-entity sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf))))
+    (->> (game.games/game->new-game-message game user-db-id)
+         (transform [:stocks ALL] #(json/write-str (dissoc % :db/id))))))
 
 (defn resolve-start-game [context args _]
   :gamestarted)

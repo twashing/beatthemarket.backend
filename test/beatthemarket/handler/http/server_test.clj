@@ -98,24 +98,43 @@
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
-      (util/pprint+identity (test-util/<message!! 1000))
-      (is false)
-
-      #_(let [result  (util/pprint+identity (test-util/<message!! 1000))
-            {:keys [stocks subscriptions id]} (-> result :payload :data :createGame :message read-string)]
+      (let [result (util/pprint+identity (test-util/<message!! 1000))
+            {:keys [stocks id]} (-> result :payload :data :createGame)]
 
         (is (UUID/fromString id))
-        (is (some (into #{} stocks)
-                  subscriptions))
-        (are [x y] (= x y)
-          4 (count stocks)
-          1 (count subscriptions))
+        (is (= 4 (count stocks)))
+        (->> (map #(json/read-str % :key-fn keyword) stocks)
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= #{:id :name :symbol} %))
+             is)
 
         (testing "Returned game is what's registered in the :game/games component"
 
           (let [game-id (UUID/fromString id)
                 expected-component-game-keys
-                #{:game :stocks-with-tick-data :tick-sleep-ms :stock-stream-channel :control-channel :close-sink-fn :sink-fn :profit-loss}]
+                #{:game
+                  :control-channel
+                  :stocks-with-tick-data
+                  :profit-loss
+
+                  :transact-profit-loss-xf
+                  :stream-portfolio-update-xf
+                  :calculate-profit-loss-xf
+                  :collect-profit-loss-xf
+                  :transact-tick-xf
+                  :stream-stock-tick-xf
+
+                  :close-sink-fn
+                  :sink-fn
+
+                  :paused?
+                  :level-timer-atom
+                  :tick-sleep-atom
+
+                  :portfolio-update-stream
+                  :stock-tick-stream
+                  :game-event-stream}]
 
             (->> state/system :game/games deref (#(get % game-id)) keys
                  (into #{})
