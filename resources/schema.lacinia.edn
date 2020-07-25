@@ -190,13 +190,13 @@
    {:gameId {:type (non-null String)}}}
 
   :portfolioUpdates
-  {:type   :PortfolioUpdate
+  {:type   String ;; :PortfolioUpdate
    :stream :stream-portfolio-updates
    :args
    {:gameId {:type (non-null String)}}}
 
   :gameEvents
-  {:type   :GameEvent
+  {:type   String ;; :GameEvent
    :stream :stream-game-events
    :args
    {:gameId {:type (non-null String)}}}}}

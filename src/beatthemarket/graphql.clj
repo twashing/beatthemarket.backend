@@ -109,8 +109,7 @@
 
 
 ;; STREAMERS
-(defn stream-stock-ticks
-  [context {id :gameId :as args} source-stream]
+(defn stream-stock-ticks [context {id :gameId :as args} source-stream]
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
@@ -143,8 +142,66 @@
     ;; Return a cleanup fn
     cleanup-fn))
 
-(defn stream-portfolio-updates [context args source-stream]
-  )
+(defn stream-portfolio-updates [context {id :gameId :as args} source-stream]
+  (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {{{email :email} :checked-authentication} :request} context
+        user-db-id                                          (ffirst
+                                                              (d/q '[:find ?e
+                                                                     :in $ ?email
+                                                                     :where [?e :user/email ?email]]
+                                                                   (d/db conn)
+                                                                   email))
+        id-uuid                                             (UUID/fromString id)
+        portfolio-update-stream                             (-> repl.state/system
+                                                                :game/games
+                                                                deref
+                                                                (get (UUID/fromString id))
+                                                                :portfolio-update-stream)
+        cleanup-fn                                          (constantly (core.async/close! portfolio-update-stream))]
 
-(defn stream-game-events [context args source-stream]
-  )
+    (core.async/go-loop []
+      (when-let [stock-ticks (core.async/<! portfolio-update-stream)]
+        (->> stock-ticks
+             (map #(clojure.set/rename-keys %
+                                            {:game.stock.tick/id         :stockTickId
+                                             :game.stock.tick/trade-time :stockTickTime
+                                             :game.stock.tick/close      :stockTickClose
+                                             :game.stock/id              :stockId
+                                             :game.stock/name            :stockName}))
+             source-stream)
+        (recur)))
+
+    ;; Return a cleanup fn
+    cleanup-fn))
+
+(defn stream-game-events [context {id :gameId :as args} source-stream]
+  (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {{{email :email} :checked-authentication} :request} context
+        user-db-id                                          (ffirst
+                                                              (d/q '[:find ?e
+                                                                     :in $ ?email
+                                                                     :where [?e :user/email ?email]]
+                                                                   (d/db conn)
+                                                                   email))
+        id-uuid                                             (UUID/fromString id)
+        game-event-stream                                   (-> repl.state/system
+                                                                :game/games
+                                                                deref
+                                                                (get (UUID/fromString id))
+                                                                :game-event-stream)
+        cleanup-fn                                          (constantly (core.async/close! game-event-stream))]
+
+    (core.async/go-loop []
+      (when-let [stock-ticks (core.async/<! game-event-stream)]
+        (->> stock-ticks
+             (map #(clojure.set/rename-keys %
+                                            {:game.stock.tick/id         :stockTickId
+                                             :game.stock.tick/trade-time :stockTickTime
+                                             :game.stock.tick/close      :stockTickClose
+                                             :game.stock/id              :stockId
+                                             :game.stock/name            :stockName}))
+             source-stream)
+        (recur)))
+
+    ;; Return a cleanup fn
+    cleanup-fn))
