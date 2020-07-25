@@ -495,7 +495,7 @@
   ;; TODO stream a :game-event
   (reset! paused? pause?))
 
-(defn handle-control-event [control remaining]
+(defn handle-control-event [game-event-stream control remaining]
 
   ;; TODO stream
   ;; :game-event
@@ -503,9 +503,12 @@
 
   ;; TODO handle events
   ;; :exit :win :lose :timeout
-  )
 
-(defn run-game! [{:keys [control-channel profit-loss-transact-to]} pause-atom tick-sleep-atom level-timer-atom]
+  (core.async/go (core.async/>!! game-event-stream {:message control})))
+
+(defn run-game! [{:keys [control-channel
+                         profit-loss-transact-to
+                         game-event-stream]} pause-atom tick-sleep-atom level-timer-atom]
 
   (let [start (t/now)]
 
@@ -522,18 +525,18 @@
             [nowA endA] (match [@pause-atom controlv (time-expired? remaining)]
 
                                [true :exit _] (do
-                                                (handle-control-event controlv remaining)
+                                                (handle-control-event game-event-stream controlv remaining)
                                                 (println (format "< Paused > %s / Exiting..." (format-remaining-time remaining))))
                                [true _ _] (let [new-end (t/plus end (t/seconds 1))
                                                 remaining (calculate-remaining-time now new-end)]
                                             (println (format "< Paused > %s" (format-remaining-time remaining)))
                                             [(t/now) new-end])
 
-                               [_ :exit _] (do (handle-control-event controlv remaining)
+                               [_ :exit _] (do (handle-control-event game-event-stream controlv remaining)
                                                (println (format "Running %s / Exiting" (format-remaining-time remaining))))
-                               [_ :win _] (do (handle-control-event controlv remaining)
+                               [_ :win _] (do (handle-control-event game-event-stream controlv remaining)
                                               (println (format "Win %s" (format-remaining-time remaining))))
-                               [_ :lose _] (do (handle-control-event controlv remaining)
+                               [_ :lose _] (do (handle-control-event game-event-stream controlv remaining)
                                                (println (format "Lose %s" (format-remaining-time remaining))))
                                [_ _ false] (let [v (<! profit-loss-transact-to)]
 
@@ -544,7 +547,7 @@
                                              (println (format "Running %s / %s" (format-remaining-time remaining) v))
                                              (when v
                                                [(t/now) end]))
-                               [_ _ true] (do (handle-control-event :timeout remaining)
+                               [_ _ true] (do (handle-control-event game-event-stream :timeout remaining)
                                               (println (format "Running %s / TIME'S UP!!" (format-remaining-time remaining)))))]
 
         (when (and nowA endA)

@@ -65,7 +65,8 @@
   :GameEvent
   {:description "Game events"
    :fields
-   {:type {:type (non-null :GameEventType)}
+   {:message {:type (non-null String)}}
+   #_{:type {:type (non-null :GameEventType)}
     :gameId {:type (non-null String)}
     :message {:type (non-null :GameEventMessage)}}}
 
@@ -194,7 +195,7 @@
    {:gameId {:type (non-null String)}}}
 
   :portfolioUpdates
-  {:type  (non-null :PortfolioUpdate)
+  {:type  :PortfolioUpdate
    :stream :stream-portfolio-updates
    :args
    {:gameId {:type (non-null String)}}}

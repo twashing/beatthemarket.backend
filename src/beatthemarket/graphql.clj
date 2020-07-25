@@ -187,15 +187,7 @@
 
     (core.async/go-loop []
       (when-let [game-event (core.async/<! game-event-stream)]
-        (source-stream game-event)
-        #_(->> stock-ticks
-             (map #(clojure.set/rename-keys %
-                                            {:game.stock.tick/id         :stockTickId
-                                             :game.stock.tick/trade-time :stockTickTime
-                                             :game.stock.tick/close      :stockTickClose
-                                             :game.stock/id              :stockId
-                                             :game.stock/name            :stockName}))
-             source-stream)
+        (source-stream (util/pprint+identity game-event))
         (recur)))
 
     ;; Return a cleanup fn
