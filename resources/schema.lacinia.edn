@@ -40,6 +40,10 @@
     :stockId {:type (non-null String)}
     :stockName {:type (non-null String)}}}
 
+  :PortfolioUpdate
+  {:fields
+   {:message {:type (list (non-null String))}}}
+
   :ProfitLoss
   {:description "Container for portfolio updates"
    :fields
@@ -106,9 +110,9 @@
 
 
  ;; //
- :unions
- {:PortfolioUpdate
-  {:members [:ProfitLoss :AccountBalance]}}
+ ;; :unions
+ ;; {:PortfolioUpdate
+ ;;  {:members [:ProfitLoss :AccountBalance]}}
 
 
  ;; //
@@ -190,13 +194,13 @@
    {:gameId {:type (non-null String)}}}
 
   :portfolioUpdates
-  {:type   String ;; :PortfolioUpdate
+  {:type  (non-null :PortfolioUpdate)
    :stream :stream-portfolio-updates
    :args
    {:gameId {:type (non-null String)}}}
 
   :gameEvents
-  {:type   String ;; :GameEvent
+  {:type  :GameEvent
    :stream :stream-game-events
    :args
    {:gameId {:type (non-null String)}}}}}

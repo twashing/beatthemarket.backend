@@ -160,15 +160,9 @@
         cleanup-fn                                          (constantly (core.async/close! portfolio-update-stream))]
 
     (core.async/go-loop []
-      (when-let [stock-ticks (core.async/<! portfolio-update-stream)]
-        (->> stock-ticks
-             (map #(clojure.set/rename-keys %
-                                            {:game.stock.tick/id         :stockTickId
-                                             :game.stock.tick/trade-time :stockTickTime
-                                             :game.stock.tick/close      :stockTickClose
-                                             :game.stock/id              :stockId
-                                             :game.stock/name            :stockName}))
-             source-stream)
+      (when-let [portfolio-update (core.async/<! portfolio-update-stream)]
+        (when-not (empty? portfolio-update)
+          (source-stream {:message portfolio-update}))
         (recur)))
 
     ;; Return a cleanup fn
@@ -192,8 +186,9 @@
         cleanup-fn                                          (constantly (core.async/close! game-event-stream))]
 
     (core.async/go-loop []
-      (when-let [stock-ticks (core.async/<! game-event-stream)]
-        (->> stock-ticks
+      (when-let [game-event (core.async/<! game-event-stream)]
+        (source-stream game-event)
+        #_(->> stock-ticks
              (map #(clojure.set/rename-keys %
                                             {:game.stock.tick/id         :stockTickId
                                              :game.stock.tick/trade-time :stockTickTime
