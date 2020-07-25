@@ -56,16 +56,10 @@
                                                                    (d/db conn)
                                                                    email))
         gameId (UUID/fromString game-id)
-        ;; _ (trace ["Sanity Check /" gameId])
         game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
 
-    #_(-> game-control
-        (dissoc :stocks-with-tick-data)
-        util/pprint+identity)
-
-    (game.games/start-game! conn user-db-id game-control))
-
-  {:message :gamestarted})
+    (game.games/start-game! conn user-db-id game-control)
+    {:message :gamestarted}))
 
 (defn resolve-buy-stock [context args _]
 
@@ -112,7 +106,6 @@
 (defn resolve-account-balances [context args _])
 
 (defn resolve-stock-history [context args _])
-
 
 
 ;; STREAMERS

@@ -164,9 +164,6 @@
                                        }
                                      }"}}))
 
-    ;; (util/pprint+identity (test-util/<message!! 1000))
-    ;; (util/pprint+identity (test-util/<message!! 1000))
-
     (testing "Start a Game"
 
       (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
@@ -181,66 +178,20 @@
                                        }"
                                :variables {:id id}}})
 
-        (let [result (util/pprint+identity (test-util/<message!! 1000))]
-          result)))
+        (as-> (:game/games state/system) gs
+          (deref gs)
+          (get gs (UUID/fromString id))
+          (:control-channel gs)
+          (core.async/>!! gs :exit))
 
-    (is false)
+        (Thread/sleep 1000)
 
+        (let [_ (test-util/<message!! 1000)
 
-    #_(testing "Expected data when we start streaming a new game"
+              expected-result {:message :gamestarted}
+              result (-> (test-util/<message!! 1000) :payload :data :startGame)]
 
-        (let [create-result                     (test-util/<message!! 1000)
-              _                                 (test-util/<message!! 1000)
-              {:keys [stocks subscriptions id]} (-> create-result :payload :data :createGame :message read-string)]
-
-
-          (test-util/send-data {:id   987
-                                :type :start
-                                :payload
-                                {:query "subscription StartGame($id: String!) {
-                                         startGame(id: $id) {
-                                           message
-                                         }
-                                       }"
-                                 :variables {:id id}}})
-
-          (core.async/<!! (core.async/timeout 2000))
-
-          (testing "Subscription is being streamed to client"
-
-            (let [parse-startGame-message (fn [a]
-                                            (->> a :payload :data :startGame :message
-                                                 (map read-string)))
-
-                  ;; NOTE I (unfortunately) have to futz around with the timing of collecting messages
-                  {id0     :game.stock.tick/id
-                   t0-time :game.stock.tick/trade-time}
-                  (first (parse-startGame-message (test-util/<message!! 10000)))
-
-                  {id1     :game.stock.tick/id
-                   t1-time :game.stock.tick/trade-time}
-                  (first (parse-startGame-message (test-util/<message!! 5000)))]
-
-              (is (t/after?
-                    (c/from-long t1-time)
-                    (c/from-long t0-time)))
-
-              (testing "Two ticks streamed to client, got saved to the DB"
-
-                (let [conn (-> state/system :persistence/datomic :opts :conn)
-
-                      tick-id0 id0
-                      tick-id1 id1]
-
-                  (->> (d/q '[:find ?e
-                              :in $ [?tick-id ...]
-                              :where
-                              [?e :game.stock.tick/id ?tick-id]]
-                            (d/db conn)
-                            [tick-id0 tick-id1])
-                       count
-                       (= 2)
-                       is)))))))))
+          (= expected-result result))))))
 
 #_(deftest buy-stock-test
 
