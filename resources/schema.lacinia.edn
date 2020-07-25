@@ -35,7 +35,7 @@
   :StockTick
   {:fields
    {:stockTickId {:type (non-null String)}
-    :stockTickTime {:type (non-null Int)}
+    :stockTickTime {:type (non-null String)}
     :stockTickClose {:type (non-null Float)}
     :stockId {:type (non-null String)}
     :stockName {:type (non-null String)}}}

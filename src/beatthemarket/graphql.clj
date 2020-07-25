@@ -110,7 +110,7 @@
 
 ;; STREAMERS
 (defn stream-stock-ticks
-  [context {id :id :as args} source-stream]
+  [context {id :gameId :as args} source-stream]
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
@@ -121,41 +121,27 @@
                                                                    (d/db conn)
                                                                    email))
         id-uuid                                             (UUID/fromString id)
-        _                                                   (update-sink-fn! id-uuid source-stream)
-        {game            :game
-         control-channel :control-channel
-         :as             game-control}                                  (-> repl.state/system :game/games deref (get id-uuid))
-        game-user-subscription                              (-> game
-                                                                :game/users first
-                                                                :game.user/subscriptions first)
+        stock-tick-stream                                   (-> repl.state/system
+                                                                :game/games
+                                                                deref
+                                                                (get (UUID/fromString id))
+                                                                :stock-tick-stream)
+        cleanup-fn                                          (constantly (core.async/close! stock-tick-stream))]
 
-        game-loop-fn        identity
-        {{:keys               [mixer
-                               pause-chan
-                               input-chan
-                               output-chan] :as channel-controls}
-         :channel-controls} (game.games/start-game! conn user-db-id game-control game-loop-fn)]
+    (core.async/go-loop []
+      (when-let [stock-ticks (core.async/<! stock-tick-stream)]
+        (->> stock-ticks
+             (map #(clojure.set/rename-keys %
+                                            {:game.stock.tick/id :stockTickId
+                                             :game.stock.tick/trade-time :stockTickTime
+                                             :game.stock.tick/close :stockTickClose
+                                             :game.stock/id :stockId
+                                             :game.stock/name :stockName}))
+             source-stream)
+        (recur)))
 
-
-    ;; TODO
-    ;; [ok] Register channel-controls
-
-    ;; GQL responses no longer in a :message
-
-    ;; Make a control to :exit a game
-    ;; Make a control to :pause | :resume a game
-
-    ;; STREAMS
-    ;; put stock ticks into a channel
-    ;; put portfoliio updates into a channel
-    ;; put game events into a channel
-
-
-    (core.async/<!! (core.async/timeout 10000))
-    ;; (game.games/control-streams! control-channel channel-controls :exit)
-
-    ;; D Return a cleanup fn
-    (constantly nil)))
+    ;; Return a cleanup fn
+    cleanup-fn))
 
 (defn stream-portfolio-updates [context args source-stream]
   )

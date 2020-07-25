@@ -141,7 +141,7 @@
                  (= expected-component-game-keys)
                  is)))))))
 
-(deftest start-game-subscription-test
+(deftest start-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)]
@@ -192,6 +192,112 @@
               result (-> (test-util/<message!! 1000) :payload :data :startGame)]
 
           (= expected-result result))))))
+
+(deftest stream-stock-ticks-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)]
+
+
+    (testing "REST Login (not WebSocket) ; creates a user"
+
+      (test-util/login-assertion service id-token))
+
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame {
+                                       createGame {
+                                         id
+                                         stocks
+                                       }
+                                     }"}}))
+
+    (testing "Start a Game"
+
+      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+
+        (test-util/send-data {:id   987
+                              :type :start
+                              :payload
+                              {:query "mutation StartGame($id: String!) {
+                                         startGame(id: $id) {
+                                           message
+                                         }
+                                       }"
+                               :variables {:id id}}})
+
+        (util/pprint+identity (test-util/<message!! 1000))
+        (util/pprint+identity (test-util/<message!! 1000))
+
+        (testing "Stream Stock Ticks
+
+                  We should expect a structure that looks like this
+
+                  {:type \"data\"
+                   :id 987
+                   :payload
+                   {:data
+                    {:stockTicks
+                     [{:stockTickId \"32bd40bb-c4b3-4f07-9667-781c67d4e1f5\"
+                       :stockTickTime \"1595692766979\"
+                       :stockTickClose 149.02000427246094
+                       :stockId \"d658021f-ca4e-4e34-a6ee-2a9fc8bb253d\"
+                       :stockName \"Outside Church\"}
+                      {:stockTickId \"df09933d-5879-45e5-b038-40498d7ca198\"
+                       :stockTickTime \"1595692766979\"
+                       :stockTickClose 149.02000427246094
+                       :stockId \"942349f5-94ef-4ed3-8470-a9fb1123dbb8\"
+                       :stockName \"Sick Dough\"}
+                      {:stockTickId \"324e662b-24ac-4b0d-8f91-ebee01f029d9\"
+                       :stockTickTime \"1595692766979\"
+                       :stockTickClose 149.02000427246094
+                       :stockId \"97fa4791-47f8-42ff-8683-a235284de178\"
+                       :stockName \"Vigorous Grip\"}
+                      {:stockTickId \"cce40bb5-279e-47d6-a3c1-0e587c8e097b\"
+                       :stockTickTime \"1595692766979\"
+                       :stockTickClose 149.02000427246094
+                       :stockId \"e02e81a7-15c1-4c4e-996a-bc65c8de4a9a\"
+                       :stockName \"Color-blind Maintenance\"}]}}}"
+
+          (test-util/send-data {:id   987
+                                :type :start
+                                :payload
+                                {:query "subscription StockTicks($gameId: String!) {
+                                           stockTicks(gameId: $gameId) {
+                                             stockTickId
+                                             stockTickTime
+                                             stockTickClose
+                                             stockId
+                                             stockName
+                                         }
+                                       }"
+                                 :variables {:gameId id}}}))
+
+        (as-> (:game/games state/system) gs
+          (deref gs)
+          (get gs (UUID/fromString id))
+          (:control-channel gs)
+          (core.async/>!! gs :exit))
+        (Thread/sleep 1000)
+
+        (util/pprint+identity (test-util/<message!! 1000))
+
+        (let [expected-keys #{:stockTickId :stockTickTime :stockTickClose :stockId :stockName}
+              stockTicks (-> (test-util/<message!! 1000) :payload :data :stockTicks)]
+
+          (->> (map #(into #{} (keys %)) stockTicks)
+               (map #(= expected-keys %))
+               (every? true?)
+               is))))))
+
+
+;; > Stream Stock Ticks
+;; > Stream P/L, Account Balances
+;; > Stream Game Events
 
 #_(deftest buy-stock-test
 
