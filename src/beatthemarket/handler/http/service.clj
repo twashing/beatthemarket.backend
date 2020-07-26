@@ -266,7 +266,7 @@
 
     (default-service compiled-schema options')))
 
-(defn coerce-to-client [[time price]]
+#_(defn coerce-to-client [[time price]]
   (json/write-str (vector (c/to-long time) price)))
 
 #_(defn stream-stock-data []

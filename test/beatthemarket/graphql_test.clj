@@ -52,21 +52,38 @@
         (testing "Subsequent logins find an existing user"
 
           (let [expected-status 200
-                expected-body {:data {:login {:message "userexists"}}}
+                expected-body-message "userexists"
                 expected-headers {"Content-Type" "application/json"}
+
+                expected-user-keys #{:userEmail :userName :userExternal-uid :userAccounts}
+                expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount}
 
                 {status :status
                  body :body
                  headers :headers}
                 (response-for service
                               :post "/api"
-                              :body "{\"query\": \"mutation Login { login { message }} \" }"
+                              :body "{\"query\": \"mutation Login { login { message user }} \" }"
                               :headers {"Content-Type" "application/json"
                                         "Authorization" (format "Bearer %s" id-token)})
+                {{{user :user
+                   message :message} :login} :data :as body-parsed} (json/read-str body :key-fn keyword)
+                user-parsed (json/read-str user :key-fn keyword)]
 
-                body-parsed (json/read-str body :key-fn keyword)]
+
+            (->> (keys user-parsed)
+                 (into #{})
+                 (= expected-user-keys)
+                 is)
+
+            (->> user-parsed :userAccounts
+                 (map keys)
+                 (map #(into #{} %))
+                 (map #(= expected-user-account-keys %))
+                 (every? true?)
+                 is)
 
             (are [x y] (= x y)
               expected-status status
-              expected-body body-parsed
-              expected-headers headers)))))))
+              expected-headers headers
+              expected-body-message message)))))))

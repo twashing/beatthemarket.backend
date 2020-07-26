@@ -7,24 +7,56 @@
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
             [clojure.data.json :as json])
   (:import [java.util UUID]))
 
 
+(defn coerce-uuid->str [k v]
+
+  (if (= :accountId k)
+    (str v)
+    v))
+
+
 ;; RESOLVERS
 (defn resolve-login
   [context _ _]
 
-  (let [{{checked-authentication :checked-authentication}
+  (let [{{{email :email :as checked-authentication} :checked-authentication}
          :request}                                   context
         conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
-        {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)]
+        {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)
+
+        rename-user-key-map {:user/email :userEmail
+                             :user/name :userName
+                             :user/external-uid :userExternal-uid
+                             :user/accounts :userAccounts}
+
+        rename-user-accounts-key-map {:bookkeeping.account/id :accountId
+                                      :bookkeeping.account/name :accountName
+                                      :bookkeeping.account/balance :accountBalance
+                                      :bookkeeping.account/amount :accountAmount}
+
+        base-response {:user (->> [:user/email
+                                    :user/name
+                                    :user/external-uid
+                                    {:user/accounts [:bookkeeping.account/id
+                                                     :bookkeeping.account/name
+                                                     :bookkeeping.account/balance
+                                                     :bookkeeping.account/amount]}]
+                                 (persistence.core/entity-by-domain-id
+                                   conn :user/email email)
+                                 ffirst
+                                 (transform identity #(clojure.set/rename-keys % rename-user-key-map))
+                                 (transform [:userAccounts ALL] #(clojure.set/rename-keys % rename-user-accounts-key-map))
+                                 (#(json/write-str % :value-fn coerce-uuid->str)))}]
 
     (if (util/truthy? (and db-before db-after tx-data tempids))
-      {:message :useradded}
-      {:message :userexists})))
+      (assoc base-response :message :useradded)
+      (assoc base-response :message :userexists))))
 
 (defn resolve-create-game [context args _]
 

@@ -4,12 +4,13 @@
  {:LoginAck
   {:description "Possible return states from a login attempt"
    :fields
-   {:message {:type (non-null :LoginAckMessage)}}}
+   {:message {:type (non-null :LoginAckMessage)}
+    :user    {:type (non-null String)}}}
 
   :CreateGamekAck
   {:fields
-   {:id            {:type (non-null String)}
-    :stocks        {:type (list (non-null String))}
+   {:id     {:type (non-null String)}
+    :stocks {:type (list (non-null String))}
     ;; :stocks        {:type (non-null (list :Stock))}
     }}
 
@@ -34,11 +35,11 @@
 
   :StockTick
   {:fields
-   {:stockTickId {:type (non-null String)}
-    :stockTickTime {:type (non-null String)}
+   {:stockTickId    {:type (non-null String)}
+    :stockTickTime  {:type (non-null String)}
     :stockTickClose {:type (non-null Float)}
-    :stockId {:type (non-null String)}
-    :stockName {:type (non-null String)}}}
+    :stockId        {:type (non-null String)}
+    :stockName      {:type (non-null String)}}}
 
   :PortfolioUpdate
   {:fields
@@ -47,9 +48,9 @@
   :ProfitLoss
   {:description "Container for portfolio updates"
    :fields
-   {:profitLoss     {:type (non-null Float)}
-    :stockId        {:type (non-null String)}
-    :gameId         {:type (non-null String)}
+   {:profitLoss {:type (non-null Float)}
+    :stockId    {:type (non-null String)}
+    :gameId     {:type (non-null String)}
     ;; :profitLossType {:type (non-null :ProfitLossType)}
     }}
 
@@ -66,35 +67,35 @@
   {:description "Game events"
    :fields
    {:message {:type (non-null String)}}
-   #_{:type {:type (non-null :GameEventType)}
-    :gameId {:type (non-null String)}
-    :message {:type (non-null :GameEventMessage)}}}
+   #_           {:type    {:type (non-null :GameEventType)}
+                 :gameId  {:type (non-null String)}
+                 :message {:type (non-null :GameEventMessage)}}}
 
   :LevelTimer
   {:description "The amount of time a user has left in a given level"
    :fields
-   {:level {:type (non-null Int)}
+   {:level         {:type (non-null Int)}
     :timeRemaining {:type (non-null Int)}}}
 
   :LevelStatus
   {:description "Tells user if they've won or lost a level"
    :fields
-   {:level {:type (non-null Int)}
-    :status {:type (non-null :LevelStatusMessage)}
+   {:level      {:type (non-null Int)}
+    :status     {:type (non-null :LevelStatusMessage)}
     :profitLoss {:type (non-null Float)}}}}
 
 
  ;; //
  :enums
  {:LoginAckMessage
-  {:values      [:useradded :userexists]}
+  {:values [:useradded :userexists]}
 
   :StartGameAckMessage
   {:descriptiuon "Expected return value when starting a game"
-   :values      [:gamestarted]}
+   :values       [:gamestarted]}
 
   :ProfitLossType
-  {:values      [:running :realized]}
+  {:values [:running :realized]}
 
   :GameEventType
   {:values [:control :levelStatus :levelTimer]}
@@ -142,16 +143,16 @@
  ;; //
  :queries
  {:accountBalances
-  {:type (list (non-null :AccountBalance))
-   :args {:gameId {:type (non-null String)}}
+  {:type    (list (non-null :AccountBalance))
+   :args    {:gameId {:type (non-null String)}}
    :resolve :resolve-account-balances}
 
   :stockHistory
-  {:type (list (non-null :StockTick))
-   :args {:gameId {:type (non-null String)}
-          :stockId {:type (non-null String)}
-          :range {:type (list (non-null Int))}}
-   :resolve :resolve-stock-history
+  {:type        (list (non-null :StockTick))
+   :args        {:gameId  {:type (non-null String)}
+                 :stockId {:type (non-null String)}
+                 :range   {:type (list (non-null Int))}}
+   :resolve     :resolve-stock-history
    :description "Called after game is created (where stocks are created)"}}
 
 
@@ -159,9 +160,9 @@
  :mutations
  {
   :login
-  {:type    :LoginAck
+  {:type        :LoginAck
    :description "Logs a user in, using Firebase's ID JWT"
-   :resolve :resolve-login}
+   :resolve     :resolve-login}
 
   :createGame
   {:type        :CreateGamekAck
@@ -195,13 +196,13 @@
    {:gameId {:type (non-null String)}}}
 
   :portfolioUpdates
-  {:type  :PortfolioUpdate
+  {:type   :PortfolioUpdate
    :stream :stream-portfolio-updates
    :args
    {:gameId {:type (non-null String)}}}
 
   :gameEvents
-  {:type  :GameEvent
+  {:type   :GameEvent
    :stream :stream-game-events
    :args
    {:gameId {:type (non-null String)}}}}}
