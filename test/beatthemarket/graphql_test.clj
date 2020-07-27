@@ -55,7 +55,7 @@
                 expected-body-message "userexists"
                 expected-headers {"Content-Type" "application/json"}
 
-                expected-user-keys #{:userEmail :userName :userExternal-uid :userAccounts}
+                expected-user-keys #{:userEmail :userName :userExternalUid :userAccounts}
                 expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount}
 
                 {status :status

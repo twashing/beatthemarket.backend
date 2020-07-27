@@ -199,14 +199,14 @@
 
   ([conn user-entity sink-fn]
 
-   (initialize-game! conn user-entity sink-fn (->data-sequence) nil nil nil))
+   (initialize-game! conn user-entity sink-fn :game-level/one (->data-sequence) nil nil nil))
 
-  ([conn user-entity sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
+  ([conn user-entity sink-fn game-level data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
 
    (let [stocks                (game.core/generate-stocks! 4)
          {game-id :game/id
           stocks  :game/stocks
-          :as     game}        (game.core/initialize-game! conn user-entity stocks)
+          :as     game}        (game.core/initialize-game! conn user-entity game-level stocks)
          stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
          stock-tick-by-id      (fn [id stock-ticks]
                                  (first (filter #(= id (:game.stock/id %))
@@ -281,11 +281,15 @@
 (defn create-game!
 
   ([conn user-id sink-fn]
-   (create-game! conn user-id sink-fn (->data-sequence) nil nil nil))
+   (create-game! conn user-id sink-fn :game-level/one))
 
-  ([conn user-id sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
+  ([conn user-id sink-fn game-level]
+   (create-game! conn user-id sink-fn game-level (->data-sequence) nil nil nil))
+
+  ([conn user-id sink-fn game-level data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
    (let [user-entity (hash-map :db/id user-id)]
-     (initialize-game! conn user-entity sink-fn data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf))))
+     (initialize-game! conn user-entity sink-fn game-level
+                       data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf))))
 
 ;; START
 (defn game->new-game-message [game user-id]

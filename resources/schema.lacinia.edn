@@ -67,9 +67,9 @@
   {:description "Game events"
    :fields
    {:message {:type (non-null String)}}
-   #_           {:type    {:type (non-null :GameEventType)}
-                 :gameId  {:type (non-null String)}
-                 :message {:type (non-null :GameEventMessage)}}}
+   #_{:type    {:type (non-null :GameEventType)}
+      :gameId  {:type (non-null String)}
+      :message {:type (non-null :GameEventMessage)}}}
 
   :LevelTimer
   {:description "The amount of time a user has left in a given level"
@@ -167,7 +167,9 @@
   :createGame
   {:type        :CreateGamekAck
    :description "Creates a new game"
-   :resolve     :resolve-create-game}
+   :resolve     :resolve-create-game
+   :args
+   {:gameLevel {:type (non-null String)}}}
 
   :startGame
   {:type        :StartGameAck

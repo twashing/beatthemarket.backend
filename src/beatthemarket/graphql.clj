@@ -32,7 +32,7 @@
 
         rename-user-key-map {:user/email :userEmail
                              :user/name :userName
-                             :user/external-uid :userExternal-uid
+                             :user/external-uid :userExternalUid
                              :user/accounts :userAccounts}
 
         rename-user-accounts-key-map {:bookkeeping.account/id :accountId
@@ -58,7 +58,20 @@
       (assoc base-response :message :useradded)
       (assoc base-response :message :userexists))))
 
-(defn resolve-create-game [context args _]
+(def game-level-map
+  {"one" :game-level/one
+   "two" :game-level/two
+   "three" :game-level/three
+   "four" :game-level/four
+   "five" :game-level/five
+   "six" :game-level/six
+   "seven" :game-level/seven
+   "eight" :game-level/eight
+   "nine" :game-level/nine
+   "ten" :game-level/ten
+   "market" :game-level/market})
+
+(defn resolve-create-game [context {gameLevel :gameLevel :as args} _]
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
@@ -69,10 +82,12 @@
                                                                    (d/db conn)
                                                                    email))
 
+        mapped-game-level (get game-level-map gameLevel)
+
         ;; NOTE sink-fn updates once we start to stream a game
         sink-fn                identity
         {{game-id :game/id
-          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn)]
+          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level)]
 
     (->> (game.games/game->new-game-message game user-db-id)
          (transform [:stocks ALL] #(json/write-str (dissoc % :db/id))))))

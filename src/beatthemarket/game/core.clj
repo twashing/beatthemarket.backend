@@ -61,14 +61,18 @@
 
   ([conn user-entity]
 
-   (initialize-game! conn user-entity (->> (name-generator/generate-names 4)
-                                           (map (juxt :stock-name :stock-symbol))
-                                           (map #(apply ->stock %))
-                                           (map persistence.core/bind-temporary-id))))
-  ([conn user-entity stocks]
+   (initialize-game! conn user-entity :game-level/one))
 
-   (let [game-level :game-level/one
-         game       (->game game-level stocks user-entity)]
+  ([conn user-entity game-level]
+
+   (initialize-game! conn user-entity game-level (->> (name-generator/generate-names 4)
+                                                      (map (juxt :stock-name :stock-symbol))
+                                                      (map #(apply ->stock %))
+                                                      (map persistence.core/bind-temporary-id))))
+
+  ([conn user-entity game-level stocks]
+
+   (let [game (->game game-level stocks user-entity)]
 
      (as-> game gm
        (persistence.datomic/transact-entities! conn gm)

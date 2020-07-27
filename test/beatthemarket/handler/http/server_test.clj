@@ -76,7 +76,8 @@
 (deftest create-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)]
+        id-token (test-util/->id-token)
+        gameLevel "one"]
 
 
     (testing "REST Login (not WebSocket) ; creates a user"
@@ -89,12 +90,13 @@
       (test-util/send-data {:id   987
                             :type :start
                             :payload
-                            {:query "mutation CreateGame {
-                                       createGame {
+                            {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks
                                        }
-                                     }"}}))
+                                     }"
+                             :variables {:gameLevel gameLevel}}}))
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
@@ -144,7 +146,8 @@
 (deftest start-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)]
+        id-token (test-util/->id-token)
+        gameLevel "one"]
 
 
     (testing "REST Login (not WebSocket) ; creates a user"
@@ -157,12 +160,13 @@
       (test-util/send-data {:id   987
                             :type :start
                             :payload
-                            {:query "mutation CreateGame {
-                                       createGame {
+                            {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks
                                        }
-                                     }"}}))
+                                     }"
+                             :variables {:gameLevel gameLevel}}}))
 
     (testing "Start a Game"
 
@@ -196,7 +200,8 @@
 (deftest stream-stock-ticks-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)]
+        id-token (test-util/->id-token)
+        gameLevel "one"]
 
 
     (testing "REST Login (not WebSocket) ; creates a user"
@@ -209,12 +214,13 @@
       (test-util/send-data {:id   987
                             :type :start
                             :payload
-                            {:query "mutation CreateGame {
-                                       createGame {
+                            {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks
                                        }
-                                     }"}}))
+                                     }"
+                             :variables {:gameLevel gameLevel}}}))
 
     (testing "Start a Game"
 
@@ -317,19 +323,21 @@
 (deftest buy-stock-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)]
+        id-token (test-util/->id-token)
+        gameLevel "one"]
 
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
                           :type :start
                           :payload
-                          {:query "mutation CreateGame {
-                                       createGame {
+                          {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks
                                        }
-                                     }"}})
+                                     }"
+                           :variables {:gameLevel gameLevel}}})
 
     (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
@@ -401,19 +409,21 @@
 (deftest sell-stock-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)]
+        id-token (test-util/->id-token)
+        gameLevel "one"]
 
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
                           :type :start
                           :payload
-                          {:query "mutation CreateGame {
-                                       createGame {
+                          {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks
                                        }
-                                     }"}})
+                                     }"
+                           :variables {:gameLevel gameLevel}}})
 
     (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
@@ -502,19 +512,21 @@
 (deftest stream-portfolio-updates-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)]
+        id-token (test-util/->id-token)
+        gameLevel "one"]
 
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
                           :type :start
                           :payload
-                          {:query "mutation CreateGame {
-                                       createGame {
+                          {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks
                                        }
-                                     }"}})
+                                     }"
+                           :variables {:gameLevel gameLevel}}})
 
     (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
@@ -599,19 +611,21 @@
 (deftest stream-game-events-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)]
+        id-token (test-util/->id-token)
+        gameLevel "one"]
 
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
                           :type :start
                           :payload
-                          {:query "mutation CreateGame {
-                                       createGame {
+                          {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks
                                        }
-                                     }"}})
+                                     }"
+                           :variables {:gameLevel gameLevel}}})
 
     (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
