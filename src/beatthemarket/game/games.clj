@@ -199,13 +199,16 @@
 
   ([conn user-entity sink-fn]
 
-   (initialize-game! conn user-entity sink-fn :game-level/one (->data-sequence) nil nil nil))
+   (initialize-game! conn user-entity sink-fn :game-level/one (->data-sequence) {}))
 
-  ([conn user-entity sink-fn game-level data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
+  ([conn user-entity sink-fn game-level data-sequence {:keys [profit-loss
+                                                              stream-stock-tick-xf stream-portfolio-update-xf
+                                                              collect-profit-loss-xf check-level-complete-xf]}]
 
    (let [stocks                (game.core/generate-stocks! 4)
          {game-id :game/id
           stocks  :game/stocks
+          {saved-game-level :db/ident} :game/level
           :as     game}        (game.core/initialize-game! conn user-entity game-level stocks)
          stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
          stock-tick-by-id      (fn [id stock-ticks]
@@ -219,14 +222,24 @@
          transact-xf             (fn [data]
                                    (beatthemarket.persistence.datomic/transact-entities! conn data)
                                    data)
+         {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
+                                                       (get saved-game-level))
+
+         current-level (atom {:level saved-game-level
+                              :profit-threshold profit-threshold
+                              :lose-threshold lose-threshold})
+
          game-control
          {:game                  game
-          :profit-loss           {}
+          :profit-loss           (or {(-> stocks first :game.stock/id) profit-loss}
+                                     {})
           :stocks-with-tick-data stocks-with-tick-data
 
           :paused?          (atom false)
           :tick-sleep-atom  (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
           :level-timer-atom (atom (-> integrant.repl.state/config :game/game :level-timer-sec))
+          :current-level    current-level
+
 
           :stock-tick-stream       stock-tick-stream
           :portfolio-update-stream portfolio-update-stream
@@ -243,6 +256,9 @@
                                            (let [recalculate-perstock-fn
                                                  (fn [profit-loss]
                                                    (reduce-kv (fn [m k v]
+                                                                ;; (util/pprint+identity [k v])
+                                                                ;; (trace k)
+                                                                ;; (util/pprint+identity stock-ticks)
                                                                 (if-let [{price :game.stock.tick/close}
                                                                          (stock-tick-by-id k stock-ticks)]
                                                                   (assoc
@@ -261,15 +277,55 @@
                                              (->> updated-profit-loss-calculations
                                                   (game.persistence/track-profit-loss-wholesale! game-id)
                                                   (#(get % game-id))
-                                                  :profit-loss))))
+                                                  :profit-loss
+                                                  ))))
           :collect-profit-loss-xf     (or collect-profit-loss-xf
                                           (map (fn [profit-loss] (game.calculation/collect-running-profit-loss game-id profit-loss))))
           :transact-profit-loss-xf    (map identity) ;; (map transact-xf)
           :stream-portfolio-update-xf (or stream-portfolio-update-xf
                                           (map (fn [running-profit-loss]
-                                                 ;; (println (format ">> STREAM portfolio-update / %s" running-profit-loss))
+
+                                                 ;; (println (format ">> STREAM portfolio-update /"))
+                                                 ;; (util/pprint+identity running-profit-loss)
+
                                                  (core.async/go (core.async/>! portfolio-update-stream running-profit-loss))
                                                  running-profit-loss)))
+
+          :check-level-complete-xf (or check-level-complete-xf
+                                       (map (fn [profit-loss]
+
+                                              ;; (println (format ">> CHECK level-complete /"))
+
+                                              (let [{profit-threshold :profit-threshold
+                                                     lose-threshold :lose-threshold
+                                                     level :level} (deref current-level)
+
+                                                    running-pl (->> profit-loss
+                                                                    (filter #(= :running-profit-loss (:profit-loss-type %)))
+                                                                    (reduce #(+ %1 (:profit-loss %2)) 0.0))
+
+                                                    realized-pl (->> profit-loss
+                                                                     (filter #(= :realized-profit-loss (:profit-loss-type %)))
+                                                                     (reduce #(+ %1 (:profit-loss %2)) 0.0))
+
+                                                    running+realized-pl (+ running-pl realized-pl)
+
+                                                    profit-threshold-met? (> running+realized-pl profit-threshold)
+                                                    lose-threshold-met? (< running+realized-pl lose-threshold)
+
+                                                    game-event-message (cond-> {:level level
+                                                                                :profit-loss running+realized-pl}
+                                                                         profit-threshold-met? (assoc :message :win)
+                                                                         lose-threshold-met? (assoc :message :lose))]
+
+                                                (util/pprint+identity profit-loss)
+                                                (util/pprint+identity (> running+realized-pl profit-threshold))
+                                                (util/pprint+identity [running+realized-pl profit-threshold])
+
+                                                (when (:message game-event-message)
+                                                  (core.async/go (core.async/>! game-event-stream game-event-message))))
+
+                                              profit-loss)))
 
           :control-channel (chan 1)
           :close-sink-fn   (partial sink-fn nil)
@@ -284,12 +340,11 @@
    (create-game! conn user-id sink-fn :game-level/one))
 
   ([conn user-id sink-fn game-level]
-   (create-game! conn user-id sink-fn game-level (->data-sequence) nil nil nil))
+   (create-game! conn user-id sink-fn game-level (->data-sequence) {}))
 
-  ([conn user-id sink-fn game-level data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf]
+  ([conn user-id sink-fn game-level data-sequence opts]
    (let [user-entity (hash-map :db/id user-id)]
-     (initialize-game! conn user-entity sink-fn game-level
-                       data-sequence stream-stock-tick-xf stream-portfolio-update-xf collect-profit-loss-xf))))
+     (initialize-game! conn user-entity sink-fn game-level data-sequence opts))))
 
 ;; START
 (defn game->new-game-message [game user-id]
@@ -459,9 +514,11 @@
        (map partitioned-entities->transaction-entities)))
 
 (defn chain-control-pipeline [{:keys [game stocks-with-tick-data
+
                                       stream-stock-tick-xf calculate-profit-loss-xf
                                       collect-profit-loss-xf stream-portfolio-update-xf
-                                      transact-tick-xf transact-profit-loss-xf]}
+                                      transact-tick-xf transact-profit-loss-xf
+                                      check-level-complete-xf]}
                               {:keys [conn user-db-id]}]
 
   (let [concurrent              1
@@ -472,7 +529,7 @@
         ticks-to                (core.async/chan plbuffer stream-stock-tick-xf)       ;; NOTE stream tick
         profit-loss-to          (core.async/chan plbuffer collect-profit-loss-xf)
         profit-loss-transact-to (core.async/chan plbuffer stream-portfolio-update-xf) ;; NOTE stream PL
-        ]
+        check-level-complete-to (core.async/chan plbuffer)]
 
     ;; P/L
     (core.async/onto-chan ticks-from input-seq)
@@ -480,7 +537,8 @@
     (core.async/pipeline-blocking concurrent ticks-to                transact-tick-xf         ticks-from)
     (core.async/pipeline-blocking concurrent profit-loss-to          calculate-profit-loss-xf ticks-to)
     (core.async/pipeline-blocking concurrent profit-loss-transact-to transact-profit-loss-xf  profit-loss-to)
-    profit-loss-transact-to))
+    (core.async/pipeline-blocking concurrent check-level-complete-to check-level-complete-xf  profit-loss-transact-to)
+    check-level-complete-to))
 
 (defn- format-remaining-time [{:keys [remaining-in-minutes remaining-in-seconds]}]
   (format "%s:%s" remaining-in-minutes remaining-in-seconds))
@@ -511,7 +569,7 @@
   (core.async/go (core.async/>!! game-event-stream {:message control})))
 
 (defn run-game! [{:keys [control-channel
-                         profit-loss-transact-to
+                         check-level-complete-to
                          game-event-stream]} pause-atom tick-sleep-atom level-timer-atom]
 
   (let [start (t/now)]
@@ -542,7 +600,7 @@
                                               (println (format "Win %s" (format-remaining-time remaining))))
                                [_ :lose _] (do (handle-control-event game-event-stream controlv remaining)
                                                (println (format "Lose %s" (format-remaining-time remaining))))
-                               [_ _ false] (let [v (<! profit-loss-transact-to)]
+                               [_ _ false] (let [v (<! check-level-complete-to)]
 
                                              ;; TODO stream
                                              ;; :stock-tick
@@ -557,7 +615,7 @@
         (when (and nowA endA)
           (recur nowA endA)))))
 
-  profit-loss-transact-to)
+  check-level-complete-to)
 
 (defn start-game! [conn user-db-id game-control]
 
@@ -568,11 +626,9 @@
 
     (as-> game-control gc
       (chain-control-pipeline gc {:conn conn :user-db-id user-db-id})
-      (assoc game-control :profit-loss-transact-to gc)
+      (assoc game-control :check-level-complete-to gc)
       (run-game! gc paused? tick-sleep-atom level-timer-atom))
 
     ;; NOTE
     (core.async/go
-      (core.async/>! control-channel :exit))
-
-    ))
+      (core.async/>! control-channel :exit))))
