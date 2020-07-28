@@ -120,12 +120,12 @@
                   :stocks-with-tick-data
                   :profit-loss
 
-                  :transact-profit-loss-xf
-                  :stream-portfolio-update-xf
-                  :calculate-profit-loss-xf
-                  :collect-profit-loss-xf
-                  :transact-tick-xf
-                  :stream-stock-tick-xf
+                  :transact-profit-loss-mappingfn
+                  :stream-portfolio-update-mappingfn
+                  :calculate-profit-loss-mappingfn
+                  :collect-profit-loss-mappingfn
+                  :transact-tick-mappingfn
+                  :stream-stock-tick-mappingfn
 
                   :close-sink-fn
                   :sink-fn

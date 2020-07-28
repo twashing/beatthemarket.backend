@@ -40,13 +40,13 @@
                                        :level-timer-atom
                                        :tick-sleep-atom
 
-                                       :transact-tick-xf
-                                       :stream-stock-tick-xf
-                                       :calculate-profit-loss-xf
-                                       :transact-profit-loss-xf
-                                       :stream-portfolio-update-xf
-                                       :collect-profit-loss-xf
-                                       :check-level-complete-xf
+                                       :transact-tick-mappingfn
+                                       :stream-stock-tick-mappingfn
+                                       :calculate-profit-loss-mappingfn
+                                       :transact-profit-loss-mappingfn
+                                       :stream-portfolio-update-mappingfn
+                                       :collect-profit-loss-mappingfn
+                                       :check-level-complete-mappingfn
 
                                        :portfolio-update-stream
                                        :stock-tick-stream
@@ -71,12 +71,12 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
-        opts {:stream-stock-tick-xf       (map (fn [a]
+        opts {:stream-stock-tick-mappingfn       (map (fn [a]
                                                  (swap! test-stock-ticks
                                                         (fn [b]
                                                           (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                             (conj b stock-ticks))))))
-              :stream-portfolio-update-xf (map (fn [a]
+              :stream-portfolio-update-mappingfn (map (fn [a]
                                                  (swap! test-portfolio-updates (fn [b] (conj b a)))))}
 
         {{gameId     :game/id
@@ -88,11 +88,11 @@
     (testing "Chaining the control pipeline, produces the correct value"
 
       (let [data-sequence-count     (count data-sequence-B)
-            check-level-complete-to (game.games/chain-control-pipeline game-control {:conn conn :user-db-id result-user-id})]
+            control-chain (game.games/inputs->control-chain game-control {:conn conn :user-db-id result-user-id})]
 
         (run! (fn [_]
                 (core.async/go
-                  (core.async/<! check-level-complete-to)))
+                  (core.async/<! control-chain)))
               data-sequence-B)
 
         (Thread/sleep 1000)
@@ -185,12 +185,12 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
-        opts {:stream-stock-tick-xf       (map (fn [a]
+        opts {:stream-stock-tick-mappingfn       (map (fn [a]
                                                 (swap! test-stock-ticks
                                                        (fn [b]
                                                          (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                            (conj b stock-ticks))))))
-              :stream-portfolio-update-xf (map (fn [a]
+              :stream-portfolio-update-mappingfn (map (fn [a]
                                                 (swap! test-portfolio-updates (fn [b] (conj b a)))))}
 
         {{gameId     :game/id
@@ -199,7 +199,7 @@
          :as              game-control}
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
 
-        check-level-complete-to (game.games/start-game! conn result-user-id game-control)
+        control-chain (game.games/start-game! conn result-user-id game-control)
         game-user-subscription  (-> game
                                     :game/users first
                                     :game.user/subscriptions first)
@@ -209,7 +209,7 @@
     ;; B
     (run! (fn [_]
             (core.async/go
-              (core.async/<! check-level-complete-to)))
+              (core.async/<! control-chain)))
           data-sequence-B)
     (Thread/sleep 1000)
 
@@ -289,12 +289,12 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
-        opts {:stream-stock-tick-xf       (map (fn [a]
+        opts {:stream-stock-tick-mappingfn       (map (fn [a]
                                                  (swap! test-stock-ticks
                                                         (fn [b]
                                                           (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                             (conj b stock-ticks))))))
-              :stream-portfolio-update-xf (map (fn [a]
+              :stream-portfolio-update-mappingfn (map (fn [a]
                                                  (swap! test-portfolio-updates (fn [b] (conj b a)))))}
 
         {{gameId     :game/id
@@ -303,7 +303,7 @@
          :as                          game-control}
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
 
-        check-level-complete-to (game.games/start-game! conn result-user-id game-control)
+        control-chain (game.games/start-game! conn result-user-id game-control)
         game-user-subscription  (-> game
                                     :game/users first
                                     :game.user/subscriptions first)
@@ -313,7 +313,7 @@
     ;; B
     (run! (fn [_]
             (core.async/go
-              (core.async/<! check-level-complete-to)))
+              (core.async/<! control-chain)))
           data-sequence-B)
     (Thread/sleep 1000)
 
@@ -387,15 +387,16 @@
                                userId :userId
                                gameId :gameId
                                stockId :stockId}
-                              {tickId      :game.stock.tick/id
-                               tickPrice   :game.stock.tick/close
-                               op          :op
-                               stockAmount :stockAmount}]
+                              {{tickId      :game.stock.tick/id
+                                tickPrice   :game.stock.tick/close
+                                op          :op
+                                stockAmount :stockAmount} :local-transact-input :as v}]
 
   (case op
     :buy (game.games/buy-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
     :sell (game.games/sell-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
-    :noop))
+    :noop)
+  v)
 
 (deftest calculate-profit-loss-single-buy-sell-test
 
@@ -421,12 +422,12 @@
           test-stock-ticks       (atom [])
           test-portfolio-updates (atom [])
 
-          opts {:stream-stock-tick-xf       (map (fn [a]
+          opts {:stream-stock-tick-mappingfn       (map (fn [a]
                                                    (swap! test-stock-ticks
                                                           (fn [b]
                                                             (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                               (conj b stock-ticks))))))
-                :stream-portfolio-update-xf (map (fn [a]
+                :stream-portfolio-update-mappingfn (map (fn [a]
                                                    (swap! test-portfolio-updates (fn [b] (conj b a)))))}
 
           {{gameId     :game/id
@@ -435,7 +436,7 @@
            :as                          game-control}
           (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-          check-level-complete-to (game.games/start-game! conn result-user-id game-control)
+          control-chain (game.games/start-game! conn result-user-id game-control)
           game-user-subscription  (-> game
                                       :game/users first
                                       :game.user/subscriptions first)
@@ -447,7 +448,7 @@
 
       (run! (fn [_]
               (core.async/go
-                (core.async/<! check-level-complete-to)))
+                (core.async/<! control-chain)))
             data-sequence-A)
       (Thread/sleep 1000)
 
@@ -517,12 +518,12 @@
             test-stock-ticks       (atom [])
             test-portfolio-updates (atom [])
 
-            opts {:stream-stock-tick-xf       (map (fn [a]
+            opts {:stream-stock-tick-mappingfn       (map (fn [a]
                                                      (swap! test-stock-ticks
                                                             (fn [b]
                                                               (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                                 (conj b stock-ticks))))))
-                  :stream-portfolio-update-xf (map (fn [a]
+                  :stream-portfolio-update-mappingfn (map (fn [a]
                                                      (swap! test-portfolio-updates (fn [b] (conj b a)))))}
 
             {{gameId     :game/id
@@ -531,7 +532,7 @@
              :as                          game-control}
             (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-            check-level-complete-to (game.games/start-game! conn result-user-id game-control)
+            control-chain (game.games/start-game! conn result-user-id game-control)
             game-user-subscription  (-> game
                                         :game/users first
                                         :game.user/subscriptions first)
@@ -543,7 +544,7 @@
 
         (run! (fn [_]
                 (core.async/go
-                  (core.async/<! check-level-complete-to)))
+                  (core.async/<! control-chain)))
               data-sequence-A)
         (Thread/sleep 1000)
 
@@ -634,12 +635,12 @@
             test-stock-ticks       (atom [])
             test-portfolio-updates (atom [])
 
-            opts {:stream-stock-tick-xf       (map (fn [a]
+            opts {:stream-stock-tick-mappingfn       (map (fn [a]
                                                      (swap! test-stock-ticks
                                                             (fn [b]
                                                               (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                                 (conj b stock-ticks))))))
-                  :stream-portfolio-update-xf (map (fn [a]
+                  :stream-portfolio-update-mappingfn (map (fn [a]
                                                      (swap! test-portfolio-updates (fn [b] (conj b a)))))}
 
             {{gameId     :game/id
@@ -648,7 +649,7 @@
              :as                          game-control}
             (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-            check-level-complete-to (game.games/start-game! conn result-user-id game-control)
+            control-chain (game.games/start-game! conn result-user-id game-control)
             game-user-subscription  (-> game
                                         :game/users first
                                         :game.user/subscriptions first)
@@ -660,7 +661,7 @@
 
         (run! (fn [_]
                 (core.async/go
-                  (core.async/<! check-level-complete-to)))
+                  (core.async/<! control-chain)))
               data-sequence-A)
         (Thread/sleep 1000)
 
@@ -905,7 +906,7 @@
           profit-loss-history     (atom [])
 
           kludgeGameId* (atom nil)
-          opts          {:collect-profit-loss-xf (map (fn [profit-loss]
+          opts          {:collect-profit-loss-mappingfn (map (fn [profit-loss]
                                                         (swap! profit-loss-history #(conj % profit-loss))
                                                         (game.calculation/collect-running-profit-loss @kludgeGameId* profit-loss)))}
 
@@ -920,7 +921,7 @@
 
 
           ;; D start-game!
-          check-level-complete-to (game.games/start-game! conn result-user-id game-control)
+          control-chain (game.games/start-game! conn result-user-id game-control)
           game-user-subscription  (-> game
                                       :game/users first
                                       :game.user/subscriptions first)
@@ -949,7 +950,7 @@
       ;; G Run game
       (run! (fn [_]
               (core.async/go
-                (core.async/<! check-level-complete-to)))
+                (core.async/<! control-chain)))
             data-sequence-A)
       (Thread/sleep 2000)
 
@@ -1006,7 +1007,7 @@
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
 
         portfolio-update-result (atom [])
-        check-level-complete-to (game.games/start-game! conn result-user-id game-control)
+        control-chain (game.games/start-game! conn result-user-id game-control)
         stockId                 (-> game
                                     :game/users first
                                     :game.user/subscriptions first
@@ -1022,7 +1023,7 @@
     ;; B
     (run! (fn [_]
             (core.async/go
-              (core.async/<! check-level-complete-to)))
+              (core.async/<! control-chain)))
           data-sequence-B)
 
     ;; C
@@ -1090,7 +1091,10 @@
                  (every? #(= #{:game-id :stock-id :profit-loss-type :profit-loss} %))
                  is)))))))
 
-(deftest check-level-complete-test
+(defn narrow-stock-ticks [stock-id stock-ticks]
+  (first (filter (fn [{id :game.stock/id}] (= id stock-id)) stock-ticks)))
+
+(deftest check-level-win-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -1105,43 +1109,100 @@
         ;; C create-game!
         sink-fn    identity
         game-level :game-level/one
-
-
-        test-stock-ticks       (atom [])
-        test-portfolio-updates (atom [])
-
-        opts {:profit-loss                updated-profit-loss
-              ;; :stream-stock-tick-xf       (map (fn [a]
-              ;;                                    (swap! test-stock-ticks
-              ;;                                           (fn [b]
-              ;;                                             (let [stock-ticks (game.games/group-stock-tick-pairs a)]
-              ;;                                               (conj b stock-ticks))))))
-              ;; :stream-portfolio-update-xf (map (fn [a]
-              ;;                                    (swap! test-portfolio-updates (fn [b] (conj b a)))))
-              }
-
         {{gameId     :game/id
           game-db-id :db/id :as game} :game
          control-channel              :control-channel
+         game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A {})
 
-        check-level-complete-to (game.games/start-game! conn result-user-id game-control)
-        game-user-subscription  (-> game
-                                    :game/users first
-                                    :game.user/subscriptions first)
-        stockId                 (:game.stock/id game-user-subscription)
-        opts                    {:conn    conn
-                                 :userId  userId
-                                 :gameId  gameId
-                                 :stockId stockId}]
+        iterations             (game.games/start-workbench! conn result-user-id game-control)
+        game-user-subscription (-> game
+                                   :game/users first
+                                   :game.user/subscriptions first)
+        stockId                (:game.stock/id game-user-subscription)
+        opts                   {:conn    conn
+                                :userId  userId
+                                :gameId  gameId
+                                :stockId stockId}
+        ops                    [{:op :buy :stockAmount 75}
+                                {:op :buy :stockAmount 25}
+                                {:op :sell :stockAmount 13}]]
 
-    ;; (pprint (:profit-loss game-control))
-    (run! (fn [_]
-            (core.async/go
-              (core.async/<! check-level-complete-to)))
-            data-sequence-A)
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
 
-    (Thread/sleep 1000)
+                ;; (-> vs :profit-loss util/pprint+identity)
+                (let [stock-tick (narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              iterations
+              ops)
+         (map #(local-transact-stock! opts %))
+         (take 3)
+         doall)
 
-    (is false)))
+    (let [expected-count   1
+          expected-message {:level :game-level/one :profit-loss 1750.0 :message :win}
+          result-messages  (test-util/to-coll game-event-stream)]
+
+      (are [x y] (= x y)
+        expected-count   (count result-messages)
+        expected-message (first result-messages)))))
+
+(deftest check-level-lose-test
+
+  (let [;; A
+        conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid} (test-util/generate-user! conn)
+
+        ;; B
+        tick-length     12
+        data-sequence-A (take tick-length (iterate (partial - 10) 100.00))
+
+
+        ;; C create-game!
+        sink-fn    identity
+        game-level :game-level/one
+        {{gameId     :game/id
+          game-db-id :db/id :as game} :game
+         control-channel              :control-channel
+         game-event-stream            :game-event-stream
+         :as                          game-control}
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A {})
+
+        iterations             (game.games/start-workbench! conn result-user-id game-control)
+        game-user-subscription (-> game
+                                   :game/users first
+                                   :game.user/subscriptions first)
+        stockId                (:game.stock/id game-user-subscription)
+        opts                   {:conn    conn
+                                :userId  userId
+                                :gameId  gameId
+                                :stockId stockId}
+        ops                    [{:op :buy :stockAmount 50}
+                                {:op :noop}
+                                {:op :sell :stockAmount 50}]]
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+                (let [stock-tick (narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              iterations
+              ops)
+         (map #(local-transact-stock! opts %))
+         (take 3)
+         ;; util/pprint+identity
+         doall)
+
+    (let [expected-count   1
+          expected-message {:level :game-level/one :profit-loss -9500.0 :message :lose}
+          result-messages  (test-util/to-coll game-event-stream)]
+
+      (are [x y] (= x y)
+        expected-count (count result-messages)
+        expected-message (first result-messages)))))
+
+(comment
+
+  (def first+next (juxt first rest))
+  (def f          (fn [[x xs]] (first+next xs)))
+  (def one (iterate f (first+next (range)))))

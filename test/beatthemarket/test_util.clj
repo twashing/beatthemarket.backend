@@ -10,7 +10,7 @@
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.repl.state :as repl.state]
             [clojure.tools.logging :as log]
-            [clojure.core.async :refer [timeout alt!! chan put!]]
+            [clojure.core.async :as core.async :refer [timeout alt!! chan put!]]
             [clojure.data.json :as json]
             [clj-http.client :as http]
             [gniazdo.core :as g]
@@ -266,3 +266,13 @@
 
 (defmethod persistence.datomic/close-db-connection! :test [{client :client}]
   (persistence.datomic/close-db-connection-local! client))
+
+
+;; Miscellaneous
+(defn to-coll [ch]
+
+  (loop [coll []]
+    (let [[v ch] (core.async/alts!! [(core.async/timeout 100) ch])]
+      (if-not v
+        coll
+        (recur (conj coll v))))))

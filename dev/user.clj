@@ -237,16 +237,16 @@
 
 
   (do
-    (def stock-tick-xf (map (fn [tick] (println (format ">> tick / %s" tick)) tick)))
-    (def portfolio-update-xf (map (fn [profit-loss] (println (format ">> portfolio-update / %s" profit-loss)) profit-loss)))
-    ;; (def game-event-xf (map (fn [game-event] (println "game-event / %s" game-event) game-event)))
+    (def stock-tick-mappingfn (map (fn [tick] (println (format ">> tick / %s" tick)) tick)))
+    (def portfolio-update-mappingfn (map (fn [profit-loss] (println (format ">> portfolio-update / %s" profit-loss)) profit-loss)))
+    ;; (def game-event-mappingfn (map (fn [game-event] (println "game-event / %s" game-event) game-event)))
 
-    (def transact-tick-xf (map (fn [a] (println (format "transact-tick-xf %s" a))
+    (def transact-tick-mappingfn (map (fn [a] (println (format "transact-tick-mappingfn %s" a))
                                  a) #_(partial beatthemarket.persistence.datomic/transact-entities! conn)))
-    (def transact-profit-loss-xf (map (fn [a] (println (format "transact-profit-loss-xf %s" a))
+    (def transact-profit-loss-mappingfn (map (fn [a] (println (format "transact-profit-loss-mappingfn %s" a))
                             a) #_(partial beatthemarket.persistence.datomic/transact-entities! conn)))
 
-    (def profit-loss-xf (map (fn [a] (println (format ">> profit-loss-xf %s" a))
+    (def profit-loss-mappingfn (map (fn [a] (println (format ">> profit-loss-mappingfn %s" a))
                                a) #_beatthemarket.game.persistence/track-profit-loss!))
 
     (def control-channel (chan)))
@@ -262,13 +262,13 @@
         ;; NOTE stream tick
         ticks-to (core.async/chan
                    profit-loss-buffer #_(core.async/sliding-buffer profit-loss-buffer)
-                   stock-tick-xf)
+                   stock-tick-mappingfn)
         profit-loss-to (core.async/chan profit-loss-buffer)
 
         ;; NOTE stream PL
         profit-loss-transact-to (core.async/chan
                                   profit-loss-buffer #_(core.async/sliding-buffer profit-loss-buffer)
-                                  portfolio-update-xf)
+                                  portfolio-update-mappingfn)
         game-event-from (core.async/chan profit-loss-buffer)
         game-event-to (core.async/chan profit-loss-buffer)
 
@@ -281,17 +281,17 @@
 
 
     ;; A
-    ;; (< ticks)       transact-xf    (< ticks)
-    ;;                 profit-loss-xf (< profit-loss)
-    ;; (< profit-loss) transact-xf    (< profit-loss)
+    ;; (< ticks)       transact-mappingfn    (< ticks)
+    ;;                 profit-loss-mappingfn (< profit-loss)
+    ;; (< profit-loss) transact-mappingfn    (< profit-loss)
 
 
     (core.async/onto-chan ticks-from (range 20))
 
     ;; P/L
-    (core.async/pipeline-blocking concurrent ticks-to                transact-tick-xf    ticks-from)
-    (core.async/pipeline-blocking concurrent profit-loss-to          profit-loss-xf ticks-to)
-    (core.async/pipeline-blocking concurrent profit-loss-transact-to transact-profit-loss-xf    profit-loss-to)
+    (core.async/pipeline-blocking concurrent ticks-to                transact-tick-mappingfn    ticks-from)
+    (core.async/pipeline-blocking concurrent profit-loss-to          profit-loss-mappingfn ticks-to)
+    (core.async/pipeline-blocking concurrent profit-loss-transact-to transact-profit-loss-mappingfn    profit-loss-to)
 
     (go-loop []
       (let [[v ch] (core.async/alts! [(core.async/timeout 1000)
@@ -308,7 +308,7 @@
 
 
   ;; B
-  ;; (> gameEvent)   transact-xf    (> gameEvent)
+  ;; (> gameEvent)   transact-mappingfn    (> gameEvent)
 
 
   (core.async/onto-chan ticks-to (range))
