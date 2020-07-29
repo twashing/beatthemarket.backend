@@ -600,7 +600,8 @@
 
   (let [remaining (calculate-remaining-time now end)]
 
-    (println (format "Running %s / Exiting" (format-remaining-time remaining))))
+    (println (format "%s / Exiting" (format-remaining-time remaining)))
+    (core.async/>!! game-event-stream control))
   [])
 
 (defmethod handle-control-event :win [conn game-event-stream {:keys [game-id level] :as control} now end]
@@ -616,8 +617,8 @@
 
   (let [remaining (calculate-remaining-time now end)]
     (println (format "Lose %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream control))
-  [])
+    (core.async/>!! game-event-stream control)
+    (handle-control-event conn game-event-stream {:message :exit} now end)))
 
 (defmethod handle-control-event :timeout [conn game-event-stream control now end]
 

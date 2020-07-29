@@ -1221,16 +1221,17 @@
 
     (testing "Correct game message is received"
 
-      (let [expected-count   1
-            expected-message {:game-id gameId
-                              :level :game-level/one
-                              :profit-loss -9500.0
-                              :message :lose}
+      (let [expected-count   2
+            expected-messages [{:game-id gameId
+                                :level :game-level/one
+                                :profit-loss -9500.0
+                                :message :lose}
+                               {:message :exit}]
             result-messages  (test-util/to-coll game-event-stream)]
 
         (are [x y] (= x y)
           expected-count (count result-messages)
-          expected-message (first result-messages))
+          expected-messages result-messages)
 
         (testing "Correct game levels are set"
 
