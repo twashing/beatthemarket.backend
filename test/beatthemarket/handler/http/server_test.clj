@@ -93,7 +93,7 @@
                             {:query "mutation CreateGame($gameLevel: String!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
-                                         stocks
+                                         stocks { id name symbol }
                                        }
                                      }"
                              :variables {:gameLevel gameLevel}}}))
@@ -101,12 +101,11 @@
     (testing "We are returned expected game information [stocks subscriptions id]"
 
       (let [result (test-util/<message!! 1000)
-            {:keys [stocks id]} (-> result :payload :data :createGame)]
+            {:keys [stocks id]} (-> result :payload :data :createGame util/pprint+identity)]
 
         (is (UUID/fromString id))
         (is (= 4 (count stocks)))
-        (->> (map #(json/read-str % :key-fn keyword) stocks)
-             (map keys)
+        (->> (map keys stocks)
              (map #(into #{} %))
              (every? #(= #{:id :name :symbol} %))
              is)
@@ -119,6 +118,7 @@
                   :control-channel
                   :stocks-with-tick-data
                   :profit-loss
+                  :current-level
 
                   :transact-profit-loss-mappingfn
                   :stream-portfolio-update-mappingfn
@@ -126,6 +126,7 @@
                   :collect-profit-loss-mappingfn
                   :transact-tick-mappingfn
                   :stream-stock-tick-mappingfn
+                  :check-level-complete-mappingfn
 
                   :close-sink-fn
                   :sink-fn

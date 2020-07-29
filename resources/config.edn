@@ -62,7 +62,10 @@
                                  :pattern           "%p [%d] %t - %c %m%n"
                                  :file              "logs/beatthemarket.log"}]
                     :overrides {"org.apachea.http"     :info
-                                "org.apache.http.wire" :error}}}
+                                "org.apache.http.wire" :error
+                                "org.eclipse.jetty.server.handler.ContextHandler" :error
+                                "org.eclipse.jetty.server.AbstractConnector" :error
+                                "org.eclipse.jetty.server.Server" :error}}}
 
 
  ;; MAIN

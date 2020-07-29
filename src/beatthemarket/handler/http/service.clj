@@ -124,7 +124,9 @@
   {"/ws" {:on-connect (ws/start-ws-connection new-ws-client)
           :on-text (fn [msg] (log/info :msg (str "A client sent - " msg)))
           :on-binary (fn [payload _offset _length] (log/info :msg "Binary Message!" :bytes payload))
-          :on-error (fn [t] (log/error :msg "WS Error happened" :exception t))
+          :on-error (fn [t]
+                      (println t)
+                      (log/error :msg "WS Error happened" :exception t))
           :on-close (fn [_num-code reason-text]
                       (log/info :msg "WS Closed:" :reason reason-text))}})
 

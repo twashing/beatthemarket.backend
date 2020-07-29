@@ -1,210 +1,210 @@
 {
- ;; //
- :objects
- {:LoginAck
-  {:description "Possible return states from a login attempt"
-   :fields
-   {:message {:type (non-null :LoginAckMessage)}
-    :user    {:type (non-null String)}}}
+  ;; //
+  :objects
+  {:LoginAck
+   {:description "Possible return states from a login attempt"
+    :fields
+    {:message {:type (non-null :LoginAckMessage)}
+     :user    {:type (non-null String)}}}
 
-  :CreateGamekAck
-  {:fields
-   {:id     {:type (non-null String)}
-    :stocks {:type (list (non-null String))}
-    ;; :stocks        {:type (non-null (list :Stock))}
+   :CreateGamekAck
+   {:fields
+    {:id     {:type (non-null String)}
+     ;; :stocks {:type (list (non-null String))}
+     :stocks        {:type (list (non-null :Stock))}
     }}
 
-  :StartGameAck
-  {:fields
-   {;; :message {:type (non-null :StartGameAckMessage)}
-    :message {:type (non-null String)}}}
+   :StartGameAck
+   {:fields
+    {;; :message {:type (non-null :StartGameAckMessage)}
+     :message {:type (non-null String)}}}
 
-  :BuyStockAck
-  {:fields
-   {:message {:type (non-null String)}}}
+   :BuyStockAck
+   {:fields
+    {:message {:type (non-null String)}}}
 
-  :SellStockAck
-  {:fields
-   {:message {:type (non-null String)}}}
+   :SellStockAck
+   {:fields
+    {:message {:type (non-null String)}}}
 
-  :Stock
-  {:fields
-   {:id     {:type (non-null String)}
-    :name   {:type (non-null String)}
-    :symbol {:type (non-null String)}}}
+   :Stock
+   {:fields
+    {:id     {:type (non-null String)}
+     :name   {:type (non-null String)}
+     :symbol {:type (non-null String)}}}
 
-  :StockTick
-  {:fields
-   {:stockTickId    {:type (non-null String)}
-    :stockTickTime  {:type (non-null String)}
-    :stockTickClose {:type (non-null Float)}
-    :stockId        {:type (non-null String)}
-    :stockName      {:type (non-null String)}}}
+   :StockTick
+   {:fields
+    {:stockTickId    {:type (non-null String)}
+     :stockTickTime  {:type (non-null String)}
+     :stockTickClose {:type (non-null Float)}
+     :stockId        {:type (non-null String)}
+     :stockName      {:type (non-null String)}}}
 
-  :PortfolioUpdate
-  {:fields
-   {:message {:type (list (non-null String))}}}
+   :PortfolioUpdate
+   {:fields
+    {:message {:type (list (non-null String))}}}
 
-  :ProfitLoss
-  {:description "Container for portfolio updates"
-   :fields
-   {:profitLoss {:type (non-null Float)}
-    :stockId    {:type (non-null String)}
-    :gameId     {:type (non-null String)}
-    ;; :profitLossType {:type (non-null :ProfitLossType)}
+   :ProfitLoss
+   {:description "Container for portfolio updates"
+    :fields
+    {:profitLoss {:type (non-null Float)}
+     :stockId    {:type (non-null String)}
+     :gameId     {:type (non-null String)}
+     ;; :profitLossType {:type (non-null :ProfitLossType)}
     }}
 
-  :AccountBalance
-  {:description "Account Balance message"
-   :fields
-   {:id           {:type (non-null String)}
-    :name         {:type (non-null String)}
-    :balance      {:type (non-null Float)}
-    :counterParty {:type String :description "Name of the stock attached to this account"}
-    :amount       {:type Int :description "The amount of units (stock shares) of the counterparty"}}}
+   :AccountBalance
+   {:description "Account Balance message"
+    :fields
+    {:id           {:type (non-null String)}
+     :name         {:type (non-null String)}
+     :balance      {:type (non-null Float)}
+     :counterParty {:type String :description "Name of the stock attached to this account"}
+     :amount       {:type Int :description "The amount of units (stock shares) of the counterparty"}}}
 
-  :GameEvent
-  {:description "Game events"
-   :fields
-   {:message {:type (non-null String)}}
-   #_{:type    {:type (non-null :GameEventType)}
-      :gameId  {:type (non-null String)}
-      :message {:type (non-null :GameEventMessage)}}}
+   :GameEvent
+   {:description "Game events"
+    :fields
+    {:message {:type (non-null String)}}
+#_{:type    {:type (non-null :GameEventType)}
+   :gameId  {:type (non-null String)}
+   :message {:type (non-null :GameEventMessage)}}}
 
-  :LevelTimer
-  {:description "The amount of time a user has left in a given level"
-   :fields
-   {:level         {:type (non-null Int)}
-    :timeRemaining {:type (non-null Int)}}}
+   :LevelTimer
+   {:description "The amount of time a user has left in a given level"
+    :fields
+    {:level         {:type (non-null Int)}
+     :timeRemaining {:type (non-null Int)}}}
 
-  :LevelStatus
-  {:description "Tells user if they've won or lost a level"
-   :fields
-   {:level      {:type (non-null Int)}
-    :status     {:type (non-null :LevelStatusMessage)}
-    :profitLoss {:type (non-null Float)}}}}
-
-
- ;; //
- :enums
- {:LoginAckMessage
-  {:values [:useradded :userexists]}
-
-  :StartGameAckMessage
-  {:descriptiuon "Expected return value when starting a game"
-   :values       [:gamestarted]}
-
-  :ProfitLossType
-  {:values [:running :realized]}
-
-  :GameEventType
-  {:values [:control :levelStatus :levelTimer]}
-
-  :GameEventMessage
-  {:values [:ControlMessage :LevelTimer :LevelStatus]}
-
-  :ControlMessage
-  {:description "Possible game event messages that can be sent to the client"
-   :values      [:pause :resume :exit]}
-
-  :LevelStatusMessage
-  {:values [:win :lose]}}
+   :LevelStatus
+   {:description "Tells user if they've won or lost a level"
+    :fields
+    {:level      {:type (non-null Int)}
+     :status     {:type (non-null :LevelStatusMessage)}
+     :profitLoss {:type (non-null Float)}}}}
 
 
- ;; //
- ;; :unions
- ;; {:PortfolioUpdate
- ;;  {:members [:ProfitLoss :AccountBalance]}}
+  ;; //
+  :enums
+  {:LoginAckMessage
+   {:values [:useradded :userexists]}
+
+   :StartGameAckMessage
+   {:descriptiuon "Expected return value when starting a game"
+    :values       [:gamestarted]}
+
+   :ProfitLossType
+   {:values [:running :realized]}
+
+   :GameEventType
+   {:values [:control :levelStatus :levelTimer]}
+
+   :GameEventMessage
+   {:values [:ControlMessage :LevelTimer :LevelStatus]}
+
+   :ControlMessage
+   {:description "Possible game event messages that can be sent to the client"
+    :values      [:pause :resume :exit]}
+
+   :LevelStatusMessage
+   {:values [:win :lose]}}
 
 
- ;; //
- :input-objects
- {:BuyStock
-  {:description "An event to buy a stock"
-   :fields
-   {:gameId      {:type (non-null String)}
-    :stockId     {:type (non-null String)}
-    :stockAmount {:type (non-null Int)}
-    :tickId      {:type (non-null String)}
-    :tickTime    {:type (non-null Int)}
-    :tickPrice   {:type (non-null Float)}}}
-
-  :SellStock
-  {:description "An event to sell a stock"
-   :fields
-   {:gameId      {:type (non-null String)}
-    :stockId     {:type (non-null String)}
-    :stockAmount {:type (non-null Int)}
-    :tickId      {:type (non-null String)}
-    :tickTime    {:type (non-null Int)}
-    :tickPrice   {:type (non-null Float)}}}}
+  ;; //
+  ;; :unions
+  ;; {:PortfolioUpdate
+      ;;  {:members [:ProfitLoss :AccountBalance]}}
 
 
- ;; //
- :queries
- {:accountBalances
-  {:type    (list (non-null :AccountBalance))
-   :args    {:gameId {:type (non-null String)}}
-   :resolve :resolve-account-balances}
+  ;; //
+  :input-objects
+  {:BuyStock
+   {:description "An event to buy a stock"
+    :fields
+    {:gameId      {:type (non-null String)}
+     :stockId     {:type (non-null String)}
+     :stockAmount {:type (non-null Int)}
+     :tickId      {:type (non-null String)}
+     :tickTime    {:type (non-null Int)}
+     :tickPrice   {:type (non-null Float)}}}
 
-  :stockHistory
-  {:type        (list (non-null :StockTick))
-   :args        {:gameId  {:type (non-null String)}
-                 :stockId {:type (non-null String)}
-                 :range   {:type (list (non-null Int))}}
-   :resolve     :resolve-stock-history
-   :description "Called after game is created (where stocks are created)"}}
-
-
- ;; //
- :mutations
- {
-  :login
-  {:type        :LoginAck
-   :description "Logs a user in, using Firebase's ID JWT"
-   :resolve     :resolve-login}
-
-  :createGame
-  {:type        :CreateGamekAck
-   :description "Creates a new game"
-   :resolve     :resolve-create-game
-   :args
-   {:gameLevel {:type (non-null String)}}}
-
-  :startGame
-  {:type        :StartGameAck
-   :description "Starts streaming that games stock data"
-   :resolve     :resolve-start-game
-   :args
-   {:id {:type (non-null String)}}}
-
-  :buyStock
-  {:type    :BuyStockAck
-   :args    {:input {:type :BuyStock}}
-   :resolve :resolve-buy-stock}
-
-  :sellStock
-  {:type    :SellStockAck
-   :args    {:input {:type :SellStock}}
-   :resolve :resolve-sell-stock}}
+   :SellStock
+   {:description "An event to sell a stock"
+    :fields
+    {:gameId      {:type (non-null String)}
+     :stockId     {:type (non-null String)}
+     :stockAmount {:type (non-null Int)}
+     :tickId      {:type (non-null String)}
+     :tickTime    {:type (non-null Int)}
+     :tickPrice   {:type (non-null Float)}}}}
 
 
- ;; //
- :subscriptions
- {:stockTicks
-  {:type   (list (non-null :StockTick))
-   :stream :stream-stock-ticks
-   :args
-   {:gameId {:type (non-null String)}}}
+  ;; //
+  :queries
+  {:accountBalances
+   {:type    (list (non-null :AccountBalance))
+    :args    {:gameId {:type (non-null String)}}
+    :resolve :resolve-account-balances}
 
-  :portfolioUpdates
-  {:type   :PortfolioUpdate
-   :stream :stream-portfolio-updates
-   :args
-   {:gameId {:type (non-null String)}}}
+   :stockHistory
+   {:type        (list (non-null :StockTick))
+    :args        {:gameId  {:type (non-null String)}
+                  :stockId {:type (non-null String)}
+                  :range   {:type (list (non-null Int))}}
+    :resolve     :resolve-stock-history
+    :description "Called after game is created (where stocks are created)"}}
 
-  :gameEvents
-  {:type   :GameEvent
-   :stream :stream-game-events
-   :args
-   {:gameId {:type (non-null String)}}}}}
+
+  ;; //
+  :mutations
+  {
+    :login
+    {:type        :LoginAck
+     :description "Logs a user in, using Firebase's ID JWT"
+     :resolve     :resolve-login}
+
+    :createGame
+    {:type        :CreateGamekAck
+     :description "Creates a new game"
+     :resolve     :resolve-create-game
+     :args
+     {:gameLevel {:type (non-null String)}}}
+
+    :startGame
+    {:type        :StartGameAck
+     :description "Starts streaming that games stock data"
+     :resolve     :resolve-start-game
+     :args
+     {:id {:type (non-null String)}}}
+
+    :buyStock
+    {:type    :BuyStockAck
+     :args    {:input {:type :BuyStock}}
+     :resolve :resolve-buy-stock}
+
+    :sellStock
+    {:type    :SellStockAck
+     :args    {:input {:type :SellStock}}
+     :resolve :resolve-sell-stock}}
+
+
+  ;; //
+  :subscriptions
+  {:stockTicks
+   {:type   (list (non-null :StockTick))
+    :stream :stream-stock-ticks
+    :args
+    {:gameId {:type (non-null String)}}}
+
+   :portfolioUpdates
+   {:type   :PortfolioUpdate
+    :stream :stream-portfolio-updates
+    :args
+    {:gameId {:type (non-null String)}}}
+
+   :gameEvents
+   {:type   :GameEvent
+    :stream :stream-game-events
+    :args
+    {:gameId {:type (non-null String)}}}}}

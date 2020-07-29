@@ -2,7 +2,7 @@
   (:require [clojure.core.async :as core.async
              :refer [>!!]]
             [datomic.client.api :as d]
-            [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
             [integrant.repl.state :as repl.state]
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
@@ -90,7 +90,8 @@
           :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level)]
 
     (->> (game.games/game->new-game-message game user-db-id)
-         (transform [:stocks ALL] #(json/write-str (dissoc % :db/id))))))
+         (transform [:stocks ALL] #(dissoc % :db/id))
+         (transform [:stocks ALL MAP-KEYS] (comp keyword name)))))
 
 (defn resolve-start-game [context {game-id :id} _]
 
