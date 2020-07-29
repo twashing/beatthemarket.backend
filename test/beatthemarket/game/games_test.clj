@@ -1091,9 +1091,6 @@
                  (every? #(= #{:game-id :stock-id :profit-loss-type :profit-loss} %))
                  is)))))))
 
-(defn narrow-stock-ticks [stock-id stock-ticks]
-  (first (filter (fn [{id :game.stock/id}] (= id stock-id)) stock-ticks)))
-
 (deftest check-level-win-test
 
   (let [;; A
@@ -1114,7 +1111,7 @@
          control-channel              :control-channel
          game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A {})
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A {:level-timer-sec 2})
 
         iterations             (game.games/start-workbench! conn result-user-id game-control)
         game-user-subscription (-> game
@@ -1132,7 +1129,7 @@
     (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
 
                 ;; (-> vs :profit-loss util/pprint+identity)
-                (let [stock-tick (narrow-stock-ticks stockId stock-ticks)]
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
                   (assoc v :local-transact-input (merge stock-tick op))))
               iterations
               ops)
@@ -1140,13 +1137,42 @@
          (take 3)
          doall)
 
-    (let [expected-count   1
-          expected-message {:level :game-level/one :profit-loss 1750.0 :message :win}
-          result-messages  (test-util/to-coll game-event-stream)]
+    (testing "Correct game message is received"
 
-      (are [x y] (= x y)
-        expected-count   (count result-messages)
-        expected-message (first result-messages)))))
+      (let [expected-count   1
+            expected-message {:game-id gameId
+                              :level :game-level/one
+                              :profit-loss 1750.0
+                              :message :win}
+            result-messages  (test-util/to-coll game-event-stream)]
+
+        (are [x y] (= x y)
+          expected-count   (count result-messages)
+          expected-message (first result-messages))
+
+        (testing "Correct game levels are set"
+
+          (let [expected-game-level {:profit-threshold 10000.0
+                                     :lose-threshold 2000.0
+                                     :level :game-level/two}
+                current-game-level (-> repl.state/system
+                                       :game/games deref (get gameId)
+                                       :current-level)
+
+                expected-db-game-level :game-level/two
+                current-db-game-level (-> (d/q '[:find (pull ?l [*])
+                                                 :in $ ?game-id
+                                                 :where
+                                                 [?g :game/id ?game-id]
+                                                 [?g :game/level ?l]]
+                                               (d/db conn)
+                                               gameId)
+                                          ffirst
+                                          :db/ident)]
+
+            (are [x y] (= x y)
+              expected-game-level current-game-level
+              expected-db-game-level current-db-game-level)))))))
 
 (deftest check-level-lose-test
 
@@ -1168,7 +1194,7 @@
          control-channel              :control-channel
          game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A {})
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A {:level-timer-sec 5})
 
         iterations             (game.games/start-workbench! conn result-user-id game-control)
         game-user-subscription (-> game
@@ -1184,7 +1210,7 @@
                                 {:op :sell :stockAmount 50}]]
 
     (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
-                (let [stock-tick (narrow-stock-ticks stockId stock-ticks)]
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
                   (assoc v :local-transact-input (merge stock-tick op))))
               iterations
               ops)
@@ -1193,16 +1219,41 @@
          ;; util/pprint+identity
          doall)
 
-    (let [expected-count   1
-          expected-message {:level :game-level/one :profit-loss -9500.0 :message :lose}
-          result-messages  (test-util/to-coll game-event-stream)]
+    (testing "Correct game message is received"
 
-      (are [x y] (= x y)
-        expected-count (count result-messages)
-        expected-message (first result-messages)))))
+      (let [expected-count   1
+            expected-message {:game-id gameId
+                              :level :game-level/one
+                              :profit-loss -9500.0
+                              :message :lose}
+            result-messages  (test-util/to-coll game-event-stream)]
 
-(comment
+        (are [x y] (= x y)
+          expected-count (count result-messages)
+          expected-message (first result-messages))
 
-  (def first+next (juxt first rest))
-  (def f          (fn [[x xs]] (first+next xs)))
-  (def one (iterate f (first+next (range)))))
+        (testing "Correct game levels are set"
+
+          (let [expected-game-level {:level :game-level/one
+                                     :profit-threshold 1000.0
+                                     :lose-threshold 1000.0}
+
+                current-game-level (-> repl.state/system
+                                       :game/games deref (get gameId)
+                                       :current-level
+                                       deref)
+
+                expected-db-game-level :game-level/one
+                current-db-game-level (-> (d/q '[:find (pull ?l [*])
+                                                 :in $ ?game-id
+                                                 :where
+                                                 [?g :game/id ?game-id]
+                                                 [?g :game/level ?l]]
+                                               (d/db conn)
+                                               gameId)
+                                          ffirst
+                                          :db/ident)]
+
+            (are [x y] (= x y)
+              expected-game-level current-game-level
+              expected-db-game-level current-db-game-level)))))))
