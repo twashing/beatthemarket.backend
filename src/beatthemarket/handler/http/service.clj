@@ -226,13 +226,17 @@
 
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
-      (util/attach-resolvers {:resolve-login            graphql/resolve-login
-                              :resolve-create-game      graphql/resolve-create-game
-                              :resolve-start-game       graphql/resolve-start-game
-                              :resolve-buy-stock        graphql/resolve-buy-stock
-                              :resolve-sell-stock       graphql/resolve-sell-stock
-                              :resolve-account-balances graphql/resolve-account-balances
-                              :resolve-stock-history    graphql/resolve-stock-history})
+      (util/attach-resolvers {:resolve-login                     graphql/resolve-login
+                              :resolve-create-game               graphql/resolve-create-game
+                              :resolve-start-game                graphql/resolve-start-game
+                              :resolve-buy-stock                 graphql/resolve-buy-stock
+                              :resolve-sell-stock                graphql/resolve-sell-stock
+                              :resolve-account-balances          graphql/resolve-account-balances
+                              :resolve-stock-time-series         graphql/resolve-stock-time-series
+                              :resolve-user                      graphql/resolve-user
+                              :resolve-users                     graphql/resolve-users
+                              :resolve-user-personal-profit-loss graphql/resolve-user-personal-profit-loss
+                              :resolve-user-market-profit-loss   graphql/resolve-user-market-profit-loss})
       (util/attach-streamers {:stream-stock-ticks       graphql/stream-stock-ticks
                               :stream-portfolio-updates graphql/stream-portfolio-updates
                               :stream-game-events       graphql/stream-game-events})

@@ -101,7 +101,7 @@
     (testing "We are returned expected game information [stocks subscriptions id]"
 
       (let [result (test-util/<message!! 1000)
-            {:keys [stocks id]} (-> result :payload :data :createGame util/pprint+identity)]
+            {:keys [stocks id]} (-> result :payload :data :createGame)]
 
         (is (UUID/fromString id))
         (is (= 4 (count stocks)))
@@ -144,7 +144,9 @@
                  (= expected-component-game-keys)
                  is)))))))
 
-(deftest start-game-resolver-test
+6
+
+#_(deftest start-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -198,7 +200,7 @@
 
           (= expected-result result))))))
 
-(deftest stream-stock-ticks-test
+#_(deftest stream-stock-ticks-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -321,7 +323,7 @@
           (swap! subscriptions #(conj % r))
           (recur (test-util/<message!! 1000)))))))
 
-(deftest buy-stock-test
+#_(deftest buy-stock-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -407,7 +409,7 @@
             (is (= {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}
                    ack)))))))
 
-(deftest sell-stock-test
+#_(deftest sell-stock-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -510,7 +512,7 @@
             (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
                    ack))))))))
 
-(deftest stream-portfolio-updates-test
+#_(deftest stream-portfolio-updates-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -609,7 +611,7 @@
                (every? true?)
                is))))))
 
-(deftest stream-game-events-test
+#_(deftest stream-game-events-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -723,7 +725,3 @@
             (first ss)
             (= expected-game-events ss)
             (is ss)))))))
-
-;; > Stream P/L, Account Balances
-;; > Stream Game Events
-;; > buy-stock-test, sell-stock-test... check tentries in DB

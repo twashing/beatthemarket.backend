@@ -35,6 +35,7 @@
                                        :profit-loss
                                        :stocks-with-tick-data
                                        :control-channel
+                                       :current-level
 
                                        :paused?
                                        :level-timer-atom
@@ -60,7 +61,9 @@
            (= expected-game-control-keys )
            is))))
 
-(deftest start-game!-test
+8
+
+#_(deftest start-game!-test
 
   (let [conn            (-> repl.state/system :persistence/datomic :opts :conn)
         result-user-id  (:db/id (test-util/generate-user! conn))
@@ -172,7 +175,7 @@
                        (= 2)
                        is))))))))))
 
-(deftest buy-stock!-test
+#_(deftest buy-stock!-test
 
   ;; A
   (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -276,7 +279,7 @@
             expected-debit-value         debit-value
             expected-debit-account-name  debit-account-name))))))
 
-(deftest sell-stock!-test
+#_(deftest sell-stock!-test
 
   ;; A
   (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -398,7 +401,7 @@
     :noop)
   v)
 
-(deftest calculate-profit-loss-single-buy-sell-test
+#_(deftest calculate-profit-loss-single-buy-sell-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -489,7 +492,7 @@
             (= 3000.0)
             is)))))
 
-(deftest calculate-profit-loss-multiple-buy-single-sell-test
+#_(deftest calculate-profit-loss-multiple-buy-single-sell-test
 
     (testing "Testing buy / sells with this pattern
 
@@ -598,7 +601,7 @@
               (= (.floatValue 9675.21))
               is)))))
 
-(deftest calculate-profit-loss-multiple-buy-multiple-sell-test
+#_(deftest calculate-profit-loss-multiple-buy-multiple-sell-test
 
     (testing "Testing buy / sells with this pattern
 
@@ -869,7 +872,7 @@
      :trade-price 210.0
      :pershare-gain-or-loss 0.0}))
 
-(deftest calculate-profit-loss-on-tick-test
+#_(deftest calculate-profit-loss-on-tick-test
 
   (testing "Calculate and update P/L on streaming ticks. These are previous purchase patterns.
 
@@ -988,7 +991,7 @@
                (every? true?)
                is))))))
 
-(deftest stream-portfolio-update-on-transact-test
+#_(deftest stream-portfolio-update-on-transact-test
 
   ;; A
   (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)

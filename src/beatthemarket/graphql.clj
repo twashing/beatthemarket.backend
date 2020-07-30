@@ -153,7 +153,95 @@
 
 (defn resolve-account-balances [context args _])
 
-(defn resolve-stock-history [context args _])
+(defn resolve-stock-time-series [context {:keys [gameId stockId range]} _]
+
+
+  [:StockTick]
+
+  [{:stockTickId "32bd40bb-c4b3-4f07-9667-781c67d4e1f5"
+    :stockTickTime "1595692766979"
+    :stockTickClose 149.02000427246094
+    :stockId "d658021f-ca4e-4e34-a6ee-2a9fc8bb253d"
+    :stockName "Outside Church"}
+   {:stockTickId "df09933d-5879-45e5-b038-40498d7ca198"
+    :stockTickTime "1595692766979"
+    :stockTickClose 149.02000427246094
+    :stockId "942349f5-94ef-4ed3-8470-a9fb1123dbb8"
+    :stockName "Sick Dough"}
+   {:stockTickId "324e662b-24ac-4b0d-8f91-ebee01f029d9"
+    :stockTickTime "1595692766979"
+    :stockTickClose 149.02000427246094
+    :stockId "97fa4791-47f8-42ff-8683-a235284de178"
+    :stockName "Vigorous Grip"}
+   {:stockTickId "cce40bb5-279e-47d6-a3c1-0e587c8e097b"
+    :stockTickTime "1595692766979"
+    :stockTickClose 149.02000427246094
+    :stockId "e02e81a7-15c1-4c4e-996a-bc65c8de4a9a"
+    :stockName "Color-blind Maintenance"}])
+
+(defn resolve-user [context  _]
+
+  :User
+
+  {:userEmail "twashing@gmail.com"
+   :userName "Timothy Washington"
+   :userExternalUid "foobar"
+   :userAccounts
+   [{:accountId "077c1016-651d-418e-9659-732023a03a27"
+     :accountName "Cash"
+     :accountBalance 100000.0
+     :accountAmount 0}
+    {:accountId "ce4a3687-d5fe-41de-8ed6-91e404cddb9b"
+     :accountName "Equity"
+     :accountBalance 100000.0
+     :accountAmount 0}]})
+
+(defn resolve-users [context args _]
+
+  [:User]
+
+  [{:userEmail "twashing@gmail.com"
+    :userName "Timothy Washington"
+    :userExternalUid "foobar"
+    :userAccounts
+    [{:accountId "077c1016-651d-418e-9659-732023a03a27"
+      :accountName "Cash"
+      :accountBalance 100000.0
+      :accountAmount 0}
+     {:accountId "ce4a3687-d5fe-41de-8ed6-91e404cddb9b"
+      :accountName "Equity"
+      :accountBalance 100000.0
+      :accountAmount 0}]}])
+
+(defn resolve-user-personal-profit-loss [context {email :email} _]
+
+  "Lists out a User's personal Profit/Loss, per game, per stock"
+  [:ProfitLoss]
+
+  [{:profitLoss 56123.73
+    :stockId "stockid1"
+    :gameId "gameid1"}
+   {:profitLoss 1293.73
+    :stockId "stockid2"
+    :gameId "gameid1"}
+   {:profitLoss -10460.73
+    :stockId "stockid3"
+    :gameId "gameid1"}])
+
+(defn resolve-user-market-profit-loss [context {email :email} _]
+
+  "Lists out a User's amrket Profit/Loss, per stock"
+  [:ProfitLoss]
+
+  [{:profitLoss 56123.73
+    :stockId "stockid1"
+    :gameId "marketid1"}
+   {:profitLoss 1293.73
+    :stockId "stockid2"
+    :gameId "marketid1"}
+   {:profitLoss -10460.73
+    :stockId "stockid3"
+    :gameId "marketid1"}])
 
 
 ;; STREAMERS

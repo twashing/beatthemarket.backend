@@ -522,10 +522,10 @@
        (map partitioned-entities->transaction-entities)))
 
 (defn inputs->control-chain [{:keys [game stocks-with-tick-data
-                                      stream-stock-tick-mappingfn calculate-profit-loss-mappingfn
-                                      collect-profit-loss-mappingfn stream-portfolio-update-mappingfn
-                                      transact-tick-mappingfn transact-profit-loss-mappingfn
-                                      check-level-complete-mappingfn]}
+                                     stream-stock-tick-mappingfn calculate-profit-loss-mappingfn
+                                     collect-profit-loss-mappingfn stream-portfolio-update-mappingfn
+                                     transact-tick-mappingfn transact-profit-loss-mappingfn
+                                     check-level-complete-mappingfn]}
                               {:keys [conn user-db-id]}]
 
   (->> stocks-with-tick-data
@@ -681,6 +681,7 @@
 
 (defn start-game! [conn user-db-id game-control]
 
+  ;; TODO can seek to startPosition in stocks-with-tick-data
   (let [{:keys [control-channel
                 paused?
                 tick-sleep-atom
