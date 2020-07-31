@@ -82,7 +82,8 @@
 
     (testing "REST Login (not WebSocket) ; creates a user"
 
-      (test-util/login-assertion service id-token))
+      (test-uti
+        l/login-assertion service id-token))
 
 
     (testing "Create a Game"

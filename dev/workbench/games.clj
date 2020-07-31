@@ -130,3 +130,45 @@
   ;;     :user/_accounts :game.user/_user :game/_users :game/id)
 
   )
+
+(comment
+
+  (def conn (-> repl.state/system :persistence/datomic :opts :conn))
+  (def user (test-util/generate-user! conn))
+  (def result-user-id (:db/id user))
+  (def userId (:user/external-uid user)) 
+
+
+  (def data-sequence-A [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+  (def tick-length (count data-sequence-A))
+
+
+  ;; C create-game!
+  (def sink-fn identity)
+  (def test-stock-ticks (atom []))
+  (def test-portfolio-updates (atom []))
+
+  (def opts {:level-timer-sec                   10
+             :stream-stock-tick-mappingfn       (map (fn [a]
+                                                       (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                         (swap! test-stock-ticks
+                                                                (fn [b]
+                                                                  (conj b stock-ticks)))
+                                                         stock-ticks)))
+             :stream-portfolio-update-mappingfn (map (fn [a]
+                                                       (swap! test-portfolio-updates (fn [b] (conj b a)))
+                                                       a))})
+  (def game-level :game-level/one)
+
+  #_{{gameId     :game/id
+    game-db-id :db/id :as game} :game
+   control-channel              :control-channel
+   game-event-stream            :game-event-stream
+   :as                          game-control}
+
+
+  (def one
+    (util/pprint+identity
+      (dissoc (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+              :stocks-with-tick-data)))
+  )

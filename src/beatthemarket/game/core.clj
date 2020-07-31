@@ -21,25 +21,30 @@
                                          (-> % :game.user/user :db/id)))]
               game))
 
-(defn ->game [game-level stocks user]
+(defn ->game
 
-  (let [subscriptions          (take 1 stocks)
-        portfolio-with-journal (bookkeeping/->portfolio
-                                 (bookkeeping/->journal))
+  ([game-level stocks user]
+   (->game game-level stocks user {:game-id (UUID/randomUUID)}))
 
-        game-users (-> (hash-map
-                         :game.user/user user
-                         :game.user/subscriptions subscriptions
-                         :game.user/portfolio portfolio-with-journal)
-                       persistence.core/bind-temporary-id
-                       list)]
+  ([game-level stocks user {game-id :game-id}]
 
-    (hash-map
-      :game/id (UUID/randomUUID)
-      :game/start-time (c/to-date (t/now))
-      :game/level game-level
-      :game/stocks stocks
-      :game/users game-users)))
+   (let [subscriptions          (take 1 stocks)
+         portfolio-with-journal (bookkeeping/->portfolio
+                                  (bookkeeping/->journal))
+
+         game-users (-> (hash-map
+                          :game.user/user user
+                          :game.user/subscriptions subscriptions
+                          :game.user/portfolio portfolio-with-journal)
+                        persistence.core/bind-temporary-id
+                        list)]
+
+     (hash-map
+       :game/id (or game-id (UUID/randomUUID))
+       :game/start-time (c/to-date (t/now))
+       :game/level game-level
+       :game/stocks stocks
+       :game/users game-users))))
 
 (defn ->stock
 
@@ -60,18 +65,18 @@
 (defn initialize-game!
 
   ([conn user-entity]
-
    (initialize-game! conn user-entity :game-level/one))
 
   ([conn user-entity game-level]
-
    (initialize-game! conn user-entity game-level (->> (name-generator/generate-names 4)
                                                       (map (juxt :stock-name :stock-symbol))
                                                       (map #(apply ->stock %))
                                                       (map persistence.core/bind-temporary-id))))
 
   ([conn user-entity game-level stocks]
+   (initialize-game! conn user-entity game-level stocks {}))
 
+  ([conn user-entity game-level stocks opts]
    (let [game (->game game-level stocks user-entity)]
 
      (as-> game gm
