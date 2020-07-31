@@ -133,42 +133,63 @@
 
 (comment
 
-  (def conn (-> repl.state/system :persistence/datomic :opts :conn))
-  (def user (test-util/generate-user! conn))
-  (def result-user-id (:db/id user))
-  (def userId (:user/external-uid user)) 
+  (do
+    (def conn (-> repl.state/system :persistence/datomic :opts :conn))
+    (def user (test-util/generate-user! conn))
+    (def user-db-id (:db/id user))
+    (def result-user-id (:db/id user))
+    (def userId (:user/external-uid user))
+
+    ;; (def data-sequence-A [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+    (def data-sequence-A (game.games/->data-sequence))
+    ;; (def tick-length (count data-sequence-A))
 
 
-  (def data-sequence-A [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
-  (def tick-length (count data-sequence-A))
+    ;; C create-game!
+    (def sink-fn identity)
+    (def test-stock-ticks (atom []))
+    (def test-portfolio-updates (atom []))
+
+    #_(def opts {:level-timer-sec                   10
+               :stream-stock-tick-mappingfn       (map (fn [a]
+                                                         (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                           (swap! test-stock-ticks
+                                                                  (fn [b]
+                                                                    (conj b stock-ticks)))
+                                                           stock-ticks)))
+               :stream-portfolio-update-mappingfn (map (fn [a]
+                                                         (swap! test-portfolio-updates (fn [b] (conj b a)))
+                                                         a))})
+
+    (def opts {} #_{:level-timer-sec 20})
+    (def game-level :game-level/one))
+
+  (do
+    (def game-control (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts))
+    (def control-channel (:control-channel game-control))
+    (def paused? (:paused? game-control))
 
 
-  ;; C create-game!
-  (def sink-fn identity)
-  (def test-stock-ticks (atom []))
-  (def test-portfolio-updates (atom []))
+    (def iterations (as-> game-control gc
+                      (game.games/inputs->control-chain gc {:conn conn :user-db-id user-db-id})
+                      (game.games/run-iteration gc))))
 
-  (def opts {:level-timer-sec                   10
-             :stream-stock-tick-mappingfn       (map (fn [a]
-                                                       (let [stock-ticks (game.games/group-stock-tick-pairs a)]
-                                                         (swap! test-stock-ticks
-                                                                (fn [b]
-                                                                  (conj b stock-ticks)))
-                                                         stock-ticks)))
-             :stream-portfolio-update-mappingfn (map (fn [a]
-                                                       (swap! test-portfolio-updates (fn [b] (conj b a)))
-                                                       a))})
-  (def game-level :game-level/one)
+  (game.games/start-game! conn user-db-id game-control)
 
-  #_{{gameId     :game/id
-    game-db-id :db/id :as game} :game
-   control-channel              :control-channel
-   game-event-stream            :game-event-stream
-   :as                          game-control}
+  (->> iterations
+       (map second)
+       (map #(take 2 %))
+       (take 10)
+       util/pprint+identity)
+
+  (->> iterations
+       (map first)
+       (take 10)
+       util/pprint+identity)
 
 
-  (def one
-    (util/pprint+identity
-      (dissoc (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
-              :stocks-with-tick-data)))
+  (reset! paused? true)
+  (reset! paused? false)
+  (core.async/>!! control-channel {:message :exit})
+
   )

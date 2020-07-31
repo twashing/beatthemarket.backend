@@ -218,11 +218,6 @@
                   :bookkeeping.credit/account
                   (select-keys [:bookkeeping.account/name :bookkeeping.account/balance]))]
 
-          ;; TODO
-          ;; Check portfolio-update-stream for
-          ;; running-profit-loss
-          ;; account-balances
-
           (are [x y] (= x y)
             expected-credit-value        credit-value
             expected-credit-account-name credit-account-name
@@ -372,25 +367,25 @@
            userId         :user/external-uid} (test-util/generate-user! conn)
 
           ;; B
-          data-sequence-B                     [100.0 110.0 , 120.0 130.0]
+          data-sequence-B      [100.0 110.0 , 120.0 130.0]
           data-sequence-length (count data-sequence-B)
 
 
           ;; C create-game!
-          sink-fn    identity
+          sink-fn                identity
           test-stock-ticks       (atom [])
           test-portfolio-updates (atom [])
 
-          opts {:level-timer-sec                   5
-                :stream-stock-tick-mappingfn       (fn [a]
-                                                     (let [stock-ticks (game.games/group-stock-tick-pairs a)]
-                                                       (swap! test-stock-ticks
-                                                              (fn [b]
-                                                                (conj b stock-ticks)))
-                                                       stock-ticks))
-                :stream-portfolio-update-mappingfn (fn [a]
-                                                     (swap! test-portfolio-updates (fn [b] (conj b a)))
-                                                     a)}
+          opts       {:level-timer-sec                   5
+                      :stream-stock-tick-mappingfn       (fn [a]
+                                                           (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                             (swap! test-stock-ticks
+                                                                    (fn [b]
+                                                                      (conj b stock-ticks)))
+                                                             stock-ticks))
+                      :stream-portfolio-update-mappingfn (fn [a]
+                                                           (swap! test-portfolio-updates (fn [b] (conj b a)))
+                                                           a)}
           game-level :game-level/one
           {{gameId     :game/id
             game-db-id :db/id :as game} :game
@@ -399,20 +394,20 @@
            :as                          game-control}
           (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
 
-          iterations             (game.games/start-workbench! conn result-user-id game-control)
+          iterations (game.games/start-workbench! conn result-user-id game-control)
 
-          game-user-subscription  (-> game
-                                      :game/users first
-                                      :game.user/subscriptions first)
-          stockId                 (:game.stock/id game-user-subscription)
+          game-user-subscription (-> game
+                                     :game/users first
+                                     :game.user/subscriptions first)
+          stockId                (:game.stock/id game-user-subscription)
           opts                   {:conn    conn
                                   :userId  userId
                                   :gameId  gameId
                                   :stockId stockId}
-          ops [{:op :buy :stockAmount 100}
-               {:op :sell :stockAmount 100}
-               {:op :buy :stockAmount 200}
-               {:op :sell :stockAmount 200}]]
+          ops                    [{:op :buy :stockAmount 100}
+                                  {:op :sell :stockAmount 100}
+                                  {:op :buy :stockAmount 200}
+                                  {:op :sell :stockAmount 200}]]
 
 
       (testing "Check profit/loss (running & realized), per purchase chunk - A"
@@ -433,7 +428,7 @@
                               (get stockId))
 
               [{gl1 :pershare-gain-or-loss}] (filter #(= :BUY (:op %)) profit-loss)
-              [{pl1 :realized-profit-loss}]   (filter #(= :SELL (:op %)) profit-loss)]
+              [{pl1 :realized-profit-loss}]  (filter #(= :SELL (:op %)) profit-loss)]
 
           (are [x y] (= x y)
             10.0   gl1
@@ -441,9 +436,9 @@
 
       (testing "Check profit/loss (running & realized), per purchase chunk - B"
 
-          (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
 
-                      (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
                         (assoc v :local-transact-input (merge stock-tick op))))
                     (drop 2 iterations)
                     (drop 2 ops))
@@ -1077,26 +1072,6 @@
 
     ;; B
     (testing "We are correctly streaming running-profit-loss and account-balances updates"
-
-      ;; profit-loss and account-balances shapes should look like this
-      #_(({:game-id          #uuid "afffbd97-4a26-4e6c-aa68-e63945f77e8e"
-           :stock-id         #uuid "8c8518e9-0601-443d-a26a-af3c45e5ac21"
-           :profit-loss-type :running-profit-loss
-           :profit-loss      0.0})
-
-         (#{:bookkeeping.account/id #uuid "113c18ef-ccf3-4b2d-bf4e-a8bcb9869f05"
-            :bookkeeping.account/name "STOCK.Relative Waste"
-            :bookkeeping.account/balance 10500.0
-            :bookkeeping.account/amount 100
-            :bookkeeping.account/counter-party #:game.stock{:name "Relative Waste"}}
-           #{:bookkeeping.account/id #uuid "a99ee1be-da48-401f-af63-e84fb1058a7c"
-             :bookkeeping.account/name "Cash"
-             :bookkeeping.account/balance 89500.0
-             :bookkeeping.account/amount 0}
-           #{:bookkeeping.account/id #uuid "e47c40e0-18c8-41f9-afd1-5eeae5e92472"
-             :bookkeeping.account/name "Equity"
-             :bookkeeping.account/balance 100000.0
-             :bookkeeping.account/amount 0}))
 
       (let [expected-profit-loss-count     5
             expected-account-balance-count 2

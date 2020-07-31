@@ -680,26 +680,27 @@
 
 (defn run-game! [conn
                  {:keys [control-channel
-                         control-chain
+                         iterations
                          game-event-stream]}
                  pause-atom tick-sleep-atom level-timer-atom]
 
   (core.async/go-loop [now (t/now)
                        end (t/plus now (t/seconds @level-timer-atom))
-                       [x xs] (run-iteration control-chain)]
+                       iters iterations]
 
-    (let [remaining (calculate-remaining-time now end)
+    (let [x                                    (ffirst iters)
+          remaining                            (calculate-remaining-time now end)
           [{message :message :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
                                                                   control-channel])
 
           ;; pause
           ;; control
           ;; timer
-          _ (println (format "game-loop %s / %s / %s" now end controlv))
+          _           (println (format "game-loop %s / %s / %s" now end controlv))
           [nowA endA] (match [@pause-atom message (time-expired? remaining)]
 
                              [true :exit _] (handle-control-event conn game-event-stream (assoc controlv :message :pause-exit) now end)
-                             [true _ _] (let [new-end (t/plus end (t/seconds 1))
+                             [true _ _] (let [new-end   (t/plus end (t/seconds 1))
                                               remaining (calculate-remaining-time now new-end)]
                                           (println (format "< Paused > %s" (format-remaining-time remaining)))
                                           [(t/now) new-end])
@@ -713,18 +714,19 @@
                                            ;; :stock-tick
                                            ;; :timer-event
 
-                                           (println (format "Running %s / %s" (format-remaining-time remaining) x))
+                                           (println (format "Running %s" (format-remaining-time remaining)))
                                            (when x
                                              [(t/now) end]))
                              [_ _ true] (handle-control-event conn game-event-stream {:message :timeout} now end))
 
           ;; NOTE On shutdown, the game reference can disappear
-          game-alive? (-> repl.state/system :game/games deref keys)]
+          ;; game-alive? (-> repl.state/system :game/games deref keys)
+          ]
 
-      (println game-alive?)
+      ;; (println game-alive?)
 
-      (when (and nowA endA game-alive?)
-        (recur nowA endA xs)))))
+      (when (and nowA endA)
+        (recur nowA endA (next iters))))))
 
 (defn start-game! [conn user-db-id game-control]
 
@@ -736,7 +738,8 @@
 
     (as-> game-control gc
       (inputs->control-chain gc {:conn conn :user-db-id user-db-id})
-      (assoc game-control :control-chain gc)
+      (run-iteration gc)
+      (assoc game-control :iterations gc)
       (run-game! conn gc paused? tick-sleep-atom level-timer-atom))))
 
 (defn start-workbench! [conn user-db-id {level-timer :level-timer-atom

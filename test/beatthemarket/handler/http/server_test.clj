@@ -1,4 +1,4 @@
-pS(ns beatthemarket.handler.http.server-test
+(ns beatthemarket.handler.http.server-test
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
             [clojure.core.async :as core.async
