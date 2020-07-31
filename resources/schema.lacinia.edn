@@ -78,7 +78,8 @@
   :GameEvent
   {:description "Game events"
    :fields
-   {:message {:type (non-null String)}}
+   #_{:message {:type (non-null String)}}
+   {:message {:type (non-null :GameEventMessage)}}
    #_{:type    {:type (non-null :GameEventType)}
       :gameId  {:type (non-null String)}
       :message {:type (non-null :GameEventMessage)}}}
@@ -93,7 +94,7 @@
   {:description "Tells user if they've won or lost a level"
    :fields
    {:level      {:type (non-null Int)}
-    :status     {:type (non-null :LevelStatusMessage)}
+    :status     {:type (non-null :GameEventMessage #_:LevelStatusMessage)}
     :profitLoss {:type (non-null Float)}}}}
 
 
@@ -113,14 +114,15 @@
   {:values [:control :levelStatus :levelTimer]}
 
   :GameEventMessage
-  {:values [:ControlMessage :LevelTimer :LevelStatus]}
+  ;; {:values [:ControlMessage :LevelTimer :LevelStatus]}
+  {:values [:pause :resume :exit :win :lose]}
 
-  :ControlMessage
-  {:description "Possible game event messages that can be sent to the client"
-   :values      [:pause :resume :exit]}
-
-  :LevelStatusMessage
-  {:values [:win :lose]}}
+  ;; :ControlMessage
+  ;; {:description "Possible game event messages that can be sent to the client"
+  ;;  :values      [:pause :resume :exit]}
+  ;; :LevelStatusMessage
+  ;; {:values [:win :lose]}
+  }
 
 
  ;; //

@@ -715,10 +715,9 @@
           (:control-channel gs)
           (core.async/>!! gs {:message :exit}))
 
-        ;; (Thread/sleep 5000)
         (let [expected-game-events {:type "data"
                                     :id 992
-                                    :payload {:data {:gameEvents {:message "{:message :exit}"}}}}]
+                                    :payload {:data {:gameEvents {:message "exit"}}}}]
 
           (as-> (consume-subscriptions) ss
             (filter #(= 992 (:id %)) ss)
