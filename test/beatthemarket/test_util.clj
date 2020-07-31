@@ -217,8 +217,10 @@
    (<message!! 75))
   ([timeout-ms]
    (util/pprint+identity
-     (alt!!
-       *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))))
+       (alt!!
+         *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))
+   #_(alt!!
+     *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)))
 
 (defmacro expect-message
   [expected]

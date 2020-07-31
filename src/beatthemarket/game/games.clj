@@ -31,14 +31,19 @@
   (atom {}))
 
 (defmethod ig/halt-key! :game/games [_ games]
-  (run! (fn [{:keys [stock-stream-channel control-channel]}]
+  (run! (fn [{:keys [stock-tick-stream
+                    portfolio-update-stream
+                    game-event-stream
+                    control-channel]}]
 
-          ;; (println "Closing Game channels...")
-          ;; (close! stock-stream-channel)
-          ;;
-          ;; (go (>! control-channel :exit))
-          ;; (close! control-channel)
-          )
+          (println "Closing Game channels...")
+
+          (go (>! control-channel {:message :exit}))
+          (close! control-channel)
+
+          (close! stock-tick-stream)
+          (close! portfolio-update-stream)
+          (close! game-event-stream))
         (-> games deref vals)))
 
 ;; BUY | SELL
@@ -277,11 +282,18 @@
                                                    stock-ticks)))
           :calculate-profit-loss-mappingfn (fn [stock-ticks]
 
+                                             #_(-> repl.state/system :game/games
+                                                 deref
+                                                 println
+                                                 ;; (get game-id)
+                                                 ;; keys
+                                                 )
+
                                              (let [updated-profit-loss-calculations
                                                    (-> repl.state/system :game/games
                                                        deref
                                                        (get game-id)
-                                                       ;; util/pprint+identity
+                                                       ;; ((util/pprint+identity (dissoc % :stocks-with-tick-data)))
                                                        :profit-loss
                                                        ((partial recalculate-perstock-fn stock-ticks)))]
 
@@ -704,9 +716,14 @@
                                            (println (format "Running %s / %s" (format-remaining-time remaining) x))
                                            (when x
                                              [(t/now) end]))
-                             [_ _ true] (handle-control-event conn game-event-stream {:message :timeout} now end))]
+                             [_ _ true] (handle-control-event conn game-event-stream {:message :timeout} now end))
 
-      (when (and nowA endA)
+          ;; NOTE On shutdown, the game reference can disappear
+          game-alive? (-> repl.state/system :game/games deref keys)]
+
+      (println game-alive?)
+
+      (when (and nowA endA game-alive?)
         (recur nowA endA xs)))))
 
 (defn start-game! [conn user-db-id game-control]

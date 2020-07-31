@@ -1,4 +1,4 @@
-(ns beatthemarket.handler.http.server-test
+pS(ns beatthemarket.handler.http.server-test
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
             [clojure.core.async :as core.async
@@ -711,10 +711,11 @@
         (as-> (:game/games state/system) gs
           (deref gs)
           (get gs (UUID/fromString id))
+          ;; (util/pprint+identity (dissoc gs :stocks-with-tick-data))
           (:control-channel gs)
           (core.async/>!! gs {:message :exit}))
 
-        ;; (Thread/sleep 1000)
+        ;; (Thread/sleep 5000)
         (let [expected-game-events {:type "data"
                                     :id 992
                                     :payload {:data {:gameEvents {:message "{:message :exit}"}}}}]

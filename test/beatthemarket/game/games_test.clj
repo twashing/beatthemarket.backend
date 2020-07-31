@@ -183,7 +183,7 @@
       (testing "Error is thrown when submitted price does not match price from tickId"
         (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
 
-      (testing "Error is thrown when submitted tick is no the latest"
+      #_(testing "Error is thrown when submitted tick is no the latest"
         (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
 
       (testing "Returned Tentry matches what was submitted"
@@ -958,34 +958,34 @@
 
         (let [expected-tick-count            3
               expected-profit-loss-values    '(0.0 750.0 750.0 1750.0)
-              actual-profit-loss-values (->>  @portfolio-update-result
-                                              (select [ALL ALL])
-                                              (filter :profit-loss-type)
-                                              (map :profit-loss))
+              actual-profit-loss-values (->> @portfolio-update-result
+                                             (select [ALL ALL])
+                                             (filter :profit-loss-type)
+                                             (map :profit-loss))
 
               ;; TODO stockName is losing the "STOCK.xyz" prefix
-              expected-account-update-values #{#{{;; :bookkeeping.account/name    "Cash"
-                                                  :bookkeeping.account/balance 92500.0
+              expected-account-update-values #{#{{:bookkeeping.account/name    "Cash"
+                                                  :bookkeeping.account/balance (float 92500.0)
                                                   :bookkeeping.account/amount  0}
-                                                 {;; :bookkeeping.account/name    stockName
-                                                  :bookkeeping.account/balance 7500.0
+                                                 {:bookkeeping.account/name    (str "STOCK." stockName)
+                                                  :bookkeeping.account/balance (float 7500.0)
                                                   :bookkeeping.account/amount  75}
-                                                 {;; :bookkeeping.account/name    "Equity"
-                                                  :bookkeeping.account/balance 100000.0
+                                                 {:bookkeeping.account/name    "Equity"
+                                                  :bookkeeping.account/balance (float 100000.0)
                                                   :bookkeeping.account/amount  0}}
-                                               #{{;; :bookkeeping.account/name    "Cash"
-                                                  :bookkeeping.account/balance 89750.0
+                                               #{{:bookkeeping.account/name    "Cash"
+                                                  :bookkeeping.account/balance (float 89750.0)
                                                   :bookkeeping.account/amount  0}
-                                                 {;; :bookkeeping.account/name    stockName
-                                                  :bookkeeping.account/balance 10250.0
+                                                 {:bookkeeping.account/name    (str "STOCK." stockName)
+                                                  :bookkeeping.account/balance (float 10250.0)
                                                   :bookkeeping.account/amount  100}
-                                                 {;; :bookkeeping.account/name    "Equity"
-                                                  :bookkeeping.account/balance 100000.0
+                                                 {:bookkeeping.account/name    "Equity"
+                                                  :bookkeeping.account/balance (float 100000.0)
                                                   :bookkeeping.account/amount  0}}}
               actual-account-update-values (->> @portfolio-update-result
                                                 (select [ALL ALL])
                                                 (filter :bookkeeping.account/balance)
-                                                (map #(select-keys % [;; :bookkeeping.account/name
+                                                (map #(select-keys % [:bookkeeping.account/name
                                                                       :bookkeeping.account/balance
                                                                       :bookkeeping.account/amount]))
                                                 (partition 3)
@@ -995,10 +995,7 @@
           (are [x y] (= x y)
             expected-tick-count (count @stock-tick-result)
             expected-profit-loss-values actual-profit-loss-values
-
-            ;; TODO These hashsets are equal. But test is still failing
-            ;; expected-account-update-values actual-account-update-values
-            )))
+            expected-account-update-values actual-account-update-values)))
 
       (testing "Correctly recalculating profit-loss on a tick update (:running-profit-loss increases)"
 
@@ -1016,31 +1013,51 @@
                (every? true?)
                is))))))
 
-#_(deftest stream-portfolio-update-on-transact-test
+(deftest stream-portfolio-update-on-transact-test
 
   ;; A
-  (let [conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+  (let [;; A
+        conn                                (-> repl.state/system :persistence/datomic :opts :conn)
         {result-user-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
-        sink-fn                             identity
-        game-level                          :game-level/one
-        data-sequence-A                     [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
-        opts                                {}
 
-        {{gameId :game/id :as game} :game
-         control-channel            :control-channel
-         stock-tick-stream          :stock-tick-stream
-         portfolio-update-stream    :portfolio-update-stream
-         :as                        game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+        ;; B
+        data-sequence-A [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
+        data-sequence-length (count data-sequence-A)
 
+
+        ;; C create-game!
+        sink-fn    identity
+
+        stock-tick-result       (atom [])
         portfolio-update-result (atom [])
-        control-chain (game.games/start-game! conn result-user-id game-control)
-        stockId                 (-> game
+        profit-loss-history     (atom [])
+
+        game-id (UUID/randomUUID)
+        opts          {:level-timer-sec 5}
+
+        game-level :game-level/one
+        {{gameId     :game/id
+          game-db-id :db/id :as game} :game
+         control-channel              :control-channel
+         portfolio-update-stream      :portfolio-update-stream
+         :as                          game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+        iterations (game.games/start-workbench! conn result-user-id game-control)
+
+        game-user-subscription  (-> game
                                     :game/users first
-                                    :game.user/subscriptions first
-                                    :game.stock/id)
-        stockAmount             100]
+                                    :game.user/subscriptions first)
+        {stockId   :game.stock/id
+         stockName :game.stock/name} game-user-subscription
+        opts                   {:conn    conn
+                                :userId  userId
+                                :gameId  gameId
+                                :stockId stockId}
+        ops [{:op :noop}
+             {:op :buy :stockAmount 75}
+             {:op :buy :stockAmount 25}
+             {:op :noop}
+             {:op :noop}]]
 
     (core.async/go-loop []
       (let [a (core.async/<! portfolio-update-stream)]
@@ -1048,76 +1065,97 @@
           (swap! portfolio-update-result #(conj % a))
           (recur))))
 
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              iterations
+              ops)
+         (map #(local-transact-stock! opts %))
+         (take data-sequence-length)
+         doall)
+
     ;; B
-    (run! (fn [_]
-            (core.async/go
-              (core.async/<! control-chain)))
-          data-sequence-A)
+    (testing "We are correctly streaming running-profit-loss and account-balances updates"
 
-    ;; C
-    (let [test-stock-ticks (atom [])
-          f                (fn [a]
-                             (swap! test-stock-ticks
-                                    #(conj % a)))]
+      ;; profit-loss and account-balances shapes should look like this
+      #_(({:game-id          #uuid "afffbd97-4a26-4e6c-aa68-e63945f77e8e"
+           :stock-id         #uuid "8c8518e9-0601-443d-a26a-af3c45e5ac21"
+           :profit-loss-type :running-profit-loss
+           :profit-loss      0.0})
 
-      ;; D Collect stock-tick-stream values
-      (run! (fn [_]
-              (core.async/go
-                (f (core.async/<! stock-tick-stream))))
-            data-sequence-A)
-      (Thread/sleep 1000)
+         (#{:bookkeeping.account/id #uuid "113c18ef-ccf3-4b2d-bf4e-a8bcb9869f05"
+            :bookkeeping.account/name "STOCK.Relative Waste"
+            :bookkeeping.account/balance 10500.0
+            :bookkeeping.account/amount 100
+            :bookkeeping.account/counter-party #:game.stock{:name "Relative Waste"}}
+           #{:bookkeeping.account/id #uuid "a99ee1be-da48-401f-af63-e84fb1058a7c"
+             :bookkeeping.account/name "Cash"
+             :bookkeeping.account/balance 89500.0
+             :bookkeeping.account/amount 0}
+           #{:bookkeeping.account/id #uuid "e47c40e0-18c8-41f9-afd1-5eeae5e92472"
+             :bookkeeping.account/name "Equity"
+             :bookkeeping.account/balance 100000.0
+             :bookkeeping.account/amount 0}))
 
+      (let [expected-profit-loss-count     5
+            expected-account-balance-count 2
 
-      (testing "We are correctly streaming running-profit-loss and account-balances updates"
+            expected-profit-loss-keys #{:game-id :stock-id :profit-loss-type :profit-loss }
+            expected-profit-loss-values (->> [125.0 0.0 1125.0 -375.0]
+                                             (map float)
+                                             (into #{}))
 
-        (let [{tickPriceL :game.stock.tick/close
-               tickIdL    :game.stock.tick/id}
-              (->> @test-stock-ticks last
-                   (filter #(= stockId (:game.stock/id %))) first)]
+            expected-account-balance-updates #{#{{:bookkeeping.account/name (str "STOCK." stockName)
+                                                  :bookkeeping.account/balance (float 10875.0)
+                                                  :bookkeeping.account/amount 100}
+                                                 {:bookkeeping.account/name "Cash"
+                                                  :bookkeeping.account/balance (float 89125.0)
+                                                  :bookkeeping.account/amount 0}
+                                                 {:bookkeeping.account/name "Equity"
+                                                  :bookkeeping.account/balance (float 100000.0)
+                                                  :bookkeeping.account/amount 0}}
+                                               #{{:bookkeeping.account/name (str "STOCK." stockName)
+                                                  :bookkeeping.account/balance (float 8250.0)
+                                                  :bookkeeping.account/amount 75}
+                                                 {:bookkeeping.account/name "Cash"
+                                                  :bookkeeping.account/balance (float 91750.0)
+                                                  :bookkeeping.account/amount 0}
+                                                 {:bookkeeping.account/name "Equity"
+                                                  :bookkeeping.account/balance (float 100000.0)
+                                                  :bookkeeping.account/amount 0}}}
 
-          (game.games/buy-stock! conn userId gameId stockId stockAmount tickIdL (Float. tickPriceL) false)
-          (Thread/sleep 1000)
+            profit-loss (->> @portfolio-update-result
+                             (select [ALL ALL])
+                             (filter :profit-loss-type))
 
-          ;; profit-loss and account-balances shapes should look like this
-          '(({:game-id          #uuid "afffbd97-4a26-4e6c-aa68-e63945f77e8e"
-              :stock-id         #uuid "8c8518e9-0601-443d-a26a-af3c45e5ac21"
-              :profit-loss-type :running-profit-loss
-              :profit-loss      0.0})
+            account-balances (->> @portfolio-update-result
+                                  (select [ALL ALL])
+                                  (filter :bookkeeping.account/balance)
+                                  (map #(select-keys % [:bookkeeping.account/name
+                                                        :bookkeeping.account/balance
+                                                        :bookkeeping.account/amount]))
+                                  (partition 3)
+                                  (into #{})
+                                  (transform [ALL] #(into #{} %))
+                                  util/pprint+identity)]
 
-            (#{:bookkeeping.account/id #uuid "113c18ef-ccf3-4b2d-bf4e-a8bcb9869f05"
-               :bookkeeping.account/name "STOCK.Relative Waste"
-               :bookkeeping.account/balance 10500.0
-               :bookkeeping.account/amount 100
-               :bookkeeping.account/counter-party #:game.stock{:name "Relative Waste"}}
-              #{:bookkeeping.account/id #uuid "a99ee1be-da48-401f-af63-e84fb1058a7c"
-                :bookkeeping.account/name "Cash"
-                :bookkeeping.account/balance 89500.0
-                :bookkeeping.account/amount 0}
-              #{:bookkeeping.account/id #uuid "e47c40e0-18c8-41f9-afd1-5eeae5e92472"
-                :bookkeeping.account/name "Equity"
-                :bookkeeping.account/balance 100000.0
-                :bookkeeping.account/amount 0}))
+        (are [x y] (= x y)
+          expected-account-balance-count (count account-balances)
+          expected-profit-loss-count     (count profit-loss)
+          expected-account-balance-updates account-balances)
 
-          (let [expected-profit-loss-count     1
-                expected-account-balance-count 3
-                [profit-loss account-balances] (filter (comp not empty?) @portfolio-update-result)]
+        (->> (map keys profit-loss)
+             (map #(into #{} %))
+             (every? #(= expected-profit-loss-keys %))
+             is)
 
-            (are [x y] (= x y)
-              expected-account-balance-count (count account-balances)
-              expected-profit-loss-count     (count profit-loss))
-
-            (->> (map keys account-balances)
-                 (map #(into #{} %))
-                 (every? #(or (= #{:bookkeeping.account/id :bookkeeping.account/name :bookkeeping.account/balance
-                                   :bookkeeping.account/amount} %)
-                              (= #{:bookkeeping.account/id :bookkeeping.account/name :bookkeeping.account/balance
-                                   :bookkeeping.account/amount :bookkeeping.account/counter-party} %)))
-                 is)
-
-            (->> (map keys profit-loss)
-                 (map #(into #{} %))
-                 (every? #(= #{:game-id :stock-id :profit-loss-type :profit-loss} %))
-                 is)))))))
+        (->> (map #(select-keys % [:profit-loss]) profit-loss)
+             (map vals)
+             flatten
+             (into #{})
+             (= expected-profit-loss-values)
+             is)))))
 
 (deftest check-level-win-test
 
