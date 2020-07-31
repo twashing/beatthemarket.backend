@@ -683,6 +683,7 @@
           ;; pause
           ;; control
           ;; timer
+          _ (println (format "game-loop %s / %s / %s" now end controlv))
           [nowA endA] (match [@pause-atom message (time-expired? remaining)]
 
                              [true :exit _] (handle-control-event conn game-event-stream (assoc controlv :message :pause-exit) now end)

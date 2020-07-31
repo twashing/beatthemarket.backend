@@ -289,7 +289,7 @@
           (deref gs)
           (get gs (UUID/fromString id))
           (:control-channel gs)
-          (core.async/>!! gs :exit))
+          (core.async/>!! gs {:message :exit}))
         (Thread/sleep 1000)
 
         (test-util/<message!! 1000)
@@ -376,7 +376,7 @@
         (deref gs)
         (get gs (UUID/fromString id))
         (:control-channel gs)
-        (core.async/>!! gs :exit))
+        (core.async/>!! gs {:message :exit}))
 
 
       (let [latest-tick (consume-latest-tick)
@@ -462,7 +462,7 @@
         (deref gs)
         (get gs (UUID/fromString id))
         (:control-channel gs)
-        (core.async/>!! gs :exit))
+        (core.async/>!! gs {:message :exit}))
 
 
       (let [latest-tick (consume-latest-tick)
@@ -624,7 +624,7 @@
                           {:query "mutation CreateGame($gameLevel: String!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
-                                         stocks
+                                         stocks { id name symbol }
                                        }
                                      }"
                            :variables {:gameLevel gameLevel}}})
@@ -661,7 +661,6 @@
       (test-util/<message!! 1000)
 
       (let [latest-tick (->> (consume-subscriptions)
-                             ;;   util/pprint+identity
                              (filter #(= 989 (:id %)))
                              last)
             [{stockTickId :stockTickId
@@ -675,9 +674,9 @@
                               :type :start
                               :payload
                               {:query "mutation BuyStock($input: BuyStock!) {
-                                       buyStock(input: $input) {
-                                         message
-                                       }
+                                         buyStock(input: $input) {
+                                           message
+                                         }
                                      }"
                                :variables {:input {:gameId      id
                                                    :stockId     stockId
@@ -713,15 +712,16 @@
           (deref gs)
           (get gs (UUID/fromString id))
           (:control-channel gs)
-          (core.async/>!! gs :exit))
+          (core.async/>!! gs {:message :exit}))
 
-        (Thread/sleep 1000)
+        ;; (Thread/sleep 1000)
         (let [expected-game-events {:type "data"
                                     :id 992
-                                    :payload {:data {:gameEvents {:message ":exit"}}}}]
+                                    :payload {:data {:gameEvents {:message "{:message :exit}"}}}}]
 
           (as-> (consume-subscriptions) ss
             (filter #(= 992 (:id %)) ss)
+            (util/pprint+identity ss)
             (first ss)
             (= expected-game-events ss)
             (is ss)))))))
