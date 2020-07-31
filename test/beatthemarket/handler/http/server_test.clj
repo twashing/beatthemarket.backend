@@ -144,8 +144,6 @@
                  (= expected-component-game-keys)
                  is)))))))
 
-6
-
 (deftest start-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
@@ -199,7 +197,7 @@
 
           (is (= expected-result result)))))))
 
-#_(deftest stream-stock-ticks-test
+(deftest stream-stock-ticks-test
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
           id-token (test-util/->id-token)
@@ -219,7 +217,7 @@
                               {:query "mutation CreateGame($gameLevel: String!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
-                                         stocks
+                                         stocks  { id name symbol }
                                        }
                                      }"
                                :variables {:gameLevel gameLevel}}}))
@@ -290,7 +288,6 @@
             (get gs (UUID/fromString id))
             (:control-channel gs)
             (core.async/>!! gs {:message :exit}))
-          (Thread/sleep 1000)
 
           (test-util/<message!! 1000)
 
@@ -322,7 +319,7 @@
           (swap! subscriptions #(conj % r))
           (recur (test-util/<message!! 1000)))))))
 
-#_(deftest buy-stock-test
+(deftest buy-stock-test
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
           id-token (test-util/->id-token)
@@ -336,7 +333,7 @@
                             {:query "mutation CreateGame($gameLevel: String!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
-                                         stocks
+                                         stocks { id name symbol }
                                        }
                                      }"
                              :variables {:gameLevel gameLevel}}})
@@ -379,7 +376,9 @@
           (core.async/>!! gs {:message :exit}))
 
 
-        (let [latest-tick (consume-latest-tick)
+        (let [latest-tick (->> (consume-subscriptions)
+                               (filter #(= 989 (:id %)))
+                               last)
               [{stockTickId :stockTickId
                 stockTickTime :stockTickTime
                 stockTickClose :stockTickClose
@@ -391,10 +390,10 @@
                                 :type :start
                                 :payload
                                 {:query "mutation BuyStock($input: BuyStock!) {
-                                       buyStock(input: $input) {
-                                         message
-                                       }
-                                     }"
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
                                  :variables {:input {:gameId      id
                                                      :stockId     stockId
                                                      :stockAmount 100
@@ -408,7 +407,7 @@
             (is (= {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}
                    ack)))))))
 
-#_(deftest sell-stock-test
+(deftest sell-stock-test
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
           id-token (test-util/->id-token)
@@ -422,7 +421,7 @@
                             {:query "mutation CreateGame($gameLevel: String!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
-                                         stocks
+                                         stocks { id name symbol }
                                        }
                                      }"
                              :variables {:gameLevel gameLevel}}})
@@ -465,7 +464,9 @@
           (core.async/>!! gs {:message :exit}))
 
 
-        (let [latest-tick (consume-latest-tick)
+        (let [latest-tick (->> (consume-subscriptions)
+                               (filter #(= 989 (:id %)))
+                               last)
               [{stockTickId :stockTickId
                 stockTickTime :stockTickTime
                 stockTickClose :stockTickClose
