@@ -13,8 +13,9 @@
 
   :StartGameAck
   {:fields
-   {;; :message {:type (non-null :StartGameAckMessage)}
-    :message {:type (non-null String)}}}
+   {:message {:type (non-null :StartGameAckMessage)}
+    ;; :message {:type (non-null String)}
+    }}
 
   :BuyStockAck
   {:fields

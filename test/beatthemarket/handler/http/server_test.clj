@@ -82,8 +82,7 @@
 
     (testing "REST Login (not WebSocket) ; creates a user"
 
-      (test-uti
-        l/login-assertion service id-token))
+      (test-util/login-assertion service id-token))
 
 
     (testing "Create a Game"
@@ -147,7 +146,7 @@
 
 6
 
-#_(deftest start-game-resolver-test
+(deftest start-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -167,7 +166,7 @@
                             {:query "mutation CreateGame($gameLevel: String!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
-                                         stocks
+                                         stocks { id name symbol }
                                        }
                                      }"
                              :variables {:gameLevel gameLevel}}}))
@@ -190,16 +189,15 @@
           (deref gs)
           (get gs (UUID/fromString id))
           (:control-channel gs)
-          (core.async/>!! gs :exit))
+          (core.async/>!! gs {:message :exit}))
 
-        (Thread/sleep 1000)
 
-        (let [_ (test-util/<message!! 1000)
+        (test-util/<message!! 1000)
 
-              expected-result {:message :gamestarted}
+        (let [expected-result {:message "gamestarted"}
               result (-> (test-util/<message!! 1000) :payload :data :startGame)]
 
-          (= expected-result result))))))
+          (is (= expected-result result)))))))
 
 #_(deftest stream-stock-ticks-test
 
@@ -612,7 +610,7 @@
                (every? true?)
                is))))))
 
-#_(deftest stream-game-events-test
+(deftest stream-game-events-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -663,6 +661,7 @@
       (test-util/<message!! 1000)
 
       (let [latest-tick (->> (consume-subscriptions)
+                             ;;   util/pprint+identity
                              (filter #(= 989 (:id %)))
                              last)
             [{stockTickId :stockTickId

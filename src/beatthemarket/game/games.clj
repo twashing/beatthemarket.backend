@@ -280,7 +280,9 @@
                                              (let [updated-profit-loss-calculations
                                                    (-> repl.state/system :game/games
                                                        deref
-                                                       (get game-id) :profit-loss
+                                                       (get game-id)
+                                                       ;; util/pprint+identity
+                                                       :profit-loss
                                                        ((partial recalculate-perstock-fn stock-ticks)))]
 
                                                (->> updated-profit-loss-calculations
@@ -664,9 +666,11 @@
         f          (fn [[x xs]] (first+next xs))]
     (iterate f (first+next control-chain))))
 
-(defn run-game! [{:keys [control-channel
+(defn run-game! [conn
+                 {:keys [control-channel
                          control-chain
-                         game-event-stream]} pause-atom tick-sleep-atom level-timer-atom]
+                         game-event-stream]}
+                 pause-atom tick-sleep-atom level-timer-atom]
 
   (core.async/go-loop [now (t/now)
                        end (t/plus now (t/seconds @level-timer-atom))
@@ -681,15 +685,15 @@
           ;; timer
           [nowA endA] (match [@pause-atom message (time-expired? remaining)]
 
-                             [true :exit _] (handle-control-event game-event-stream (assoc controlv :message :pause-exit) now end)
+                             [true :exit _] (handle-control-event conn game-event-stream (assoc controlv :message :pause-exit) now end)
                              [true _ _] (let [new-end (t/plus end (t/seconds 1))
                                               remaining (calculate-remaining-time now new-end)]
                                           (println (format "< Paused > %s" (format-remaining-time remaining)))
                                           [(t/now) new-end])
 
-                             [_ :exit _] (handle-control-event game-event-stream controlv now end)
-                             [_ :win _] (handle-control-event game-event-stream controlv now end)
-                             [_ :lose _] (handle-control-event game-event-stream controlv now end)
+                             [_ :exit _] (handle-control-event conn game-event-stream controlv now end)
+                             [_ :win _] (handle-control-event conn game-event-stream controlv now end)
+                             [_ :lose _] (handle-control-event conn game-event-stream controlv now end)
                              [_ _ false] (do
 
                                            ;; TODO stream
@@ -699,7 +703,7 @@
                                            (println (format "Running %s / %s" (format-remaining-time remaining) x))
                                            (when x
                                              [(t/now) end]))
-                             [_ _ true] (handle-control-event game-event-stream {:message :timeout} now end))]
+                             [_ _ true] (handle-control-event conn game-event-stream {:message :timeout} now end))]
 
       (when (and nowA endA)
         (recur nowA endA xs)))))
@@ -715,7 +719,7 @@
     (as-> game-control gc
       (inputs->control-chain gc {:conn conn :user-db-id user-db-id})
       (assoc game-control :control-chain gc)
-      (run-game! gc paused? tick-sleep-atom level-timer-atom))))
+      (run-game! conn gc paused? tick-sleep-atom level-timer-atom))))
 
 (defn start-workbench! [conn user-db-id {level-timer :level-timer-atom
                                          tick-sleep-atom :tick-sleep-atom
