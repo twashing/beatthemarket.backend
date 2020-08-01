@@ -6,6 +6,7 @@
             [integrant.repl.state :as repl.state]
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.game.core :as game.core]
@@ -71,7 +72,9 @@
    "ten" :game-level/ten
    "market" :game-level/market})
 
-(defn resolve-create-game [context {gameLevel :gameLevel :as args} _]
+(defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
+
+  ;; (pprint [context args parent])
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
@@ -151,67 +154,46 @@
                                                      ;; (println "sink-fn CALLED /" %)
                                                      (sink-fn {:message %}))) ))
 
-(defn resolve-account-balances [context args _])
+(defn resolve-user [context {email :email :as args}_]
 
-(defn resolve-stock-time-series [context {:keys [gameId stockId range]} _]
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)]
 
-
-  [:StockTick]
-
-  [{:stockTickId "32bd40bb-c4b3-4f07-9667-781c67d4e1f5"
-    :stockTickTime "1595692766979"
-    :stockTickClose 149.02000427246094
-    :stockId "d658021f-ca4e-4e34-a6ee-2a9fc8bb253d"
-    :stockName "Outside Church"}
-   {:stockTickId "df09933d-5879-45e5-b038-40498d7ca198"
-    :stockTickTime "1595692766979"
-    :stockTickClose 149.02000427246094
-    :stockId "942349f5-94ef-4ed3-8470-a9fb1123dbb8"
-    :stockName "Sick Dough"}
-   {:stockTickId "324e662b-24ac-4b0d-8f91-ebee01f029d9"
-    :stockTickTime "1595692766979"
-    :stockTickClose 149.02000427246094
-    :stockId "97fa4791-47f8-42ff-8683-a235284de178"
-    :stockName "Vigorous Grip"}
-   {:stockTickId "cce40bb5-279e-47d6-a3c1-0e587c8e097b"
-    :stockTickTime "1595692766979"
-    :stockTickClose 149.02000427246094
-    :stockId "e02e81a7-15c1-4c4e-996a-bc65c8de4a9a"
-    :stockName "Color-blind Maintenance"}])
-
-(defn resolve-user [context  _]
-
-  :User
-
-  {:userEmail "twashing@gmail.com"
-   :userName "Timothy Washington"
-   :userExternalUid "foobar"
-   :userAccounts
-   [{:accountId "077c1016-651d-418e-9659-732023a03a27"
-     :accountName "Cash"
-     :accountBalance 100000.0
-     :accountAmount 0}
-    {:accountId "ce4a3687-d5fe-41de-8ed6-91e404cddb9b"
-     :accountName "Equity"
-     :accountBalance 100000.0
-     :accountAmount 0}]})
+    (->> (iam.persistence/user-by-email conn email)
+         ffirst
+         (transform [identity] #(dissoc % :db/id))
+         (transform [identity] #(clojure.set/rename-keys % {:user/email :userEmail
+                                                            :user/name :userName
+                                                            :user/external-uid :userExternalUid
+                                                            :user/accounts :userAccounts}))
+         (transform [:userAccounts ALL] #(dissoc % :db/id :bookkeeping.account/type :bookkeeping.account/orientation))
+         (transform [:userAccounts ALL] #(clojure.set/rename-keys % {:bookkeeping.account/id :accountId
+                                                                     :bookkeeping.account/name :accountName
+                                                                     :bookkeeping.account/balance :accountBalance
+                                                                     :bookkeeping.account/amount :accountAmount})))))
 
 (defn resolve-users [context args _]
 
-  [:User]
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+        users (d/q '[:find (pull ?e [*])
+                     :in $
+                     :where
+                     [?e :user/email]]
+                   (d/db conn))]
 
-  [{:userEmail "twashing@gmail.com"
-    :userName "Timothy Washington"
-    :userExternalUid "foobar"
-    :userAccounts
-    [{:accountId "077c1016-651d-418e-9659-732023a03a27"
-      :accountName "Cash"
-      :accountBalance 100000.0
-      :accountAmount 0}
-     {:accountId "ce4a3687-d5fe-41de-8ed6-91e404cddb9b"
-      :accountName "Equity"
-      :accountBalance 100000.0
-      :accountAmount 0}]}])
+    (->> (map first users)
+         (transform [ALL identity] #(dissoc % :db/id))
+         (transform [ALL identity] #(clojure.set/rename-keys % {:user/email :userEmail
+                                                                :user/name :userName
+                                                                :user/external-uid :userExternalUid
+                                                                :user/accounts :userAccounts}))
+         (transform [ALL :userAccounts ALL] #(dissoc % :db/id :bookkeeping.account/type :bookkeeping.account/orientation))
+         (transform [ALL :userAccounts ALL] #(clojure.set/rename-keys % {:bookkeeping.account/id :accountId
+                                                                         :bookkeeping.account/name :accountName
+                                                                         :bookkeeping.account/balance :accountBalance
+                                                                         :bookkeeping.account/amount :accountAmount})))))
+
+
+
 
 (defn resolve-user-personal-profit-loss [context {email :email} _]
 
@@ -242,6 +224,34 @@
    {:profitLoss -10460.73
     :stockId "stockid3"
     :gameId "marketid1"}])
+
+(defn resolve-account-balances [context args _])
+
+(defn resolve-stock-time-series [context {:keys [gameId stockId range]} _]
+
+
+  [:StockTick]
+
+  [{:stockTickId "32bd40bb-c4b3-4f07-9667-781c67d4e1f5"
+    :stockTickTime "1595692766979"
+    :stockTickClose 149.02000427246094
+    :stockId "d658021f-ca4e-4e34-a6ee-2a9fc8bb253d"
+    :stockName "Outside Church"}
+   {:stockTickId "df09933d-5879-45e5-b038-40498d7ca198"
+    :stockTickTime "1595692766979"
+    :stockTickClose 149.02000427246094
+    :stockId "942349f5-94ef-4ed3-8470-a9fb1123dbb8"
+    :stockName "Sick Dough"}
+   {:stockTickId "324e662b-24ac-4b0d-8f91-ebee01f029d9"
+    :stockTickTime "1595692766979"
+    :stockTickClose 149.02000427246094
+    :stockId "97fa4791-47f8-42ff-8683-a235284de178"
+    :stockName "Vigorous Grip"}
+   {:stockTickId "cce40bb5-279e-47d6-a3c1-0e587c8e097b"
+    :stockTickTime "1595692766979"
+    :stockTickClose 149.02000427246094
+    :stockId "e02e81a7-15c1-4c4e-996a-bc65c8de4a9a"
+    :stockName "Color-blind Maintenance"}])
 
 
 ;; STREAMERS

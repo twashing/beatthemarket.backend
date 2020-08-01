@@ -159,7 +159,8 @@
  {:accountBalances
   {:type    (list (non-null :AccountBalance))
    :args    {:gameId {:type (non-null String)}}
-   :resolve :resolve-account-balances}
+   :resolve :resolve-account-balances
+   :description "Returns accountBalances, per game, per user"}
 
   :stockTimeSeries
   {:type        (list (non-null :StockTick))
@@ -170,13 +171,13 @@
    :description "Called after game is created (where stocks are created)"}
 
   :user
-  {:type (non-null #_String :User)
+  {:type (non-null :User)
    :args {:email {:type (non-null String)}}
    :resolve :resolve-user
    :description "Return data for a given user"}
 
   :users
-  {:type (list (non-null #_String :User))
+  {:type (list (non-null :User))
    :resolve :resolve-users
    :description "Lists all the users in the system"}
 
