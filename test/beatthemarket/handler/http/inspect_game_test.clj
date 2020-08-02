@@ -4,29 +4,7 @@
             [com.rpl.specter :refer [transform ALL]]
 
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.util :as util])
-  #_(:require [clojure.test :refer :all]
-            [clojure.java.io :refer [resource]]
-            [clojure.core.async :as core.async
-             :refer [<!!]]
-            [clj-time.core :as t]
-            [clj-time.format :as f]
-            [aero.core :as aero]
-            [clojure.data.json :as json]
-            [datomic.client.api :as d]
-            [io.pedestal.http :as server]
-            [com.rpl.specter :refer [transform ALL MAP-VALS]]
-            [beatthemarket.game.games :as game.games]
-            [beatthemarket.test-util :as test-util]
-            [integrant.repl.state :as state]
-            [integrant.repl :refer [clear go halt prep init reset reset-all]]
-            [io.pedestal.test :refer [response-for]]
-            [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.handler.http.service :as http.service]
-            [beatthemarket.iam.persistence :as iam.persistence]
-            [beatthemarket.util :as util]
-            [clj-time.coerce :as c])
-  #_(:import [java.util UUID]))
+            [beatthemarket.util :as util]))
 
 
 (use-fixtures :once (partial test-util/component-prep-fixture :test))
@@ -48,7 +26,7 @@
 (def expected-user-keys #{:userEmail :userName :userExternalUid :userAccounts})
 (def expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount})
 
-(deftest query-user-test
+#_(deftest query-user-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -95,7 +73,7 @@
            (= expected-user)
            is))))
 
-(deftest query-users-test
+#_(deftest query-users-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)

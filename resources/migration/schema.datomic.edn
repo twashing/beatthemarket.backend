@@ -17,11 +17,6 @@
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         "User's ID in the external Authentication system (Firebase)"}
- {:db/ident       :user/accounts
-  :db/valueType   :db.type/ref ;; List of default :account
-  :db/cardinality :db.cardinality/many
-  :db/isComponent true
-  :db/doc         ""}
 
 
  ;; GAME LEVELS
@@ -78,12 +73,25 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
+
+ {:db/ident       :game.user/accounts
+  :db/valueType   :db.type/ref ;; List of default :account
+  :db/cardinality :db.cardinality/many
+  :db/isComponent true
+  :db/doc         ""}
+
+ {:db/ident       :game.user/user-client
+  :db/valueType   :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/isComponent false
+  :db/doc         ""}
+
  {:db/ident       :game.user/profit-loss
   :db/valueType   :db.type/ref
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
- {:db/ident       :game.user/subscriptions
+ #_{:db/ident       :game.user/subscriptions
   :db/valueType   :db.type/ref ;; List of :stock
   :db/cardinality :db.cardinality/many
   :db/isComponent true

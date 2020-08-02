@@ -154,7 +154,7 @@
 
 
   ;; USER
-(defn generate-user!
+#_(defn generate-user!
 
   ([conn] (generate-user! conn (-> repl.state/config :game/game :starting-balance)))
 
@@ -174,6 +174,25 @@
                 :claims (get "email")))
        (ffirst obj)
        (persistence.core/pull-entity conn obj)))))
+
+(defn generate-user!
+
+  [conn]
+
+  (let [id-token               (->id-token)
+        checked-authentication (iam.auth/check-authentication id-token)]
+
+    (as-> checked-authentication obj
+      (iam.user/conditionally-add-new-user! conn obj)
+      (:db-after obj)
+      (d/q '[:find ?e
+             :in $ ?email
+             :where [?e :user/email ?email]]
+           obj
+           (-> checked-authentication
+               :claims (get "email")))
+      (ffirst obj)
+      (persistence.core/pull-entity conn obj))))
 
 
 ;; DOMAIN

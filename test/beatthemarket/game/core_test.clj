@@ -1,15 +1,21 @@
 (ns beatthemarket.game.core-test
   (:require [clojure.test :refer :all]
             [datomic.client.api :as d]
+            [com.rpl.specter :refer [transform ALL]]
+            [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.repl.state :as repl.state]
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.bookkeeping.core :as bookkeeping]
-            [beatthemarket.persistence.core :as persistence.core]
+
+            [beatthemarket.state.core :as state.core]
+            [beatthemarket.migration.core :as migration.core]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :as util]
+            [beatthemarket.bookkeeping.core :as bookkeeping]
+            [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.migration.core :as migration.core])
   (:import [java.util UUID]
            [clojure.lang ExceptionInfo]))
 
@@ -19,6 +25,35 @@
   test-util/component-fixture
   test-util/migration-fixture)
 
+
+#_(comment
+
+  (halt)
+
+  (do
+    (state.core/set-prep :development)
+    (state.core/init-components)
+    (migration.core/run-migrations))
+
+  (do
+    (def conn (-> repl.state/system :persistence/datomic :opts :conn))
+    (def email "foo@bar.com")
+    (def checked-authentication (hash-map :email email
+                                          :name "Foo Bar"
+                                          :uid (str (UUID/randomUUID))))
+
+    (iam.user/add-user! conn checked-authentication)
+    (def result-user-id (-> (d/q '[:find ?e
+                                   :in $ ?email
+                                   :where [?e :user/email ?email]]
+                                 (d/db conn)
+                                 email)
+                            ffirst))
+    (def user-entity (hash-map :db/id result-user-id))
+
+    ;; Initialize Game
+    ;; game (util/pprint+identity (game.core/initialize-game! conn user-entity))
+    (def game (game.core/initialize-game! conn user-entity))))
 
 (deftest initialize-game!-test
 
@@ -43,6 +78,8 @@
 
         ;; Initialize Game
         game (game.core/initialize-game! conn user-entity)
+
+
         result-game-id (-> (d/q '[:find ?e
                                   :in $ ?game-id
                                   :where [?e :game/id ?game-id]]
@@ -58,16 +95,30 @@
       (testing "User has bound game"
 
         (-> game-users first :game.user/user :user/email (= email) is)
-
         (is (= pulled-user (-> game-users first :game.user/user))))
 
       (testing "User's stock subscriptions are a part of the games stocks"
-        (let [game-stocks (:game/stocks pulled-game)
-              game-user-subscriptions (-> game-users first :game.user/subscriptions)]
+        (let [expected-accounts #{{:bookkeeping.account/amount 0
+                                   :bookkeeping.account/name "Cash"
+                                   :bookkeeping.account/orientation :bookkeeping.account.orientation/debit
+                                   :bookkeeping.account/type :bookkeeping.account.type/asset
+                                   :bookkeeping.account/balance (float 100000.0)}
+                                  {:bookkeeping.account/amount 0
+                                   :bookkeeping.account/name "Equity"
+                                   :bookkeeping.account/orientation :bookkeeping.account.orientation/credit
+                                   :bookkeeping.account/type :bookkeeping.account.type/equity
+                                   :bookkeeping.account/balance (float 100000.0)}}
 
-          (is (some (into #{} game-stocks) game-user-subscriptions)))))))
+              game-user-accounts (->> game-users first
+                                      :game.user/accounts
+                                      (into #{})
+                                      (transform [ALL] #(dissoc % :db/id :bookkeeping.account/id))
+                                      (transform [ALL :bookkeeping.account/type] :db/ident)
+                                      (transform [ALL :bookkeeping.account/orientation] :db/ident))]
 
-(deftest buy-stock!-test
+          (is (= expected-accounts game-user-accounts)))))))
+
+#_(deftest buy-stock!-test
 
   (let [conn         (-> repl.state/system :persistence/datomic :opts :conn)
         stock-amount 100
@@ -169,7 +220,7 @@
                              (= (+ stock-starting-balance value-change))
                              is)))))))))))))
 
-(deftest buy-stock!-insufficient-funds-test
+#_(deftest buy-stock!-insufficient-funds-test
 
   (testing "Cannot buy stock with insufficient funds"
 
@@ -184,7 +235,7 @@
 
       (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price))))))
 
-(deftest sell-stock!-test
+#_(deftest sell-stock!-test
 
   (let [conn         (-> repl.state/system :persistence/datomic :opts :conn)
         stock-amount 100

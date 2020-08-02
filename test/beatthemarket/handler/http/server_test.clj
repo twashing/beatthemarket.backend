@@ -73,7 +73,7 @@
     (test-util/send-init)
     (test-util/expect-message {:type "connection_ack"})))
 
-(deftest create-game-resolver-test
+#_(deftest create-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -144,7 +144,7 @@
                  (= expected-component-game-keys)
                  is)))))))
 
-(deftest start-game-resolver-test
+#_(deftest start-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -197,7 +197,7 @@
 
           (is (= expected-result result)))))))
 
-(deftest stream-stock-ticks-test
+#_(deftest stream-stock-ticks-test
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
           id-token (test-util/->id-token)
@@ -319,7 +319,7 @@
           (swap! subscriptions #(conj % r))
           (recur (test-util/<message!! 1000)))))))
 
-(deftest buy-stock-test
+#_(deftest buy-stock-test
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
           id-token (test-util/->id-token)
@@ -407,7 +407,7 @@
             (is (= {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}
                    ack)))))))
 
-(deftest sell-stock-test
+#_(deftest sell-stock-test
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
           id-token (test-util/->id-token)
@@ -594,7 +594,7 @@
 
     createGameAck))
 
-(deftest stream-portfolio-updates-test
+#_(deftest stream-portfolio-updates-test
 
   (let [{id :id :as createGameAck} (stock-buy-happy-path)]
 
@@ -625,7 +625,7 @@
            (every? true?)
            is))))
 
-(deftest stream-game-events-test
+#_(deftest stream-game-events-test
 
   (let [{id :id :as createGameAck} (stock-buy-happy-path)]
 

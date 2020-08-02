@@ -3,6 +3,7 @@
             [clj-time.coerce :as c]
             [com.rpl.specter :refer [select-one  pred ALL]]
             [integrant.core :as ig]
+            [integrant.repl.state :as repl.state]
             [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.persistence.core :as persistence.core]
@@ -23,18 +24,17 @@
 
 (defn ->game
 
-  ([game-level stocks user]
-   (->game game-level stocks user {:game-id (UUID/randomUUID)}))
+  ([game-level stocks user accounts]
+   (->game game-level stocks user accounts {:game-id (UUID/randomUUID)}))
 
-  ([game-level stocks user {game-id :game-id}]
+  ([game-level stocks user accounts {game-id :game-id}]
 
-   (let [subscriptions          (take 1 stocks)
-         portfolio-with-journal (bookkeeping/->portfolio
+   (let [portfolio-with-journal (bookkeeping/->portfolio
                                   (bookkeeping/->journal))
 
          game-users (-> (hash-map
                           :game.user/user user
-                          :game.user/subscriptions subscriptions
+                          :game.user/accounts accounts
                           :game.user/portfolio portfolio-with-journal)
                         persistence.core/bind-temporary-id
                         list)]
@@ -56,6 +56,17 @@
              :game.stock/symbol symbol)
      (util/exists? price-history) (assoc :game.stock/price-history price-history))))
 
+(defn ->game-user-accounts
+
+  ([] (->game-user-accounts (-> repl.state/config :game/game :starting-balance)))
+
+  ([starting-balance]
+   (let [starting-amount 0
+         counter-party   nil]
+     (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit starting-balance starting-amount counter-party]
+           ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit starting-balance starting-amount counter-party]]
+          (map #(apply bookkeeping/->account %))))))
+
 (defn generate-stocks! [amount]
   (->> (name-generator/generate-names amount)
        (map (juxt :stock-name :stock-symbol))
@@ -65,19 +76,22 @@
 (defn initialize-game!
 
   ([conn user-entity]
-   (initialize-game! conn user-entity :game-level/one))
+   (initialize-game! conn user-entity (->game-user-accounts)))
 
-  ([conn user-entity game-level]
-   (initialize-game! conn user-entity game-level (->> (name-generator/generate-names 4)
-                                                      (map (juxt :stock-name :stock-symbol))
-                                                      (map #(apply ->stock %))
-                                                      (map persistence.core/bind-temporary-id))))
+  ([conn user-entity accounts]
+   (initialize-game! conn user-entity accounts :game-level/one))
 
-  ([conn user-entity game-level stocks]
-   (initialize-game! conn user-entity game-level stocks {}))
+  ([conn user-entity accounts game-level]
+   (initialize-game! conn user-entity accounts game-level (->> (name-generator/generate-names 4)
+                                                               (map (juxt :stock-name :stock-symbol))
+                                                               (map #(apply ->stock %))
+                                                               (map persistence.core/bind-temporary-id))))
 
-  ([conn user-entity game-level stocks opts]
-   (let [game (->game game-level stocks user-entity)]
+  ([conn user-entity accounts game-level stocks]
+   (initialize-game! conn user-entity accounts game-level stocks {}))
+
+  ([conn user-entity accounts game-level stocks opts]
+   (let [game (->game game-level stocks user-entity accounts)]
 
      (as-> game gm
        (persistence.datomic/transact-entities! conn gm)

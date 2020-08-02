@@ -210,13 +210,13 @@
 
 (defn initialize-game!
 
-  ([conn user-entity sink-fn]
+  ([conn user-entity accounts sink-fn]
 
-   (initialize-game! conn user-entity sink-fn :game-level/one (->data-sequence) {}))
+   (initialize-game! conn user-entity accounts sink-fn :game-level/one (->data-sequence) {}))
 
-  ([conn user-entity sink-fn game-level data-sequence {:keys [profit-loss level-timer-sec game-id
-                                                              stream-stock-tick-mappingfn stream-portfolio-update-mappingfn
-                                                              collect-profit-loss-mappingfn check-level-complete-mappingfn]}]
+  ([conn user-entity accounts sink-fn game-level data-sequence {:keys [profit-loss level-timer-sec game-id
+                                                                       stream-stock-tick-mappingfn stream-portfolio-update-mappingfn
+                                                                       collect-profit-loss-mappingfn check-level-complete-mappingfn]}]
 
    (let [stocks                (game.core/generate-stocks! 4)
          initialize-game-opts {:game-id game-id}
@@ -224,7 +224,7 @@
          {game-id :game/id
           stocks  :game/stocks
           {saved-game-level :db/ident} :game/level
-          :as     game}        (game.core/initialize-game! conn user-entity game-level stocks initialize-game-opts)
+          :as     game}        (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
          stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
          stock-tick-by-id      (fn [id stock-ticks]
                                  (first (filter #(= id (:game.stock/id %))
@@ -283,11 +283,11 @@
           :calculate-profit-loss-mappingfn (fn [stock-ticks]
 
                                              #_(-> repl.state/system :game/games
-                                                 deref
-                                                 println
-                                                 ;; (get game-id)
-                                                 ;; keys
-                                                 )
+                                                   deref
+                                                   println
+                                                   ;; (get game-id)
+                                                   ;; keys
+                                                   )
 
                                              (let [updated-profit-loss-calculations
                                                    (-> repl.state/system :game/games
@@ -368,17 +368,18 @@
    (create-game! conn user-id sink-fn :game-level/one))
 
   ([conn user-id sink-fn game-level]
-   (create-game! conn user-id sink-fn game-level (->data-sequence) {}))
+   (create-game! conn user-id sink-fn game-level (->data-sequence) {:accounts (game.core/->game-user-accounts)}))
 
-  ([conn user-id sink-fn game-level data-sequence opts]
+  ([conn user-id sink-fn game-level data-sequence {accounts :accounts :as opts}]
    (let [user-entity (hash-map :db/id user-id)]
-     (initialize-game! conn user-entity sink-fn game-level data-sequence opts))))
+     (initialize-game! conn user-entity accounts sink-fn game-level data-sequence opts))))
 
 ;; START
 (defn game->new-game-message [game user-id]
 
   (let [game-stocks        (:game/stocks game)
-        game-subscriptions (:game.user/subscriptions (game.core/game-user-by-user-id game user-id))]
+        ;; game-subscriptions (:game.user/subscriptions (game.core/game-user-by-user-id game user-id))
+        ]
 
     (as-> {:stocks game-stocks} v
       (transform [MAP-VALS ALL :game.stock/id] str v)
@@ -564,7 +565,7 @@
                                      collect-profit-loss-mappingfn stream-portfolio-update-mappingfn
                                      transact-tick-mappingfn transact-profit-loss-mappingfn
                                      check-level-complete-mappingfn]}
-                              {:keys [conn user-db-id]}]
+                             {:keys [conn user-db-id]}]
 
   (->> stocks-with-tick-data
        (stocks->stock-sequences conn game user-db-id)
@@ -765,5 +766,5 @@
         (recur nowA endA))))
 
   (as-> game-control gc
-      (inputs->control-chain gc {:conn conn :user-db-id user-db-id})
-      (run-iteration gc)))
+    (inputs->control-chain gc {:conn conn :user-db-id user-db-id})
+    (run-iteration gc)))

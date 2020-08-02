@@ -11,6 +11,7 @@
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
+            [beatthemarket.bookkeeping.core :as bookkeeping]
             [clojure.data.json :as json])
   (:import [java.util UUID]))
 
@@ -73,8 +74,6 @@
    "market" :game-level/market})
 
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
-
-  ;; (pprint [context args parent])
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
