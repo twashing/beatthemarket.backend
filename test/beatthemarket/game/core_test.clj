@@ -118,7 +118,7 @@
 
           (is (= expected-accounts game-user-accounts)))))))
 
-#_(deftest buy-stock!-test
+(deftest buy-stock!-test
 
   (let [conn         (-> repl.state/system :persistence/datomic :opts :conn)
         stock-amount 100
@@ -382,8 +382,8 @@
          util/pprint+identity
          (def user-pulled)))
 
-  ;; (cash-account-by-user user-pulled)
-  ;; (equity-account-by-user user-pulled)
+  ;; (cash-account-by-game-user user-pulled)
+  ;; (equity-account-by-game-user user-pulled)
 
   ;; TODO Input
   #_{:stockId 1234
@@ -425,7 +425,7 @@
 
 
   ;; TENTRY
-  (let [cash-account (:db/id (cash-account-by-user user-pulled))
+  (let [cash-account (:db/id (cash-account-by-game-user user-pulled))
         debit-value 1234.45
 
         credit-account {:db/id stock-account-id}

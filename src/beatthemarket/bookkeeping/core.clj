@@ -1,6 +1,6 @@
 (ns beatthemarket.bookkeeping.core
   (:require [datomic.client.api :as d]
-            [com.rpl.specter :refer [select pred ALL MAP-VALS]]
+            [com.rpl.specter :refer [select transform pred ALL MAP-VALS]]
             [rop.core :as rop]
             [integrant.repl.state :as repl.state]
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
@@ -76,6 +76,10 @@
 
     (exists? price)  (assoc :bookkeeping.credit/price price)
     (exists? amount) (assoc :bookkeeping.credit/amount amount)))
+
+(defn ->stock-account-name [n]
+  (format "STOCK.%s" n))
+
 
 ;; TODO Make a user-accounts-balanced? function
 ;; TODO ensure tentry transactions can't put accounts into negative balance
@@ -168,21 +172,27 @@
     (and (every? value-equals-price-times-amount-debit? debits)
          (every? value-equals-price-times-amount-credit? credits))))
 
-(defn create-stock-account! [conn user-entity stock-entity]
+(defn create-stock-account! [conn game-entity user-entity stock-entity]
 
-  (let [starting-balance         0.0
-        starting-amount          0
-        counter-party            (select-keys stock-entity [:db/id])
-        account                  (persistence.core/bind-temporary-id
-                                   (apply ->account
-                                          [(->> stock-entity :game.stock/name (format "STOCK.%s"))
-                                           :bookkeeping.account.type/asset
-                                           :bookkeeping.account.orientation/debit
-                                           starting-balance
-                                           starting-amount
-                                           counter-party]))
-        user-entity-with-account (assoc user-entity :user/accounts account)
-        entities                 [account user-entity-with-account]]
+  (let [starting-balance 0.0
+        starting-amount  0
+        counter-party    (select-keys stock-entity [:db/id])
+        account          (persistence.core/bind-temporary-id
+                           (apply ->account
+                                  [(->> stock-entity :game.stock/name ->stock-account-name)
+                                   :bookkeeping.account.type/asset
+                                   :bookkeeping.account.orientation/debit
+                                   starting-balance
+                                   starting-amount
+                                   counter-party]))
+
+        game-user-with-account (->> (bookkeeping.persistence/pull-game-user
+                                      conn
+                                      (:db/id user-entity)
+                                      (:game/id game-entity))
+                                    (transform [:game.user/accounts] #(conj % account)))
+
+        entities               [account game-user-with-account]]
 
     (as-> entities ent
       (persistence.datomic/transact-entities! conn ent)
@@ -195,18 +205,26 @@
       (ffirst ent)
       (persistence.core/pull-entity conn ent))))
 
-(defn conditionally-create-stock-account! [conn user-entity stock-entity]
+(defn conditionally-create-stock-account! [conn
+                                           {game-db-id :db/id :as game-entity}
+                                           {user-db-id :db/id :as user-entity}
+                                           {stock-db-id :db/id :as stock-entity}]
 
   (let [stock-account-result-set
-        (d/q '[:find ?e
-               :in $ ?counter-party
-               :where [?e :bookkeeping.account/counter-party ?counter-party]]
+        (d/q '[:find (pull ?gua [*])
+               :in $ ?game-db-id ?game-user ?stock-db-id
+               :where
+               [?game-db-id]
+               [?game-db-id :game/users ?gus]
+               [?gus :game.user/user ?game-user]
+               [?gus :game.user/accounts ?gua]
+               [?gua :bookkeeping.account/counter-party ?stock-db-id]]
              (d/db conn)
-             (:db/id stock-entity))]
+             game-db-id user-db-id stock-db-id)]
 
     (if (exists? stock-account-result-set)
       (persistence.core/pull-entity conn (ffirst stock-account-result-set))
-      (create-stock-account! conn user-entity stock-entity))))
+      (create-stock-account! conn game-entity user-entity stock-entity))))
 
 (defn- game-exists? [{:keys [conn game-id] :as inputs}]
   (let [game-pulled (try (persistence.core/pull-entity conn game-id)
@@ -229,9 +247,10 @@
       (rop/succeed (assoc inputs :stock-pulled stock-pulled))
       (rop/fail (ex-info "No stock bound to id" inputs)))))
 
-(defn- cash-account-has-sufficient-funds? [debit-value {user-pulled :user-pulled :as inputs}]
+(defn- cash-account-has-sufficient-funds? [conn debit-value {user-pulled :user-pulled
+                                                             game-pulled :game-pulled :as inputs}]
   (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
-        (bookkeeping.persistence/cash-account-by-user user-pulled)]
+        (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
 
     (if (> cash-account-starting-balance debit-value)
       (rop/succeed inputs)
@@ -291,12 +310,12 @@
 
   tentry)
 
-(defn buy-stock! [conn game-id user-id stock-id stock-amount stock-price]
+(defn buy-stock! [conn game-db-id user-db-id stock-db-id stock-amount stock-price]
 
   (let [validation-inputs {:conn         conn
-                           :game-id      game-id
-                           :user-id      user-id
-                           :stock-id     stock-id
+                           :game-id      game-db-id
+                           :user-id      user-db-id
+                           :stock-id     stock-db-id
                            :stock-amount stock-amount
                            :stock-price  stock-price}
 
@@ -305,18 +324,18 @@
                              game-exists?
                              user-exists?
                              stock-exists?
-                             (partial cash-account-has-sufficient-funds? debit-value))]
+                             (partial cash-account-has-sufficient-funds? conn debit-value))]
 
     (if (= clojure.lang.ExceptionInfo (type result))
 
       (throw result)
 
       (let [{:keys [user-pulled stock-pulled]} result
-            stock-account                      (conditionally-create-stock-account! conn user-pulled stock-pulled)
+            stock-account                      (conditionally-create-stock-account! conn game-db-id user-pulled stock-pulled)
             credit-value                       debit-value
 
             ;; ACCOUNT BALANCE UPDATES
-            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-user user-pulled)
+            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-game-user user-pulled)
                                               [:bookkeeping.account/balance] - debit-value)
             updated-credit-account (-> stock-account
                                        (update-in [:bookkeeping.account/balance] + credit-value)
@@ -326,7 +345,7 @@
             debits+credits                    [(->debit updated-debit-account debit-value nil nil)
                                                (->credit updated-credit-account credit-value stock-price stock-amount)]
             tentry                            (apply ->tentry debits+credits)
-            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-id)
+            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id)
             updated-journal-entries           (-> game-entity
                                                   :game/users first
                                                   :game.user/portfolio
@@ -345,8 +364,8 @@
                (-> tentry :bookkeeping.tentry/id))
           (ffirst ent)
           ;; (game.persistence/track-profit-loss! ent)
-          (track-profit-loss+stream-portfolio-update! conn gameId game-id user-id ent)
-          (identity ent))))))
+          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent)
+          #_(identity ent))))))
 
 (defn sell-stock! [conn game-id user-id stock-id stock-amount stock-price]
 
@@ -382,7 +401,7 @@
                                        :bookkeeping.account/_counter-party
                                        (update-in [:bookkeeping.account/balance] (constantly stock-account-balance-updated))
                                        (update-in [:bookkeeping.account/amount] - stock-amount))
-            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-user user-pulled)
+            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-game-user user-pulled)
                                               [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
