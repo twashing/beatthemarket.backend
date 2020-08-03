@@ -43,8 +43,7 @@
                                :bookkeeping.account/amount
                                :bookkeeping.account/orientation])
               (transform [:bookkeeping.account/type] :db/ident ca)
-              (transform [:bookkeeping.account/orientation] :db/ident ca)
-              (util/pprint+identity ca))]
+              (transform [:bookkeeping.account/orientation] :db/ident ca))]
 
         (is (= expected-cash-account result-cash-account))))))
 
@@ -73,11 +72,9 @@
                                :bookkeeping.account/amount
                                :bookkeeping.account/orientation])
               (transform [:bookkeeping.account/type] :db/ident ca)
-              (transform [:bookkeeping.account/orientation] :db/ident ca)
-              (util/pprint+identity ca))]
+              (transform [:bookkeeping.account/orientation] :db/ident ca))]
 
         (is (= expected-equity-account result-equity-account))))))
-
 
 (deftest stock-accounts-by-game-user-test
 

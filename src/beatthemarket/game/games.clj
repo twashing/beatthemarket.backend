@@ -218,7 +218,7 @@
                                                                        stream-stock-tick-mappingfn stream-portfolio-update-mappingfn
                                                                        collect-profit-loss-mappingfn check-level-complete-mappingfn]}]
 
-   (let [stocks                (game.core/generate-stocks! 4)
+   (let [stocks               (game.core/generate-stocks! 4)
          initialize-game-opts {:game-id game-id}
 
          {game-id :game/id
@@ -261,8 +261,8 @@
          game-control
          {:game                  game
           :profit-loss           (or profit-loss {})
-          :stocks-with-tick-data stocks-with-tick-data
-
+          ;; :stocks-with-tick-data stocks-with-tick-data
+          :stocks-with-tick-data []
           :paused?          (atom false)
           :tick-sleep-atom  (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
           :level-timer-atom (atom (or level-timer-sec (-> integrant.repl.state/config :game/game :level-timer-sec)))

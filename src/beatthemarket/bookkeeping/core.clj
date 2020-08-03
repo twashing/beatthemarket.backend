@@ -292,6 +292,7 @@
 
 (defn track-profit-loss+stream-portfolio-update! [conn gameId game-db-id user-id tentry]
 
+  ;; NOTE breaking
   (game.persistence/track-profit-loss! tentry)
 
   (let [portfolio-update-stream (-> repl.state/system :game/games deref
@@ -330,12 +331,14 @@
 
       (throw result)
 
-      (let [{:keys [user-pulled stock-pulled]} result
-            stock-account                      (conditionally-create-stock-account! conn game-db-id user-pulled stock-pulled)
+      (let [{{game-id :game/id :as game-pulled} :game-pulled
+             user-pulled :user-pulled
+             stock-pulled :stock-pulled} result
+            stock-account                      (conditionally-create-stock-account! conn game-pulled user-pulled stock-pulled)
             credit-value                       debit-value
 
             ;; ACCOUNT BALANCE UPDATES
-            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-game-user user-pulled)
+            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)
                                               [:bookkeeping.account/balance] - debit-value)
             updated-credit-account (-> stock-account
                                        (update-in [:bookkeeping.account/balance] + credit-value)
@@ -367,12 +370,12 @@
           (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent)
           #_(identity ent))))))
 
-(defn sell-stock! [conn game-id user-id stock-id stock-amount stock-price]
+(defn sell-stock! [conn game-db-id user-db-id stock-db-id stock-amount stock-price]
 
   (let [validation-inputs {:conn         conn
-                           :game-id      game-id
-                           :user-id      user-id
-                           :stock-id     stock-id
+                           :game-id      game-db-id
+                           :user-id      user-db-id
+                           :stock-id     stock-db-id
                            :stock-amount stock-amount
                            :stock-price  stock-price}
 
@@ -387,9 +390,10 @@
 
       (throw result)
 
-      (let [{:keys [user-pulled
-                    stock-pulled
-                    stock-account]}               result
+      (let [{{game-id :game/id :as game-pulled} :game-pulled
+             user-pulled :user-pulled
+             stock-pulled :stock-pulled
+             stock-account :stock-account} result
             {{stock-account-amount :bookkeeping.account/amount}
              :bookkeeping.account/_counter-party} stock-account
             debit-value                           (Float. (format "%.2f" (* stock-amount stock-price)))
@@ -401,14 +405,14 @@
                                        :bookkeeping.account/_counter-party
                                        (update-in [:bookkeeping.account/balance] (constantly stock-account-balance-updated))
                                        (update-in [:bookkeeping.account/amount] - stock-amount))
-            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-game-user user-pulled)
+            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)
                                               [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
             debits+credits                  [(->debit updated-debit-account debit-value stock-price stock-amount)
                                              (->credit updated-credit-account credit-value nil nil)]
             tentry                          (apply ->tentry debits+credits)
-            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-id)
+            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id)
             updated-journal-entries         (-> game-entity
                                                 :game/users first
                                                 :game.user/portfolio
@@ -427,7 +431,7 @@
                (-> tentry :bookkeeping.tentry/id))
           (ffirst ent)
           ;; (game.persistence/track-profit-loss! ent)
-          (track-profit-loss+stream-portfolio-update! conn gameId game-id user-id ent)
+          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent)
           (identity ent))))))
 
 (comment

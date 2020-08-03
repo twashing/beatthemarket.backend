@@ -175,9 +175,7 @@
        (ffirst obj)
        (persistence.core/pull-entity conn obj)))))
 
-(defn generate-user!
-
-  [conn]
+(defn generate-user! [conn]
 
   (let [id-token               (->id-token)
         checked-authentication (iam.auth/check-authentication id-token)]

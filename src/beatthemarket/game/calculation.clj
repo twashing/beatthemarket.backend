@@ -50,7 +50,7 @@
               [?game-id :game/users ?gus]
               [?gus :game.user/user ?gu]
               [(= ?gu ?user-id)]
-              [?gu :user/accounts ?ua]]
+              [?gu :game.user/accounts ?ua]]
             (d/db conn)
             game-id user-id)
        (map first)))

@@ -12,6 +12,7 @@
                       (constantly updated-profit-loss-calculations)))))
 
 (defn track-profit-loss-by-stock-id! [game-id updated-profit-loss-calculations]
+
   (swap! (:game/games repl.state/system)
          (fn [gs]
            (update-in gs [game-id :profit-loss]
@@ -75,16 +76,15 @@
                :pershare-gain-or-loss     pershare-gain-or-loss)))))
 
 (defn game-id-by-account-id [conn account-id]
-  (-> (d/q '[:find (pull ?e [{:user/_accounts
-                              [{:game.user/_user
-                                [{:game/_users [:game/id]}]}]}])
+  (-> (d/q '[:find (pull ?e [{:game.user/_accounts
+                              [{:game/_users [:game/id]}]}])
              :in $ ?account-id
              :where
              [?e :bookkeeping.account/id ?account-id]]
            (d/db conn)
            account-id)
       flatten first
-      :user/_accounts :game.user/_user :game/_users :game/id))
+      :game.user/_accounts :game/_users :game/id))
 
 (defn profit-loss->chunks [profit-loss]
   (->> profit-loss
@@ -104,7 +104,8 @@
 
     ;; Calculate i. pershare price ii. pershare amount (Purchase amt / total amt)
     (when credit-account-id
-      (let [conn                    (-> repl.state/system :persistence/datomic :opts :conn)
+      (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+
             game-id                 (game-id-by-account-id conn credit-account-id)
             pershare-gain-or-loss   (- price price)
             pershare-purchase-ratio (/ amount stock-account-amount)
@@ -144,6 +145,7 @@
                                   flatten)])))
                  (map #(apply hash-map %)))]
 
+        ;; NOTE breaking
         (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
