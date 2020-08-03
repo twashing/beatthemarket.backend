@@ -29,15 +29,7 @@
   {:fields
    {:userEmail {:type String}
     :userName {:type String}
-    :userExternalUid {:type String}
-    :userAccounts {:type (list (non-null :UserAccount))}}}
-
-  :UserAccount
-  {:fields
-   {:accountId {:type (non-null String)}
-    :accountName {:type (non-null String)}
-    :accountBalance {:type (non-null Float)}
-    :accountAmount {:type Int}}}
+    :userExternalUid {:type String}}}
 
   :Stock
   {:fields
@@ -158,7 +150,8 @@
  :queries
  {:accountBalances
   {:type    (list (non-null :AccountBalance))
-   :args    {:gameId {:type (non-null String)}}
+   :args    {:gameId {:type (non-null String)}
+             :email {:type (non-null String)}}
    :resolve :resolve-account-balances
    :description "Returns accountBalances, per game, per user"}
 

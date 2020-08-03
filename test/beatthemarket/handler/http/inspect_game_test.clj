@@ -15,18 +15,11 @@
 
 
 (def expected-user {:userEmail "twashing@gmail.com"
-                    :userName "Timothy Washington"
-                    :userAccounts
-                    [{:accountName "Cash"
-                      :accountBalance 100000.0
-                      :accountAmount 0}
-                     {:accountName "Equity"
-                      :accountBalance 100000.0
-                      :accountAmount 0}]})
-(def expected-user-keys #{:userEmail :userName :userExternalUid :userAccounts})
-(def expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount})
+                    :userName "Timothy Washington"})
+(def expected-user-keys #{:userEmail :userName :userExternalUid})
 
-#_(deftest query-user-test
+
+(deftest query-user-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -43,37 +36,23 @@
                                        userEmail
                                        userName
                                        userExternalUid
-                                       userAccounts
-                                       { accountId
-                                         accountName
-                                         accountBalance
-                                         accountAmount
-                                       }
                                      }
                                    }"
                            :variables {:email email}}})
 
 
-    (let [result-user (-> (test-util/<message!! 1000) :payload :data :user)]
+    (let [result-user (-> (test-util/<message!! 1000) util/pprint+identity :payload :data :user)]
 
       (->> (keys result-user)
            (into #{})
            (= expected-user-keys)
            is)
 
-      (->> (:userAccounts result-user)
-           (map keys)
-           (map #(into #{} %))
-           (map #(= expected-user-account-keys %))
-           (every? true?)
-           is)
-
       (->> (transform [identity] #(dissoc % :userExternalUid) result-user)
-           (transform [:userAccounts ALL] #(dissoc % :accountId))
            (= expected-user)
            is))))
 
-#_(deftest query-users-test
+(deftest query-users-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -90,12 +69,6 @@
                                        userEmail
                                        userName
                                        userExternalUid
-                                       userAccounts
-                                       { accountId
-                                         accountName
-                                         accountBalance
-                                         accountAmount
-                                       }
                                      }
                                    }"}})
 
@@ -106,30 +79,62 @@
            (map #(= expected-user-keys %))
            is)
 
-      (->> (map :userAccounts result-users)
-           (map #(map keys %))
-           (map #(map (fn [a] (into #{} a)) %))
-           (map #(map (fn [a] (= expected-user-account-keys a)) %))
-           (map #(every? true? %))
-           (every? true?)
-           is)
-
       (->> (first result-users)
            (transform [identity] #(dissoc % :userExternalUid))
-           (transform [:userAccounts ALL] #(dissoc % :accountId))
            (= expected-user)
            is))))
 
+(deftest query-account-balances-test
 
-#_{:userEmail "twashing@gmail.com"
- :userName "Timothy Washington"
- :userExternalUid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"
- :userAccounts
- [{:accountId "9ac6c44c-5fd0-4de0-9412-a4b923408031"
-   :accountName "Cash"
-   :accountBalance 100000.0
-   :accountAmount 0}
-  {:accountId "fdfcf6b1-eaba-4dcf-89ab-03fbfbcd35fa"
-   :accountName "Equity"
-   :accountBalance 100000.0
-   :accountAmount 0}]}
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        email "twashing@gmail.com"
+        gameLevel "one"]
+
+
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation CreateGame($gameLevel: String!) {
+                                     createGame(gameLevel: $gameLevel) {
+                                       id
+                                       stocks { id name symbol }
+                                     }
+                                   }"
+                           :variables {:gameLevel gameLevel}}})
+
+    (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+
+      (test-util/send-data {:id   988
+                            :type :start
+                            :payload
+                            {:query "query AccountBalances($gameId: String!, $email: String!) {
+                                       accountBalances(gameId: $gameId, email: $email) {
+                                         id
+                                         name
+                                         balance
+                                         counterParty
+                                         amount
+                                       }
+                                   }"
+                             :variables {:gameId gameId
+                                         :email  email}}})
+
+      (test-util/<message!! 1000)
+
+      (let [expected-user-account-balances #{{:name "Cash"
+                                              :balance 100000.0
+                                              :counterParty nil
+                                              :amount 0}
+                                             {:name "Equity"
+                                              :balance 100000.0
+                                              :counterParty nil
+                                              :amount 0}}
+
+            result-accounts (->> (test-util/<message!! 1000) util/pprint+identity :payload :data :accountBalances
+                                 (map #(dissoc % :id))
+                                 (into #{}))]
+
+            (is (= expected-user-account-balances result-accounts))))))

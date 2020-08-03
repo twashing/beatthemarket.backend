@@ -131,7 +131,7 @@
 
 (defn resolve-sell-stock [context args _]
 
-  (println "resolve-sell-stock CALLED /" args)
+  ;; (println "resolve-sell-stock CALLED /" args)
   (let [{{{userId :uid} :checked-authentication} :request} context
         conn                                               (-> repl.state/system :persistence/datomic :opts :conn)
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
@@ -162,13 +162,7 @@
          (transform [identity] #(dissoc % :db/id))
          (transform [identity] #(clojure.set/rename-keys % {:user/email :userEmail
                                                             :user/name :userName
-                                                            :user/external-uid :userExternalUid
-                                                            :user/accounts :userAccounts}))
-         (transform [:userAccounts ALL] #(dissoc % :db/id :bookkeeping.account/type :bookkeeping.account/orientation))
-         (transform [:userAccounts ALL] #(clojure.set/rename-keys % {:bookkeeping.account/id :accountId
-                                                                     :bookkeeping.account/name :accountName
-                                                                     :bookkeeping.account/balance :accountBalance
-                                                                     :bookkeeping.account/amount :accountAmount})))))
+                                                            :user/external-uid :userExternalUid})))))
 
 (defn resolve-users [context args _]
 
@@ -183,13 +177,7 @@
          (transform [ALL identity] #(dissoc % :db/id))
          (transform [ALL identity] #(clojure.set/rename-keys % {:user/email :userEmail
                                                                 :user/name :userName
-                                                                :user/external-uid :userExternalUid
-                                                                :user/accounts :userAccounts}))
-         (transform [ALL :userAccounts ALL] #(dissoc % :db/id :bookkeeping.account/type :bookkeeping.account/orientation))
-         (transform [ALL :userAccounts ALL] #(clojure.set/rename-keys % {:bookkeeping.account/id :accountId
-                                                                         :bookkeeping.account/name :accountName
-                                                                         :bookkeeping.account/balance :accountBalance
-                                                                         :bookkeeping.account/amount :accountAmount})))))
+                                                                :user/external-uid :userExternalUid})))))
 
 
 
@@ -224,7 +212,27 @@
     :stockId "stockid3"
     :gameId "marketid1"}])
 
-(defn resolve-account-balances [context args _])
+(defn resolve-account-balances [context {gameId :gameId email :email} _]
+
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)]
+
+    (->> (d/q '[:find (pull ?uas [*])
+                          :in $ ?gameId ?email
+                          :where
+                          [?g :game/id ?gameId]
+                          [?g :game/users ?gus]
+                          [?gus :game.user/user ?gu]
+                          [?gu :user/email ?email]
+                          [?gus :game.user/accounts ?uas]]
+                        (d/db conn)
+                        (UUID/fromString gameId) email)
+                   (map first)
+                   (transform [ALL identity] #(dissoc % :db/id))
+                   (transform [ALL identity] #(clojure.set/rename-keys % {:bookkeeping.account/id :id
+                                                                          :bookkeeping.account/name :name
+                                                                          :bookkeeping.account/balance :balance
+                                                                          :bookkeeping.account/amount :amount
+                                                                          :bookkeeping.account/counter-party :counterParty})))))
 
 (defn resolve-stock-time-series [context {:keys [gameId stockId range]} _]
 
