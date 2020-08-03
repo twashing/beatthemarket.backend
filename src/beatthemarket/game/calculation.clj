@@ -47,10 +47,10 @@
                                 [:game.stock/name]}])
               :in $ ?game-id ?user-id
               :where
+              [?game-id]
               [?game-id :game/users ?gus]
-              [?gus :game.user/user ?gu]
-              [(= ?gu ?user-id)]
-              [?gu :game.user/accounts ?ua]]
+              [?gus :game.user/user ?user-id]
+              [?gus :game.user/accounts ?ua]]
             (d/db conn)
             game-id user-id)
        (map first)))

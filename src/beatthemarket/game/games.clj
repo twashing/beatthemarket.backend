@@ -261,8 +261,7 @@
          game-control
          {:game                  game
           :profit-loss           (or profit-loss {})
-          ;; :stocks-with-tick-data stocks-with-tick-data
-          :stocks-with-tick-data []
+          :stocks-with-tick-data stocks-with-tick-data
           :paused?          (atom false)
           :tick-sleep-atom  (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
           :level-timer-atom (atom (or level-timer-sec (-> integrant.repl.state/config :game/game :level-timer-sec)))
@@ -573,7 +572,6 @@
        (map stream-stock-tick-mappingfn)
        (map calculate-profit-loss-mappingfn)
        (map collect-profit-loss-mappingfn)
-       ;; (map util/pprint+identity)
        (map transact-profit-loss-mappingfn)
        (map stream-portfolio-update-mappingfn)
        (map check-level-complete-mappingfn)))

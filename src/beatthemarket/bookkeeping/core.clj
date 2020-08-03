@@ -223,7 +223,7 @@
              game-db-id user-db-id stock-db-id)]
 
     (if (exists? stock-account-result-set)
-      (persistence.core/pull-entity conn (ffirst stock-account-result-set))
+      (ffirst stock-account-result-set)
       (create-stock-account! conn game-entity user-entity stock-entity))))
 
 (defn- game-exists? [{:keys [conn game-id] :as inputs}]
