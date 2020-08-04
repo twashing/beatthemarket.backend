@@ -8,8 +8,8 @@
 
 
 (defn request->token [request]
-  (-> request :headers
-      (get "authorization")
+  (-> request :headers 
+      (get "authorization") 
       (s/split #"Bearer ")
       last))
 
