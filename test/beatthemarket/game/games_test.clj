@@ -121,6 +121,53 @@
            (every? true?)
            is))))
 
+(deftest start-game!-with-start-position-test
+
+  (let [;; A
+        conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid} (test-util/generate-user! conn)
+
+        ;; B
+        data-sequence-A [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
+        tick-length     (count data-sequence-A)
+
+
+        ;; C create-game!
+        sink-fn                identity
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec                   5
+                    :accounts                          (game.core/->game-user-accounts)
+                    :stream-stock-tick-mappingfn       (fn [a]
+                                                         (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                           (swap! test-stock-ticks
+                                                                  (fn [b]
+                                                                    (conj b stock-ticks)))
+                                                           stock-ticks))
+                    :stream-portfolio-update-mappingfn (fn [a]
+                                                         (swap! test-portfolio-updates (fn [b] (conj b a)))
+                                                         a)}
+        game-level :game-level/one
+        {{gameId     :game/id
+          game-db-id :db/id :as game} :game
+         control-channel              :control-channel
+         game-event-stream            :game-event-stream
+         :as                          game-control}
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+
+        start-position 3
+        iterations (game.games/start-workbench! conn result-user-id game-control start-position)]
+
+
+    (testing "Game's startPosition is seeking to the correct location"
+
+      (let [expected-price 120.0
+            result-price (-> iterations ffirst :stock-ticks first :game.stock.tick/close)]
+
+        (is (= expected-price result-price))))))
+
 (deftest buy-stock!-test
 
   ;; A

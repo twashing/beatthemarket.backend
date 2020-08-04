@@ -41,7 +41,7 @@
                            :variables {:email email}}})
 
 
-    (let [result-user (-> (test-util/<message!! 1000) util/pprint+identity :payload :data :user)]
+    (let [result-user (-> (test-util/<message!! 1000) :payload :data :user)]
 
       (->> (keys result-user)
            (into #{})
@@ -91,7 +91,6 @@
         email "twashing@gmail.com"
         gameLevel "one"]
 
-
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
@@ -133,8 +132,52 @@
                                               :counterParty nil
                                               :amount 0}}
 
-            result-accounts (->> (test-util/<message!! 1000) util/pprint+identity :payload :data :accountBalances
+            result-accounts (->> (test-util/<message!! 1000) :payload :data :accountBalances
                                  (map #(dissoc % :id))
                                  (into #{}))]
 
             (is (= expected-user-account-balances result-accounts))))))
+
+(deftest query-stock-time-series-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        email "twashing@gmail.com"
+        gameLevel "one"]
+
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation CreateGame($gameLevel: String!) {
+                                     createGame(gameLevel: $gameLevel) {
+                                       id
+                                       stocks { id name symbol }
+                                     }
+                                   }"
+                           :variables {:gameLevel gameLevel}}})
+
+    (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)
+          stockId "asdf"]
+
+      (test-util/send-data {:id   988
+                            :type :start
+                            :payload
+                            {:query "query StockTimeSeries($gameId: String!, $stockId: String!, $range: [Int]) {
+                                       stockTimeSeries(gameId: $gameId, stockId: $stockId, range: $range) {
+                                         stockTickId
+                                         stockTickTime
+                                         stockTickClose
+                                         stockId
+                                         stockName
+                                       }
+                                   }"
+                             :variables {:gameId gameId
+                                         :stockId stockId
+                                         :range [0 10]}}})
+
+      (test-util/<message!! 1000)
+      (-> (test-util/<message!! 1000) util/pprint+identity)
+
+      )))

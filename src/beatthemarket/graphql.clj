@@ -95,7 +95,7 @@
          (transform [:stocks ALL] #(dissoc % :db/id))
          (transform [:stocks ALL MAP-KEYS] (comp keyword name)))))
 
-(defn resolve-start-game [context {game-id :id} _]
+(defn resolve-start-game [context {game-id :id :as args} _]
 
   (let [{{{email :email} :checked-authentication} :request} context
         conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -108,7 +108,11 @@
         gameId (UUID/fromString game-id)
         game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
 
-    (game.games/start-game! conn user-db-id game-control)
+    (game.games/start-game! conn user-db-id game-control (get args :startPosition 0))
+
+    ;; TODO seek to start-position
+    ;; stock-tick-stream
+
     {:message :gamestarted}))
 
 (defn resolve-buy-stock [context args _]
@@ -236,6 +240,7 @@
 
 (defn resolve-stock-time-series [context {:keys [gameId stockId range]} _]
 
+  ;; (trace [gameId stockId range])
 
   [:StockTick]
 
@@ -278,7 +283,7 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :stock-tick-stream)
-        cleanup-fn                                          (constantly (core.async/close! stock-tick-stream))]
+        cleanup-fn                                          (constantly :noop #_(core.async/close! stock-tick-stream))]
 
     (core.async/go-loop []
       (when-let [stock-ticks (core.async/<! stock-tick-stream)]
@@ -310,7 +315,7 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :portfolio-update-stream)
-        cleanup-fn                                          (constantly (core.async/close! portfolio-update-stream))]
+        cleanup-fn                                          (constantly :noop #_(core.async/close! portfolio-update-stream))]
 
     (core.async/go-loop []
       (when-let [portfolio-update (core.async/<! portfolio-update-stream)]
@@ -336,7 +341,7 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :game-event-stream)
-        cleanup-fn                                          (constantly (core.async/close! game-event-stream))]
+        cleanup-fn                                          (constantly :noop #_(core.async/close! game-event-stream))]
 
     (core.async/go-loop []
       (when-let [game-event (core.async/<! game-event-stream)]

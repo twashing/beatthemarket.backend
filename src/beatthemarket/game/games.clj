@@ -247,9 +247,6 @@
 
          recalculate-perstock-fn (fn [stock-ticks profit-loss]
                                    (reduce-kv (fn [m k v]
-                                                ;; (util/pprint+identity [k v])
-                                                ;; (trace k)
-                                                ;; (util/pprint+identity stock-ticks)
                                                 (if-let [{price :game.stock.tick/close}
                                                          (stock-tick-by-id k stock-ticks)]
                                                   (assoc
@@ -280,13 +277,6 @@
                                                    (core.async/go (core.async/>! stock-tick-stream stock-ticks))
                                                    stock-ticks)))
           :calculate-profit-loss-mappingfn (fn [stock-ticks]
-
-                                             #_(-> repl.state/system :game/games
-                                                   deref
-                                                   println
-                                                   ;; (get game-id)
-                                                   ;; keys
-                                                   )
 
                                              (let [updated-profit-loss-calculations
                                                    (-> repl.state/system :game/games
@@ -541,24 +531,6 @@
        stocks->partitioned-entities
        (map partitioned-entities->transaction-entities)))
 
-#_(defn inputs->control-chain [{:keys [game stocks-with-tick-data
-                                       stream-stock-tick-mappingfn calculate-profit-loss-mappingfn
-                                       collect-profit-loss-mappingfn stream-portfolio-update-mappingfn
-                                       transact-tick-mappingfn transact-profit-loss-mappingfn
-                                       check-level-complete-mappingfn]}
-                               {:keys [conn user-db-id]}]
-
-    (->> stocks-with-tick-data
-         (stocks->stock-sequences conn game user-db-id)
-         (map transact-tick-mappingfn)
-         (map stream-stock-tick-mappingfn)
-         (map calculate-profit-loss-mappingfn)
-         (map collect-profit-loss-mappingfn)
-         (map transact-profit-loss-mappingfn)
-         (map stream-portfolio-update-mappingfn)
-         (map check-level-complete-mappingfn)
-         #_util/pprint+identity))
-
 (defn inputs->control-chain [{:keys [game stocks-with-tick-data
                                      stream-stock-tick-mappingfn calculate-profit-loss-mappingfn
                                      collect-profit-loss-mappingfn stream-portfolio-update-mappingfn
@@ -695,7 +667,7 @@
           ;; pause
           ;; control
           ;; timer
-          _           (println (format "game-loop %s / %s / %s" now end controlv))
+          _ (println (format "game-loop %s / %s" remaining (if controlv controlv :running)))
           [nowA endA] (match [@pause-atom message (time-expired? remaining)]
 
                              [true :exit _] (handle-control-event conn game-event-stream (assoc controlv :message :pause-exit) now end)
@@ -713,7 +685,7 @@
                                            ;; :stock-tick
                                            ;; :timer-event
 
-                                           (println (format "Running %s" (format-remaining-time remaining)))
+                                           ;; (println (format "Running %s" (format-remaining-time remaining)))
                                            (when x
                                              [(t/now) end]))
                              [_ _ true] (handle-control-event conn game-event-stream {:message :timeout} now end))
@@ -727,42 +699,60 @@
       (when (and nowA endA)
         (recur nowA endA (next iters))))))
 
-(defn start-game! [conn user-db-id game-control]
+(defn seek-to-position [start xs]
+  (let [seekfn (juxt (partial take start) (partial drop start))]
+    (second (seekfn xs))))
 
-  ;; TODO can seek to startPosition in stocks-with-tick-data
-  (let [{:keys [control-channel
-                paused?
-                tick-sleep-atom
-                level-timer-atom]} game-control]
+(defn start-game!
 
-    (as-> game-control gc
-      (inputs->control-chain gc {:conn conn :user-db-id user-db-id})
-      (run-iteration gc)
-      (assoc game-control :iterations gc)
-      (run-game! conn gc paused? tick-sleep-atom level-timer-atom))))
+  ([conn user-db-id game-control]
+   (start-game! conn user-db-id game-control 0))
 
-(defn start-workbench! [conn user-db-id {level-timer :level-timer-atom
-                                         tick-sleep-atom :tick-sleep-atom
-                                         game-event-stream :game-event-stream
-                                         control-channel :control-channel
-                                         :as game-control}]
+  ([conn user-db-id game-control start-position]
 
-  (core.async/go-loop [now (t/now)
-                       end (t/plus now (t/seconds @level-timer))]
+   ;; TODO can seek to startPosition in stocks-with-tick-data
+   (let [{:keys [control-channel
+                 paused?
+                 tick-sleep-atom
+                 level-timer-atom]} game-control]
 
-    (let [remaining (calculate-remaining-time now end)
-          expired? (time-expired? remaining)
+     (as-> game-control v
+       (inputs->control-chain v {:conn conn :user-db-id user-db-id})
+       (seek-to-position start-position v)
+       (run-iteration v)
+       (assoc game-control :iterations v)
+       (run-game! conn v paused? tick-sleep-atom level-timer-atom)))))
 
-          [{message :message :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
-          {message :message :as controlv} (if (nil? controlv) {:message :continue} controlv)
+(defn start-workbench!
 
-          [nowA endA] (match [message expired?]
-                             [_ false] (handle-control-event conn game-event-stream controlv now end)
-                             [_ true] (handle-control-event conn game-event-stream {:message :timeout} now end))]
+  ([conn user-db-id game-control]
+   (start-workbench! conn user-db-id game-control 0))
 
-      (when (and nowA endA)
-        (recur nowA endA))))
+  ([conn user-db-id
+    {level-timer :level-timer-atom
+     tick-sleep-atom :tick-sleep-atom
+     game-event-stream :game-event-stream
+     control-channel :control-channel
+     :as game-control}
+    start-position]
 
-  (as-> game-control gc
-    (inputs->control-chain gc {:conn conn :user-db-id user-db-id})
-    (run-iteration gc)))
+   (core.async/go-loop [now (t/now)
+                        end (t/plus now (t/seconds @level-timer))]
+
+     (let [remaining (calculate-remaining-time now end)
+           expired? (time-expired? remaining)
+
+           [{message :message :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
+           {message :message :as controlv} (if (nil? controlv) {:message :continue} controlv)
+
+           [nowA endA] (match [message expired?]
+                              [_ false] (handle-control-event conn game-event-stream controlv now end)
+                              [_ true] (handle-control-event conn game-event-stream {:message :timeout} now end))]
+
+       (when (and nowA endA)
+         (recur nowA endA))))
+
+   (as-> game-control v
+     (inputs->control-chain v {:conn conn :user-db-id user-db-id})
+     (seek-to-position start-position v)
+     (run-iteration v))))
