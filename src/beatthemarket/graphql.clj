@@ -256,7 +256,7 @@
 
 ;; STREAMERS
 (defn stream-stock-ticks [context {id :gameId :as args} source-stream]
-
+  (beatthemarket.util/pprint+identity args) 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
         user-db-id                                          (ffirst
@@ -273,8 +273,9 @@
                                                                 :stock-tick-stream)
         cleanup-fn                                          (constantly (core.async/close! stock-tick-stream))]
 
-    (core.async/go-loop []
+    (core.async/go-loop [] 
       (when-let [stock-ticks (core.async/<! stock-tick-stream)]
+      (beatthemarket.util/pprint+identity stock-ticks)
         (->> stock-ticks
              (map #(clojure.set/rename-keys %
                                             {:game.stock.tick/id :stockTickId
@@ -282,7 +283,7 @@
                                              :game.stock.tick/close :stockTickClose
                                              :game.stock/id :stockId
                                              :game.stock/name :stockName}))
-             source-stream)
+              source-stream)
         (recur)))
 
     ;; Return a cleanup fn

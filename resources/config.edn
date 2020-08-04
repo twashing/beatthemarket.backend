@@ -4,7 +4,7 @@
 
  ;; COMPONENTS
  :game {:starting-balance      100000.00
-        :tick-sleep-ms         1000
+        :tick-sleep-ms         3000
         :level-timer-sec       300 ;; (* 5 60)
         :latest-tick-threshold 100
         :data-generators [:datasource.sine/generate-sine-sequence
@@ -52,7 +52,7 @@
                                                  :order 10}}}
 
 
- :logging {:config {:level     :info
+ :logging {:config {:level     :debug
                     :console   true
                     :appenders [{:appender          :rolling-file
                                  :rolling-policy    {:type      :fixed-window
@@ -65,7 +65,8 @@
                                 "org.apache.http.wire" :error
                                 "org.eclipse.jetty.server.handler.ContextHandler" :error
                                 "org.eclipse.jetty.server.AbstractConnector" :error
-                                "org.eclipse.jetty.server.Server" :error}}}
+                                "org.eclipse.jetty.server.Server" :error
+                                "datomic.db" :error}}}
 
 
  ;; MAIN

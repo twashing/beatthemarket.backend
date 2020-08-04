@@ -232,7 +232,7 @@
 
          stream-buffer           80
          control-channel         (core.async/chan stream-buffer)
-         stock-tick-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
+         stock-tick-stream       (core.async/chan stream-buffer)
          portfolio-update-stream (core.async/chan (core.async/sliding-buffer stream-buffer))
          game-event-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
          transact-mappingfn             (fn [data]
@@ -277,7 +277,7 @@
           :stream-stock-tick-mappingfn     (or stream-stock-tick-mappingfn
                                                (fn [stock-tick-pairs]
                                                  (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
-                                                   ;; (println (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
+                                                   (println (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
                                                    (core.async/go (core.async/>! stock-tick-stream stock-ticks))
                                                    stock-ticks)))
           :calculate-profit-loss-mappingfn (fn [stock-ticks]

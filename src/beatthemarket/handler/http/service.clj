@@ -148,7 +148,7 @@
 (defn auth-request-handler-ws [context]
 
   (let [id-token (-> context :connection-params  :token 
-                     (s/split #"Bearer ") beatthemarket.util/pprint+identity
+                     (s/split #"Bearer ")
                      last)
 
         user-exists? (fn [{id-token :id-token :as input}]
