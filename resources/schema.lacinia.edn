@@ -11,12 +11,6 @@
    {:id     {:type (non-null String)}
     :stocks {:type (list (non-null :Stock))}}}
 
-  :StartGameAck
-  {:fields
-   {:message {:type (non-null :StartGameAckMessage)}
-    ;; :message {:type (non-null String)}
-    }}
-
   :BuyStockAck
   {:fields
    {:message {:type (non-null String)}}}
@@ -95,10 +89,6 @@
  {:LoginAckMessage
   {:values [:useradded :userexists]}
 
-  :StartGameAckMessage
-  {:descriptiuon "Expected return value when starting a game"
-   :values       [:gamestarted]}
-
   :ProfitLossType
   {:values [:running :realized]}
 
@@ -155,8 +145,8 @@
    :resolve :resolve-account-balances
    :description "Returns accountBalances, per game, per user"}
 
-  :stockTimeSeries
-  {:type        (list (non-null :StockTick))
+  #_:stockTimeSeries
+  #_{:type        (list (non-null :StockTick))
    :args        {:gameId  {:type (non-null String)}
                  :stockId {:type (non-null String)}
                  :range   {:type (list (non-null Int))}}
@@ -203,8 +193,8 @@
    {:gameLevel {:type (non-null String)}}}
 
   :startGame
-  {:type        :StartGameAck
-   :description "Starts streaming that games stock data"
+  {:type        (list (list :StockTick))
+   :description "Starts streaming that games stock data. Conditionally returns a :StockTick history, if a :startPosition was supplied."
    :resolve     :resolve-start-game
    :args
    {:id            {:type (non-null String)}

@@ -109,12 +109,9 @@
         gameId (UUID/fromString game-id)
         game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
 
-    (game.games/start-game! conn user-db-id game-control (get args :startPosition 0))
-
-    ;; TODO seek to start-position
-    ;; stock-tick-stream
-
-    {:message :gamestarted}))
+    (->> (game.games/start-game! conn user-db-id game-control (get args :startPosition 0))
+         (map :stock-ticks)
+         (map #(map graphql.encoder/stock-tick->graphql %)))))
 
 (defn resolve-buy-stock [context args _]
 

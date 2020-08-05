@@ -178,7 +178,11 @@
                               :payload
                               {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
-                                           message
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
                                          }
                                        }"
                                :variables {:id id}}})
@@ -192,10 +196,79 @@
 
         (test-util/<message!! 1000)
 
-        (let [expected-result {:message "gamestarted"}
-              result (-> (test-util/<message!! 1000) :payload :data :startGame)]
+        (let [expected-result []
+              result (-> (test-util/<message!! 1000) util/pprint+identity :payload :data :startGame)]
 
           (is (= expected-result result)))))))
+
+(deftest start-game-resolver-with-start-position-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        gameLevel "one"]
+
+
+    (testing "REST Login (not WebSocket) ; creates a user"
+
+      (test-util/login-assertion service id-token))
+
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
+                                         id
+                                         stocks { id name symbol }
+                                       }
+                                     }"
+                             :variables {:gameLevel gameLevel}}}))
+
+    (testing "Start a Game"
+
+      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)
+            startPosition 10]
+
+        (test-util/send-data {:id   988
+                              :type :start
+                              :payload
+                              {:query "mutation StartGame($id: String!, $startPosition: Int) {
+                                         startGame(id: $id, startPosition: $startPosition) {
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
+                                         }
+                                       }"
+                               :variables {:id id
+                                           :startPosition startPosition}}})
+
+        (as-> (:game/games state/system) gs
+          (deref gs)
+          (get gs (UUID/fromString id))
+          (:control-channel gs)
+          (core.async/>!! gs {:message :exit}))
+
+
+        (test-util/<message!! 1000)
+
+        (let [expected-historical-data-length startPosition
+              result (-> (test-util/<message!! 1000) :payload :data :startGame)]
+
+
+          (is (= expected-historical-data-length (count result)))
+
+          (->> result
+               (map #(map keys %))
+               (map #(map (fn [a] (into #{} a)) %))
+               (map #(every? (fn [a]
+                               (= #{:stockTickId :stockTickTime :stockTickClose :stockId :stockName}
+                                  a)) %))
+               (every? true?)
+               is))))))
 
 (deftest stream-stock-ticks-test
 
