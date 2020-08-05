@@ -65,7 +65,10 @@
                                 "org.apache.http.wire" :error
                                 "org.eclipse.jetty.server.handler.ContextHandler" :error
                                 "org.eclipse.jetty.server.AbstractConnector" :error
-                                "org.eclipse.jetty.server.Server" :error}}}
+                                "org.eclipse.jetty.server.Server" :error
+                                "org.eclipse.jetty.util.log" :error
+                                "o.e.j.server.handler.ContextHandler" :error
+                                "o.e.jetty.server.AbstractConnector" :error}}}
 
 
  ;; MAIN

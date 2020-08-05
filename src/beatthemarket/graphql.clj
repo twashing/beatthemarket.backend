@@ -232,6 +232,11 @@
 
 
 ;; STREAMERS
+
+;; https://lacinia-pedestal.readthedocs.io/en/latest/subscriptions.html#overview
+;; When a streamer passes nil to the callback, a clean shutdown of the subscription occurs; the client is sent a completion message. The completion message informs the client that the stream of events has completed, and that it should not attempt to reconnect.
+
+
 (defn stream-stock-ticks [context {id :gameId :as args} source-stream]
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
