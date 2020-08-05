@@ -18,7 +18,7 @@
             [io.pedestal.http.jetty.websockets :as ws]
             [io.pedestal.interceptor.error :as error-int]
             [integrant.core :as ig]
-            [beatthemarket.graphql :as graphql]
+            [beatthemarket.handler.graphql.core :as graphql.core]
 
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.authentication :as iam.auth]
@@ -40,16 +40,6 @@
   (:import [org.eclipse.jetty.websocket.api Session]
            [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
 
-
-#_(defn about-page
-  [_]
-  (ring-resp/response (format "Clojure %s - served from %s"
-                              (clojure-version)
-                              (route/url-for ::about-page))))
-
-#_(defn home-page
-  [_]
-  (ring-resp/response "Hello World!"))
 
 #_(def service-error-handler
     "References:
@@ -89,7 +79,7 @@
   ;; The interceptors defined after the verb map (e.g., {:get home-page}
   ;; apply to / and its children (/about).
   #_[[["/" {:get home-page} ^:interceptors [(body-params/body-params) http/html-body]
-     ["/about" {:get about-page}]]]]
+       ["/about" {:get about-page}]]]]
 
   #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
        ["/about" {:get about-page}]]]]
@@ -150,7 +140,11 @@
 
 (defn auth-request-handler-ws [context]
 
-  (let [id-token (-> context :request :authorization
+  (let [token (if (-> context :request :authorization)
+                (-> context :request :authorization)
+                (-> context :connection-params :token))
+
+        id-token (-> token
                      (s/split #"Bearer ")
                      last)
 
@@ -229,19 +223,19 @@
 
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
-      (lacinia.util/attach-resolvers {:resolve-login                     graphql/resolve-login
-                                      :resolve-create-game               graphql/resolve-create-game
-                                      :resolve-start-game                graphql/resolve-start-game
-                                      :resolve-buy-stock                 graphql/resolve-buy-stock
-                                      :resolve-sell-stock                graphql/resolve-sell-stock
-                                      :resolve-account-balances          graphql/resolve-account-balances
-                                      :resolve-user                      graphql/resolve-user
-                                      :resolve-users                     graphql/resolve-users
-                                      :resolve-user-personal-profit-loss graphql/resolve-user-personal-profit-loss
-                                      :resolve-user-market-profit-loss   graphql/resolve-user-market-profit-loss})
-      (lacinia.util/attach-streamers {:stream-stock-ticks       graphql/stream-stock-ticks
-                                      :stream-portfolio-updates graphql/stream-portfolio-updates
-                                      :stream-game-events       graphql/stream-game-events})
+      (lacinia.util/attach-resolvers {:resolve-login                     graphql.core/resolve-login
+                                      :resolve-create-game               graphql.core/resolve-create-game
+                                      :resolve-start-game                graphql.core/resolve-start-game
+                                      :resolve-buy-stock                 graphql.core/resolve-buy-stock
+                                      :resolve-sell-stock                graphql.core/resolve-sell-stock
+                                      :resolve-account-balances          graphql.core/resolve-account-balances
+                                      :resolve-user                      graphql.core/resolve-user
+                                      :resolve-users                     graphql.core/resolve-users
+                                      :resolve-user-personal-profit-loss graphql.core/resolve-user-personal-profit-loss
+                                      :resolve-user-market-profit-loss   graphql.core/resolve-user-market-profit-loss})
+      (lacinia.util/attach-streamers {:stream-stock-ticks       graphql.core/stream-stock-ticks
+                                      :stream-portfolio-updates graphql.core/stream-portfolio-updates
+                                      :stream-game-events       graphql.core/stream-game-events})
       schema/compile))
 
 

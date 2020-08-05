@@ -118,6 +118,7 @@
                   :control-channel
                   :stocks-with-tick-data
                   :profit-loss
+                  :input-sequence
                   :current-level
 
                   :transact-profit-loss-mappingfn
@@ -197,7 +198,7 @@
         (test-util/<message!! 1000)
 
         (let [expected-result []
-              result (-> (test-util/<message!! 1000) util/pprint+identity :payload :data :startGame)]
+              result (-> (test-util/<message!! 1000) :payload :data :startGame)]
 
           (is (= expected-result result)))))))
 
@@ -779,7 +780,7 @@
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
-      (let [profit-loss (-> (test-util/<message!! 1000) :payload :data :userPersonalProfitLoss util/pprint+identity)
+      (let [profit-loss (-> (test-util/<message!! 1000) :payload :data :userPersonalProfitLoss)
 
             expected-profit-loss-keys #{:gameId :stockId :profitLoss :profitLossType}
             expected-profit-losses #{{:profitLoss (float 0.0)

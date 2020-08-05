@@ -1172,8 +1172,7 @@
                                                         :bookkeeping.account/amount]))
                                   (partition 3)
                                   (into #{})
-                                  (transform [ALL] #(into #{} %))
-                                  util/pprint+identity)]
+                                  (transform [ALL] #(into #{} %)))]
 
         (are [x y] (= x y)
           expected-account-balance-count   (count account-balances)

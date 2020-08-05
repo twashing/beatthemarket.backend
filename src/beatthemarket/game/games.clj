@@ -389,8 +389,8 @@
           :as     game}        (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
          stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
 
-         stream-buffer           80
-         control-channel         (core.async/chan stream-buffer)
+         stream-buffer           10
+         control-channel         (core.async/chan (core.async/sliding-buffer stream-buffer))
          stock-tick-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
          portfolio-update-stream (core.async/chan (core.async/sliding-buffer stream-buffer))
          game-event-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
@@ -424,6 +424,7 @@
           :transact-tick-mappingfn         transact-mappingfn
           :stream-stock-tick-mappingfn     (or stream-stock-tick-mappingfn
                                                (fn [stock-tick-pairs]
+
                                                  (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
                                                    ;; (println (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
                                                    (core.async/go (core.async/>! stock-tick-stream stock-ticks))
@@ -434,7 +435,6 @@
                                                    (-> repl.state/system :game/games
                                                        deref
                                                        (get game-id)
-                                                       ;; ((util/pprint+identity (dissoc % :stocks-with-tick-data)))
                                                        :profit-loss
                                                        ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
@@ -446,7 +446,6 @@
           :collect-profit-loss-mappingfn     (or collect-profit-loss-mappingfn
                                                  (fn [{:keys [profit-loss] :as result}]
 
-                                                   ;; (trace result)
                                                    (->> (game.calculation/collect-running-profit-loss game-id profit-loss)
                                                         (assoc result :profit-loss))))
           :transact-profit-loss-mappingfn    identity ;; (map transact-mappingfn)
@@ -455,7 +454,6 @@
 
                                                    ;; (println (format ">> STREAM portfolio-update / %s" result))
                                                    ;; (util/pprint+identity result)
-
                                                    (when profit-loss
                                                      (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
                                                    result))
@@ -487,11 +485,8 @@
                                                                            profit-threshold-met? (assoc :message :win)
                                                                            lose-threshold-met? (assoc :message :lose))]
 
-                                                  ;; (util/pprint+identity profit-loss)
-                                                  ;; (util/pprint+identity game-event-message)
-
                                                   (when (:message game-event-message)
-                                                    ;; (pprint game-event-message)
+                                                    ;; (util/pprint+identity game-event-message)
                                                     ;; (core.async/go (core.async/>! game-event-stream game-event-message))
                                                     (core.async/go (core.async/>! control-channel game-event-message))))
 
@@ -518,9 +513,7 @@
 ;; START
 (defn game->new-game-message [game user-id]
 
-  (let [game-stocks        (:game/stocks game)
-        ;; game-subscriptions (:game.user/subscriptions (game.core/game-user-by-user-id game user-id))
-        ]
+  (let [game-stocks (:game/stocks game)]
 
     (as-> {:stocks game-stocks} v
       (transform [MAP-VALS ALL :game.stock/id] str v)
@@ -675,22 +668,9 @@
                              [_ :exit _] (handle-control-event conn game-event-stream controlv now end)
                              [_ :win _] (handle-control-event conn game-event-stream controlv now end)
                              [_ :lose _] (handle-control-event conn game-event-stream controlv now end)
-                             [_ _ false] (do
-
-                                           ;; TODO stream
-                                           ;; :stock-tick
-                                           ;; :timer-event
-
-                                           ;; (println (format "Running %s" (format-remaining-time remaining)))
-                                           (when x
-                                             [(t/now) end]))
-                             [_ _ true] (handle-control-event conn game-event-stream {:message :timeout} now end))
-
-          ;; NOTE On shutdown, the game reference can disappear
-          ;; game-alive? (-> repl.state/system :game/games deref keys)
-          ]
-
-      ;; (println game-alive?)
+                             [_ _ false] (when x
+                                           [(t/now) end])
+                             [_ _ true] (handle-control-event conn game-event-stream {:message :timeout} now end))]
 
       (when (and nowA endA)
         (recur nowA endA (next iters))))))

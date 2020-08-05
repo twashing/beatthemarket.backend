@@ -178,6 +178,6 @@
                                          :range [0 10]}}})
 
       (test-util/<message!! 1000)
-      (-> (test-util/<message!! 1000) util/pprint+identity)
+      (test-util/<message!! 1000)
 
       )))

@@ -1,4 +1,4 @@
-(ns beatthemarket.graphql
+(ns beatthemarket.handler.graphql.core
   (:require [clojure.core.async :as core.async
              :refer [>!!]]
             [datomic.client.api :as d]
@@ -308,7 +308,7 @@
 
     (core.async/go-loop []
       (when-let [game-event (core.async/<! game-event-stream)]
-        (source-stream (util/pprint+identity game-event))
+        (source-stream game-event)
         (recur)))
 
     ;; Return a cleanup fn
