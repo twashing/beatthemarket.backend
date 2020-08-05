@@ -1,4 +1,4 @@
-(ns beatthemarket.graphql-test
+(ns beatthemarket.handler.graphql.core-test
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer [response-for]]
             [integrant.repl.state :as state]
@@ -6,7 +6,6 @@
             [datomic.client.api :as d]
 
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.graphql :as sut]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util]))
@@ -39,15 +38,11 @@
                 expected-name          "Timothy Washington"
                 expected-account-names ["Cash" "Equity"]
 
-                {:user/keys [email name accounts]} (d/pull (d/db conn) '[*] user-entity)
-                account-names                      (->> accounts
-                                                        (map :bookkeeping.account/name)
-                                                        sort)]
+                {:user/keys [email name]} (d/pull (d/db conn) '[*] user-entity)]
 
             (are [x y] (= x y)
               expected-email         email
-              expected-name          name
-              expected-account-names account-names)))
+              expected-name          name)))
 
         (testing "Subsequent logins find an existing user"
 

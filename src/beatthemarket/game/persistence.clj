@@ -47,9 +47,7 @@
                                       {:keys [amount trade-price] :as calculation}]
 
   (let [pershare-purchase-ratio (/ amount updated-stock-account-amount)
-        pershare-gain-or-loss   (- latest-trade-price trade-price)
-        ;; A                       (* pershare-gain-or-loss pershare-purchase-ratio)
-        ]
+        pershare-gain-or-loss   (- latest-trade-price trade-price)]
 
     (assoc calculation
            :latest-price->trade-price     [latest-trade-price trade-price]
@@ -94,8 +92,7 @@
 
 (defn calculate-running-aggregate-profit-loss-on-BUY! [data]
 
-  (let [{[{{{;; price-history :game.stock/price-history
-             game-stock-id :game.stock/id} :bookkeeping.account/counter-party
+  (let [{[{{{game-stock-id :game.stock/id} :bookkeeping.account/counter-party
             credit-account-id              :bookkeeping.account/id
             stock-account-amount           :bookkeeping.account/amount
             credit-account-name            :bookkeeping.account/name} :bookkeeping.credit/account
@@ -223,8 +220,6 @@
   (let [buys-fn (comp :bookkeeping.account/counter-party :bookkeeping.credit/account first :bookkeeping.tentry/credits)
         sells-fn (comp :bookkeeping.account/counter-party :bookkeeping.debit/account first :bookkeeping.tentry/debits)]
 
-    ;; (println "B.buys /" (buys-fn data))
-    ;; (println "B.sells /" (sells-fn data))
     (cond
 
       ;; collect BUYS by stock account

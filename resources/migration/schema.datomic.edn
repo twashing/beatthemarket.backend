@@ -1,5 +1,4 @@
 [
-
  ;; USER
 
  ;; NOTE This entity is a Firebase user, tied to an external Identity Provider
@@ -91,11 +90,7 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
- #_{:db/ident       :game.user/subscriptions
-  :db/valueType   :db.type/ref ;; List of :stock
-  :db/cardinality :db.cardinality/many
-  :db/isComponent true
-  :db/doc         ""}
+ 
  {:db/ident       :game.user/portfolio
   :db/valueType   :db.type/ref ;; :bookkeeping.portfolio
   :db/cardinality :db.cardinality/one
@@ -259,13 +254,6 @@
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
 
- #_{:db/ident        :bookkeeping.debit/validate
-  :db.entity/attrs [:bookkeeping.debit/id :bookkeeping.debit/account :bookkeeping.debit/value]}
-
-
- #_{:db/ident :bookkeeping.credit/validate
-  :db.entity/attrs [:bookkeeping.credit/id :bookkeeping.credit/account :bookkeeping.credit/value]}
-
  {:db/ident       :bookkeeping.credit/id
   :db/valueType   :db.type/uuid
   :db/cardinality :db.cardinality/one
@@ -286,6 +274,4 @@
  {:db/ident       :bookkeeping.credit/amount
   :db/valueType   :db.type/long
   :db/cardinality :db.cardinality/one
-  :db/doc         ""}
-
- ]
+  :db/doc         ""}]

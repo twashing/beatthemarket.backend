@@ -145,14 +145,6 @@
    :resolve :resolve-account-balances
    :description "Returns accountBalances, per game, per user"}
 
-  #_:stockTimeSeries
-  #_{:type        (list (non-null :StockTick))
-   :args        {:gameId  {:type (non-null String)}
-                 :stockId {:type (non-null String)}
-                 :range   {:type (list (non-null Int))}}
-   :resolve     :resolve-stock-time-series
-   :description "Called after game is created (where stocks are created)"}
-
   :user
   {:type (non-null :User)
    :args {:email {:type (non-null String)}}
