@@ -140,7 +140,10 @@
 
 (defn auth-request-handler-ws [context]
 
-  (let [id-token (-> context :request :authorization
+  (let [token (if (-> context :request :authorization)
+  (-> context :request :authorization)
+  (-> context :connection-params :token))
+  id-token (-> token
                      (s/split #"Bearer ")
                      last)
 

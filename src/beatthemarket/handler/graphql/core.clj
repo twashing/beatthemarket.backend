@@ -99,6 +99,7 @@
 
 (defn resolve-start-game [context {game-id :id :as args} _]
 
+(util/pprint+identity args)
   (let [{{{email :email} :checked-authentication} :request} context
         conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         user-db-id                                          (ffirst
@@ -253,7 +254,13 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :stock-tick-stream)
-        cleanup-fn                                          (constantly :noop #_(core.async/close! stock-tick-stream))]
+        cleanup-fn                                          (constantly 
+        
+        (do
+        (util/pprint+identity "This should not be called")
+        :noop 
+        #_(core.async/close! stock-tick-stream)
+        ))]
 
     (core.async/go-loop []
       (when-let [stock-ticks (core.async/<! stock-tick-stream)]

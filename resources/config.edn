@@ -52,7 +52,7 @@
                                                  :order 10}}}
 
 
- :logging {:config {:level     :info
+ :logging {:config {:level     :debug
                     :console   true
                     :appenders [{:appender          :rolling-file
                                  :rolling-policy    {:type      :fixed-window
