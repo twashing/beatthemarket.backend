@@ -12,6 +12,7 @@
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
             [beatthemarket.bookkeeping.core :as bookkeeping]
+            [beatthemarket.handler.graphql.encoder :as graphql.encoder]
             [clojure.data.json :as json])
   (:import [java.util UUID]))
 
@@ -287,14 +288,7 @@
 
     (core.async/go-loop []
       (when-let [stock-ticks (core.async/<! stock-tick-stream)]
-        (->> stock-ticks
-             (map #(clojure.set/rename-keys %
-                                            {:game.stock.tick/id :stockTickId
-                                             :game.stock.tick/trade-time :stockTickTime
-                                             :game.stock.tick/close :stockTickClose
-                                             :game.stock/id :stockId
-                                             :game.stock/name :stockName}))
-             source-stream)
+        (source-stream (map graphql.encoder/stock-tick->graphql stock-ticks))
         (recur)))
 
     ;; Return a cleanup fn

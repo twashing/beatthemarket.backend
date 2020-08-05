@@ -208,182 +208,6 @@
            (concat butlast-chunks)
            flatten))))
 
-(defn initialize-game!
-
-  ([conn user-entity accounts sink-fn]
-
-   (initialize-game! conn user-entity accounts sink-fn :game-level/one (->data-sequence) {}))
-
-  ([conn user-entity accounts sink-fn game-level data-sequence {:keys [profit-loss level-timer-sec game-id
-                                                                       stream-stock-tick-mappingfn stream-portfolio-update-mappingfn
-                                                                       collect-profit-loss-mappingfn check-level-complete-mappingfn]}]
-
-   (let [stocks               (game.core/generate-stocks! 4)
-         initialize-game-opts {:game-id game-id}
-
-         {game-id :game/id
-          stocks  :game/stocks
-          {saved-game-level :db/ident} :game/level
-          :as     game}        (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
-         stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
-         stock-tick-by-id      (fn [id stock-ticks]
-                                 (first (filter #(= id (:game.stock/id %))
-                                                stock-ticks)))
-
-         stream-buffer           80
-         control-channel         (core.async/chan stream-buffer)
-         stock-tick-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
-         portfolio-update-stream (core.async/chan (core.async/sliding-buffer stream-buffer))
-         game-event-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
-         transact-mappingfn             (fn [data]
-                                          (persistence.datomic/transact-entities! conn data)
-                                          data)
-         {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
-                                                       (get saved-game-level))
-
-         current-level (atom {:level saved-game-level
-                              :profit-threshold profit-threshold
-                              :lose-threshold lose-threshold})
-
-         recalculate-perstock-fn (fn [stock-ticks profit-loss]
-                                   (reduce-kv (fn [m k v]
-                                                (if-let [{price :game.stock.tick/close}
-                                                         (stock-tick-by-id k stock-ticks)]
-                                                  (assoc
-                                                    m k
-                                                    (recalculate-profit-loss-on-tick-perstock price v))
-                                                  m))
-                                              {}
-                                              profit-loss))
-         game-control
-         {:game                  game
-          :profit-loss           (or profit-loss {})
-          :stocks-with-tick-data stocks-with-tick-data
-          :paused?          (atom false)
-          :tick-sleep-atom  (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
-          :level-timer-atom (atom (or level-timer-sec (-> integrant.repl.state/config :game/game :level-timer-sec)))
-          :current-level    current-level
-
-          :control-channel         control-channel
-          :stock-tick-stream       stock-tick-stream
-          :portfolio-update-stream portfolio-update-stream
-          :game-event-stream       game-event-stream
-
-          :transact-tick-mappingfn         transact-mappingfn
-          :stream-stock-tick-mappingfn     (or stream-stock-tick-mappingfn
-                                               (fn [stock-tick-pairs]
-                                                 (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
-                                                   ;; (println (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
-                                                   (core.async/go (core.async/>! stock-tick-stream stock-ticks))
-                                                   stock-ticks)))
-          :calculate-profit-loss-mappingfn (fn [stock-ticks]
-
-                                             (let [updated-profit-loss-calculations
-                                                   (-> repl.state/system :game/games
-                                                       deref
-                                                       (get game-id)
-                                                       ;; ((util/pprint+identity (dissoc % :stocks-with-tick-data)))
-                                                       :profit-loss
-                                                       ((partial recalculate-perstock-fn stock-ticks)))]
-
-                                               (->> updated-profit-loss-calculations
-                                                    (game.persistence/track-profit-loss-wholesale! game-id)
-                                                    (#(get % game-id))
-                                                    :profit-loss
-                                                    (hash-map :stock-ticks stock-ticks :profit-loss))))
-          :collect-profit-loss-mappingfn     (or collect-profit-loss-mappingfn
-                                                 (fn [{:keys [profit-loss] :as result}]
-
-                                                   ;; (trace result)
-                                                   (->> (game.calculation/collect-running-profit-loss game-id profit-loss)
-                                                        (assoc result :profit-loss))))
-          :transact-profit-loss-mappingfn    identity ;; (map transact-mappingfn)
-          :stream-portfolio-update-mappingfn (or stream-portfolio-update-mappingfn
-                                                 (fn [{:keys [profit-loss] :as result}]
-
-                                                   ;; (println (format ">> STREAM portfolio-update / %s" result))
-                                                   ;; (util/pprint+identity result)
-
-                                                   (when profit-loss
-                                                     (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
-                                                   result))
-
-          :check-level-complete-mappingfn (or check-level-complete-mappingfn
-                                              (fn [{:keys [profit-loss]  :as result}]
-
-                                                ;; (println (format ">> CHECK level-complete /"))
-                                                (let [{profit-threshold :profit-threshold
-                                                       lose-threshold :lose-threshold
-                                                       level :level} (deref current-level)
-
-                                                      running-pl (->> profit-loss
-                                                                      (filter #(= :running-profit-loss (:profit-loss-type %)))
-                                                                      (reduce #(+ %1 (:profit-loss %2)) 0.0))
-
-                                                      realized-pl (->> profit-loss
-                                                                       (filter #(= :realized-profit-loss (:profit-loss-type %)))
-                                                                       (reduce #(+ %1 (:profit-loss %2)) 0.0))
-
-                                                      running+realized-pl (+ running-pl realized-pl)
-
-                                                      profit-threshold-met? (> running+realized-pl profit-threshold)
-                                                      lose-threshold-met? (< running+realized-pl (* -1 lose-threshold))
-
-                                                      game-event-message (cond-> {:game-id game-id
-                                                                                  :level level
-                                                                                  :profit-loss running+realized-pl}
-                                                                           profit-threshold-met? (assoc :message :win)
-                                                                           lose-threshold-met? (assoc :message :lose))]
-
-                                                  ;; (util/pprint+identity profit-loss)
-                                                  ;; (util/pprint+identity game-event-message)
-
-                                                  (when (:message game-event-message)
-                                                    ;; (pprint game-event-message)
-                                                    ;; (core.async/go (core.async/>! game-event-stream game-event-message))
-                                                    (core.async/go (core.async/>! control-channel game-event-message))))
-
-                                                result))
-
-          :close-sink-fn   (partial sink-fn nil)
-          :sink-fn         #(sink-fn {:message %})}]
-
-     (register-game-control! game game-control)
-     game-control)))
-
-(defn create-game!
-
-  ([conn user-id sink-fn]
-   (create-game! conn user-id sink-fn :game-level/one))
-
-  ([conn user-id sink-fn game-level]
-   (create-game! conn user-id sink-fn game-level (->data-sequence) {:accounts (game.core/->game-user-accounts)}))
-
-  ([conn user-id sink-fn game-level data-sequence {accounts :accounts :as opts}]
-   (let [user-entity (hash-map :db/id user-id)]
-     (initialize-game! conn user-entity accounts sink-fn game-level data-sequence opts))))
-
-;; START
-(defn game->new-game-message [game user-id]
-
-  (let [game-stocks        (:game/stocks game)
-        ;; game-subscriptions (:game.user/subscriptions (game.core/game-user-by-user-id game user-id))
-        ]
-
-    (as-> {:stocks game-stocks} v
-      (transform [MAP-VALS ALL :game.stock/id] str v)
-      (assoc v :id (str (:game/id game))))))
-
-(defn narrow-stock-tick-pairs-by-subscription [stock-tick-pairs {input-stock-id :game.stock/id}]
-
-  (for [{{each-stock-tick-id :game.stock.tick/id} :game.stock/price-history
-         each-stock-id                            :game.stock/id :as e}      stock-tick-pairs
-        {binding-stock-tick-id                    :game.stock.tick/id :as f} stock-tick-pairs
-        :when                                                                (and (= input-stock-id each-stock-id)
-                                                                                  (= binding-stock-tick-id each-stock-tick-id))]
-
-    [e f]))
-
 (defn- stocks->partitioned-entities
   "Output should be a partitioned list of {:tick :stock}.
    A count of 2 stocks should yield output that looks like below.
@@ -527,26 +351,177 @@
        (apply concat)))
 
 (defn stocks->stock-sequences [conn game user-id stocks-with-tick-data]
-  (->> stocks-with-tick-data
-       stocks->partitioned-entities
-       (map partitioned-entities->transaction-entities)))
+  (map partitioned-entities->transaction-entities
+       (stocks->partitioned-entities stocks-with-tick-data)))
 
-(defn inputs->control-chain [{:keys [game stocks-with-tick-data
-                                     stream-stock-tick-mappingfn calculate-profit-loss-mappingfn
-                                     collect-profit-loss-mappingfn stream-portfolio-update-mappingfn
-                                     transact-tick-mappingfn transact-profit-loss-mappingfn
-                                     check-level-complete-mappingfn]}
-                             {:keys [conn user-db-id]}]
+(defn initialize-game!
 
-  (->> stocks-with-tick-data
-       (stocks->stock-sequences conn game user-db-id)
-       (map transact-tick-mappingfn)
-       (map stream-stock-tick-mappingfn)
-       (map calculate-profit-loss-mappingfn)
-       (map collect-profit-loss-mappingfn)
-       (map transact-profit-loss-mappingfn)
-       (map stream-portfolio-update-mappingfn)
-       (map check-level-complete-mappingfn)))
+  ([conn user-entity accounts sink-fn]
+
+   (initialize-game! conn user-entity accounts sink-fn :game-level/one (->data-sequence) {}))
+
+  ([conn user-entity accounts sink-fn game-level data-sequence {:keys [input-sequence profit-loss level-timer-sec game-id
+                                                                       stream-stock-tick-mappingfn stream-portfolio-update-mappingfn
+                                                                       collect-profit-loss-mappingfn check-level-complete-mappingfn]}]
+
+   (let [stocks               (game.core/generate-stocks! 4)
+         initialize-game-opts {:game-id game-id}
+
+         {game-id :game/id
+          stocks  :game/stocks
+          {saved-game-level :db/ident} :game/level
+          :as     game}        (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
+         stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
+         stock-tick-by-id      (fn [id stock-ticks]
+                                 (first (filter #(= id (:game.stock/id %))
+                                                stock-ticks)))
+
+         stream-buffer           80
+         control-channel         (core.async/chan stream-buffer)
+         stock-tick-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
+         portfolio-update-stream (core.async/chan (core.async/sliding-buffer stream-buffer))
+         game-event-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
+         transact-mappingfn      (fn [data]
+                                   (persistence.datomic/transact-entities! conn data)
+                                   data)
+         {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
+                                                       (get saved-game-level))
+
+         current-level (atom {:level saved-game-level
+                              :profit-threshold profit-threshold
+                              :lose-threshold lose-threshold})
+
+         recalculate-perstock-fn (fn [stock-ticks profit-loss]
+                                   (reduce-kv (fn [m k v]
+                                                (if-let [{price :game.stock.tick/close}
+                                                         (stock-tick-by-id k stock-ticks)]
+                                                  (assoc
+                                                    m k
+                                                    (recalculate-profit-loss-on-tick-perstock price v))
+                                                  m))
+                                              {}
+                                              profit-loss))
+         game-control
+         {:game                  game
+          :profit-loss           (or profit-loss {})
+          :stocks-with-tick-data stocks-with-tick-data
+          :input-sequence   (or input-sequence
+                                (stocks->stock-sequences
+                                  conn game (:db/id user-entity) stocks-with-tick-data))
+          :paused?          (atom false)
+          :tick-sleep-atom  (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
+          :level-timer-atom (atom (or level-timer-sec (-> integrant.repl.state/config :game/game :level-timer-sec)))
+          :current-level    current-level
+
+          :control-channel         control-channel
+          :stock-tick-stream       stock-tick-stream
+          :portfolio-update-stream portfolio-update-stream
+          :game-event-stream       game-event-stream
+
+          :transact-tick-mappingfn         transact-mappingfn
+          :stream-stock-tick-mappingfn     (or stream-stock-tick-mappingfn
+                                               (fn [stock-tick-pairs]
+                                                 (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
+                                                   ;; (println (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
+                                                   (core.async/go (core.async/>! stock-tick-stream stock-ticks))
+                                                   stock-ticks)))
+          :calculate-profit-loss-mappingfn (fn [stock-ticks]
+
+                                             (let [updated-profit-loss-calculations
+                                                   (-> repl.state/system :game/games
+                                                       deref
+                                                       (get game-id)
+                                                       ;; ((util/pprint+identity (dissoc % :stocks-with-tick-data)))
+                                                       :profit-loss
+                                                       ((partial recalculate-perstock-fn stock-ticks)))]
+
+                                               (->> updated-profit-loss-calculations
+                                                    (game.persistence/track-profit-loss-wholesale! game-id)
+                                                    (#(get % game-id))
+                                                    :profit-loss
+                                                    (hash-map :stock-ticks stock-ticks :profit-loss))))
+          :collect-profit-loss-mappingfn     (or collect-profit-loss-mappingfn
+                                                 (fn [{:keys [profit-loss] :as result}]
+
+                                                   ;; (trace result)
+                                                   (->> (game.calculation/collect-running-profit-loss game-id profit-loss)
+                                                        (assoc result :profit-loss))))
+          :transact-profit-loss-mappingfn    identity ;; (map transact-mappingfn)
+          :stream-portfolio-update-mappingfn (or stream-portfolio-update-mappingfn
+                                                 (fn [{:keys [profit-loss] :as result}]
+
+                                                   ;; (println (format ">> STREAM portfolio-update / %s" result))
+                                                   ;; (util/pprint+identity result)
+
+                                                   (when profit-loss
+                                                     (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
+                                                   result))
+
+          :check-level-complete-mappingfn (or check-level-complete-mappingfn
+                                              (fn [{:keys [profit-loss]  :as result}]
+
+                                                ;; (println (format ">> CHECK level-complete /"))
+                                                (let [{profit-threshold :profit-threshold
+                                                       lose-threshold :lose-threshold
+                                                       level :level} (deref current-level)
+
+                                                      running-pl (->> profit-loss
+                                                                      (filter #(= :running-profit-loss (:profit-loss-type %)))
+                                                                      (reduce #(+ %1 (:profit-loss %2)) 0.0))
+
+                                                      realized-pl (->> profit-loss
+                                                                       (filter #(= :realized-profit-loss (:profit-loss-type %)))
+                                                                       (reduce #(+ %1 (:profit-loss %2)) 0.0))
+
+                                                      running+realized-pl (+ running-pl realized-pl)
+
+                                                      profit-threshold-met? (> running+realized-pl profit-threshold)
+                                                      lose-threshold-met? (< running+realized-pl (* -1 lose-threshold))
+
+                                                      game-event-message (cond-> {:game-id game-id
+                                                                                  :level level
+                                                                                  :profit-loss running+realized-pl}
+                                                                           profit-threshold-met? (assoc :message :win)
+                                                                           lose-threshold-met? (assoc :message :lose))]
+
+                                                  ;; (util/pprint+identity profit-loss)
+                                                  ;; (util/pprint+identity game-event-message)
+
+                                                  (when (:message game-event-message)
+                                                    ;; (pprint game-event-message)
+                                                    ;; (core.async/go (core.async/>! game-event-stream game-event-message))
+                                                    (core.async/go (core.async/>! control-channel game-event-message))))
+
+                                                result))
+
+          :close-sink-fn   (partial sink-fn nil)
+          :sink-fn         #(sink-fn {:message %})}]
+
+     (register-game-control! game game-control)
+     game-control)))
+
+(defn create-game!
+
+  ([conn user-id sink-fn]
+   (create-game! conn user-id sink-fn :game-level/one))
+
+  ([conn user-id sink-fn game-level]
+   (create-game! conn user-id sink-fn game-level (->data-sequence) {:accounts (game.core/->game-user-accounts)}))
+
+  ([conn user-id sink-fn game-level data-sequence {accounts :accounts :as opts}]
+   (let [user-entity (hash-map :db/id user-id)]
+     (initialize-game! conn user-entity accounts sink-fn game-level data-sequence opts))))
+
+;; START
+(defn game->new-game-message [game user-id]
+
+  (let [game-stocks        (:game/stocks game)
+        ;; game-subscriptions (:game.user/subscriptions (game.core/game-user-by-user-id game user-id))
+        ]
+
+    (as-> {:stocks game-stocks} v
+      (transform [MAP-VALS ALL :game.stock/id] str v)
+      (assoc v :id (str (:game/id game))))))
 
 (defn- format-remaining-time [{:keys [remaining-in-minutes remaining-in-seconds]}]
   (format "%s:%s" remaining-in-minutes remaining-in-seconds))
@@ -643,6 +618,24 @@
   [(t/now) end])
 
 
+(defn inputs->historical-data [input-sequence start-position]
+  (take start-position input-sequence))
+
+(defn inputs->control-chain [{:keys [game input-sequence
+                                     stream-stock-tick-mappingfn calculate-profit-loss-mappingfn
+                                     collect-profit-loss-mappingfn stream-portfolio-update-mappingfn
+                                     transact-tick-mappingfn transact-profit-loss-mappingfn
+                                     check-level-complete-mappingfn]}]
+
+  (->> input-sequence
+       (map transact-tick-mappingfn)
+       (map stream-stock-tick-mappingfn)
+       (map calculate-profit-loss-mappingfn)
+       (map collect-profit-loss-mappingfn)
+       (map transact-profit-loss-mappingfn)
+       (map stream-portfolio-update-mappingfn)
+       (map check-level-complete-mappingfn)))
+
 (defn run-iteration [control-chain]
 
   (let [first+next (juxt first rest)
@@ -701,7 +694,7 @@
 
 (defn seek-to-position [start xs]
   (let [seekfn (juxt (partial take start) (partial drop start))]
-    (second (seekfn xs))))
+    (seekfn xs)))
 
 (defn start-game!
 
@@ -710,18 +703,20 @@
 
   ([conn user-db-id game-control start-position]
 
-   ;; TODO can seek to startPosition in stocks-with-tick-data
    (let [{:keys [control-channel
                  paused?
                  tick-sleep-atom
-                 level-timer-atom]} game-control]
+                 level-timer-atom]} game-control
 
-     (as-> game-control v
-       (inputs->control-chain v {:conn conn :user-db-id user-db-id})
-       (seek-to-position start-position v)
+         [historical-data inputs-at-position] (->> (inputs->control-chain game-control)
+                                                   (seek-to-position start-position))]
+
+     (as-> inputs-at-position v
        (run-iteration v)
        (assoc game-control :iterations v)
-       (run-game! conn v paused? tick-sleep-atom level-timer-atom)))))
+       (run-game! conn v paused? tick-sleep-atom level-timer-atom))
+
+     historical-data)))
 
 (defn start-workbench!
 
@@ -736,6 +731,7 @@
      :as game-control}
     start-position]
 
+   ;; A
    (core.async/go-loop [now (t/now)
                         end (t/plus now (t/seconds @level-timer))]
 
@@ -752,7 +748,8 @@
        (when (and nowA endA)
          (recur nowA endA))))
 
-   (as-> game-control v
-     (inputs->control-chain v {:conn conn :user-db-id user-db-id})
-     (seek-to-position start-position v)
-     (run-iteration v))))
+   ;; B
+   (let [[historical-data inputs-at-position] (->> (inputs->control-chain game-control)
+                                                   (seek-to-position start-position))]
+
+     [historical-data (run-iteration inputs-at-position)])))

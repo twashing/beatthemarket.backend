@@ -13,6 +13,7 @@
             [beatthemarket.game.games :as game.games]
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
             [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.handler.graphql.encoder :as graphql.encoder]
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util])
   (:import [java.util UUID]
@@ -35,6 +36,7 @@
 
           expected-game-control-keys #{:game
                                        :profit-loss
+                                       :input-sequence
                                        :stocks-with-tick-data
                                        :control-channel
                                        :current-level
@@ -99,7 +101,7 @@
          :as                          game-control}
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-        iterations (game.games/start-workbench! conn result-user-id game-control)]
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)]
 
 
     (testing "Chaining the control pipeline, produces the correct value.
@@ -158,7 +160,7 @@
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
         start-position 3
-        iterations (game.games/start-workbench! conn result-user-id game-control start-position)]
+        [historical-data iterations] (game.games/start-workbench! conn result-user-id game-control start-position)]
 
 
     (testing "Game's startPosition is seeking to the correct location"
@@ -166,7 +168,25 @@
       (let [expected-price 120.0
             result-price (-> iterations ffirst :stock-ticks first :game.stock.tick/close)]
 
-        (is (= expected-price result-price))))))
+        (is (= expected-price result-price))))
+
+    (testing "We are returning the correcet historical data"
+
+      (let [result-historical-data (->> (map :stock-ticks historical-data)
+                                        (map #(map graphql.encoder/stock-tick->graphql %)))
+
+            expected-historical-data-length start-position]
+
+        (is (= expected-historical-data-length (count result-historical-data)))
+
+        (->> result-historical-data
+             (map #(map keys %))
+             (map #(map (fn [a] (into #{} a)) %))
+             (map #(every? (fn [a]
+                             (= #{:stockTickId :stockTickTime :stockTickClose :stockId :stockName}
+                                a)) %))
+             (every? true?)
+             is)))))
 
 (deftest buy-stock!-test
 
@@ -206,7 +226,7 @@
          :as                                game-control}
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
 
-        iterations                   (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
         stockAmount                  100]
@@ -305,7 +325,7 @@
          :as                            game-control}
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
 
-        iterations (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
 
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
@@ -436,7 +456,7 @@
            :as                            game-control}
           (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
 
-          iterations                   (game.games/start-workbench! conn result-user-id game-control)
+          [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
           {stockId   :game.stock/id
            stockName :game.stock/name} (first stocks)
 
@@ -556,7 +576,7 @@
              :as                            game-control}
             (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-            iterations                   (game.games/start-workbench! conn result-user-id game-control)
+            [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
             {stockId   :game.stock/id
              stockName :game.stock/name} (first stocks)
 
@@ -672,7 +692,7 @@
            :as                            game-control}
           (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-          iterations                   (game.games/start-workbench! conn result-user-id game-control)
+          [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
           {stockId   :game.stock/id
            stockName :game.stock/name} (first stocks)
 
@@ -942,7 +962,8 @@
            portfolio-update-stream        :portfolio-update-stream
            game-event-stream              :game-event-stream
            :as                            game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
-          iterations (game.games/start-workbench! conn result-user-id game-control)
+
+          [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
           {stockId   :game.stock/id
            stockName :game.stock/name} (first stocks)
 
@@ -1078,7 +1099,8 @@
          control-channel                :control-channel
          portfolio-update-stream        :portfolio-update-stream
          :as                            game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
-        iterations (game.games/start-workbench! conn result-user-id game-control)
+
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
 
@@ -1195,7 +1217,7 @@
          :as                            game-control}
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-        iterations             (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
 
@@ -1279,7 +1301,7 @@
          :as                            game-control}
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-        iterations             (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
 
