@@ -21,6 +21,14 @@
   (pprint/pprint e)
   e)
 
+(defn narrow-stock-ticks [stock-id stock-ticks]
+
+  (let [f (fn [{id :game.stock/id}]
+            (= id stock-id))]
+    (->> stock-ticks
+         (filter f)
+         first)))
+
 #_(defn split-namespaced-keyword [kw]
   ((juxt namespace name) kw))
 

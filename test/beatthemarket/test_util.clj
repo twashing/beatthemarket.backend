@@ -10,7 +10,7 @@
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.repl.state :as repl.state]
             [clojure.tools.logging :as log]
-            [clojure.core.async :refer [timeout alt!! chan put!]]
+            [clojure.core.async :as core.async :refer [timeout alt!! chan put!]]
             [clojure.data.json :as json]
             [clj-http.client :as http]
             [gniazdo.core :as g]
@@ -85,24 +85,41 @@
 (defn login-assertion [service id-token]
 
   (let [expected-status 200
-        expected-body {:data {:login "user-added"}}
+        expected-body-message "useradded"
         expected-headers {"Content-Type" "application/json"}
+
+        expected-user-keys #{:userEmail :userName :userExternalUid :userAccounts}
+        expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount}
 
         {status :status
          body :body
          headers :headers}
         (response-for service
                       :post "/api"
-                      :body "{\"query\": \"{ login }\"}"
+                      :body "{\"query\": \"mutation Login { login { message user }} \" }"
                       :headers {"Content-Type" "application/json"
                                 "Authorization" (format "Bearer %s" id-token)})
+        {{{user :user
+           message :message} :login} :data :as body-parsed} (json/read-str body :key-fn keyword)
+        user-parsed (json/read-str user :key-fn keyword)]
 
-        body-parsed (json/read-str body :key-fn keyword)]
+
+    (->> (keys user-parsed)
+         (into #{})
+         (= expected-user-keys)
+         is)
+
+    (->> user-parsed :userAccounts
+         (map keys)
+         (map #(into #{} %))
+         (map #(= expected-user-account-keys %))
+         (every? true?)
+         is)
 
     (t/are [x y] (= x y)
       expected-status status
-      expected-body body-parsed
-      expected-headers headers)))
+      expected-headers headers
+      expected-body-message message)))
 
 
 ;; Firebase Token Helpers
@@ -137,7 +154,7 @@
 
 
   ;; USER
-(defn generate-user!
+#_(defn generate-user!
 
   ([conn] (generate-user! conn (-> repl.state/config :game/game :starting-balance)))
 
@@ -157,6 +174,23 @@
                 :claims (get "email")))
        (ffirst obj)
        (persistence.core/pull-entity conn obj)))))
+
+(defn generate-user! [conn]
+
+  (let [id-token               (->id-token)
+        checked-authentication (iam.auth/check-authentication id-token)]
+
+    (as-> checked-authentication obj
+      (iam.user/conditionally-add-new-user! conn obj)
+      (:db-after obj)
+      (d/q '[:find ?e
+             :in $ ?email
+             :where [?e :user/email ?email]]
+           obj
+           (-> checked-authentication
+               :claims (get "email")))
+      (ffirst obj)
+      (persistence.core/pull-entity conn obj))))
 
 
 ;; DOMAIN
@@ -199,6 +233,9 @@
   ([]
    (<message!! 75))
   ([timeout-ms]
+   #_(util/pprint+identity
+       (alt!!
+         *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))
    (alt!!
      *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)))
 
@@ -219,7 +256,7 @@
            session (try
                      (g/connect uri
                        :on-receive (fn [message-text]
-                                     (log/debug :reason ::receive :message (util/pprint+identity message-text))
+                                     (log/debug :reason ::receive :message message-text)
                                      (put! messages-ch (json/read-str message-text :key-fn keyword)))
                        :on-connect (fn [a]
                                      (log/debug :reason ::connected))
@@ -249,3 +286,13 @@
 
 (defmethod persistence.datomic/close-db-connection! :test [{client :client}]
   (persistence.datomic/close-db-connection-local! client))
+
+
+;; Miscellaneous
+(defn to-coll [ch]
+
+  (loop [coll []]
+    (let [[v ch] (core.async/alts!! [(core.async/timeout 100) ch])]
+      (if-not v
+        coll
+        (recur (conj coll v))))))

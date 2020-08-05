@@ -1,4 +1,4 @@
-(ns beatthemarket.graphql-test
+(ns beatthemarket.handler.graphql.core-test
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer [response-for]]
             [integrant.repl.state :as state]
@@ -6,7 +6,6 @@
             [datomic.client.api :as d]
 
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.graphql :as sut]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.util :as util]))
@@ -39,34 +38,47 @@
                 expected-name          "Timothy Washington"
                 expected-account-names ["Cash" "Equity"]
 
-                {:user/keys [email name accounts]} (d/pull (d/db conn) '[*] user-entity)
-                account-names                      (->> accounts
-                                                        (map :bookkeeping.account/name)
-                                                        sort)]
+                {:user/keys [email name]} (d/pull (d/db conn) '[*] user-entity)]
 
             (are [x y] (= x y)
               expected-email         email
-              expected-name          name
-              expected-account-names account-names)))
+              expected-name          name)))
 
         (testing "Subsequent logins find an existing user"
 
           (let [expected-status 200
-                expected-body {:data {:login "user-exists"}}
+                expected-body-message "userexists"
                 expected-headers {"Content-Type" "application/json"}
+
+                expected-user-keys #{:userEmail :userName :userExternalUid :userAccounts}
+                expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount}
 
                 {status :status
                  body :body
                  headers :headers}
                 (response-for service
                               :post "/api"
-                              :body "{\"query\": \"{ login }\"}"
+                              :body "{\"query\": \"mutation Login { login { message user }} \" }"
                               :headers {"Content-Type" "application/json"
                                         "Authorization" (format "Bearer %s" id-token)})
+                {{{user :user
+                   message :message} :login} :data :as body-parsed} (json/read-str body :key-fn keyword)
+                user-parsed (json/read-str user :key-fn keyword)]
 
-                body-parsed (json/read-str body :key-fn keyword)]
+
+            (->> (keys user-parsed)
+                 (into #{})
+                 (= expected-user-keys)
+                 is)
+
+            (->> user-parsed :userAccounts
+                 (map keys)
+                 (map #(into #{} %))
+                 (map #(= expected-user-account-keys %))
+                 (every? true?)
+                 is)
 
             (are [x y] (= x y)
               expected-status status
-              expected-body body-parsed
-              expected-headers headers)))))))
+              expected-headers headers
+              expected-body-message message)))))))

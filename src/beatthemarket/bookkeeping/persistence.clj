@@ -3,60 +3,45 @@
             [datomic.client.api :as d]))
 
 
-(defn cash-account-by-user
+(defn account-by-game-user [conn user-db-id game-id account-name]
 
-  ([conn user-id]
-   (cash-account-by-user (persistence.core/pull-entity conn user-id)))
-
-  ([user-pulled]
-   (->> user-pulled
-        :user/accounts
-        (filter #(= "Cash" (:bookkeeping.account/name %)))
-        first)))
-
-(defn equity-account-by-user
-
-  ([conn user-id]
-   (equity-account-by-user (persistence.core/pull-entity conn user-id)))
-
-  ([user-pulled]
-   (->> user-pulled
-        :user/accounts
-        (filter #(= "Equity" (:bookkeeping.account/name %)))
-        first)))
-
-(defn stock-accounts-by-user-external-id [conn external-uid]
-  (d/q '[:find (pull ?e [{:user/accounts [*]}])
-         :in $ ?external-uid
+  (d/q '[:find (pull ?gua [*])
+         :in $ ?uid ?game-id ?account-name
          :where
-         [?e :user/external-uid ?external-uid]]
+         [?uid]
+         [?g :game/id ?game-id]
+         [?g :game/users ?gu]
+         [?gu :game.user/user ?uid]
+         [?gu :game.user/accounts ?gua]
+         [?gua :bookkeeping.account/name ?account-name]]
        (d/db conn)
-       external-uid))
+       user-db-id game-id account-name))
 
-(defn stock-accounts-by-user-entity [conn user-db-id]
-  (d/q '[:find (pull ?e [{:user/accounts [*]}])
-         :in $ ?e
+(defn cash-account-by-game-user [conn user-db-id game-id]
+  (ffirst (account-by-game-user conn user-db-id game-id "Cash")))
+
+(defn equity-account-by-game-user [conn user-db-id game-id]
+  (ffirst (account-by-game-user conn user-db-id game-id "Equity")))
+
+(defn pull-game-user [conn user-db-id game-id]
+  (ffirst
+    (d/q '[:find (pull ?gus [*])
+           :in $ ?game-id ?game-user
+           :where
+           [?g :game/id ?game-id]
+           [?g :game/users ?gus]
+           [?gus :game.user/user ?game-user]]
+
+         (d/db conn) game-id user-db-id)))
+
+(defn stock-accounts-by-game-user [conn user-db-id game-id]
+  (d/q '[:find (pull ?gua [*])
+         :in $ ?game-id ?game-user
          :where
-         [?e]]
+         [?g :game/id ?game-id]
+         [?g :game/users ?gus]
+         [?gus :game.user/user ?game-user]
+         [?gus :game.user/accounts ?gua]
+         [?gua :bookkeeping.account/counter-party]]
        (d/db conn)
-       user-db-id))
-
-(defn stock-accounts-by-user-for-game [conn user-db-id game-id]
-  (->> (d/q '[:find (pull ?gs [{:bookkeeping.account/_counter-party [*]}])
-              :in $ ?e ?game-id
-              :where
-              [?e]
-
-              ;; Match Game to User
-              [?g :game/id ?game-id]
-              [?g :game/users ?gus]
-              [?gus :game.user/user ?e]
-
-              ;; Narrow to stock accounts for the game
-              [?g :game/stocks ?gs]
-              [?e :user/accounts ?uas]
-              [?uas :bookkeeping.account/counter-party ?gs]]
-            (d/db conn)
-            user-db-id
-            game-id)
-       (map (comp :bookkeeping.account/_counter-party first))))
+       game-id user-db-id))

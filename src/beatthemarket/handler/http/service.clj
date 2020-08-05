@@ -18,20 +18,20 @@
             [io.pedestal.http.jetty.websockets :as ws]
             [io.pedestal.interceptor.error :as error-int]
             [integrant.core :as ig]
-            [beatthemarket.graphql :as graphql]
+            [beatthemarket.handler.graphql.core :as graphql.core]
 
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
-            [beatthemarket.util]
+            [beatthemarket.util :as util]
 
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.interceptor.chain :as chain]
 
             [com.walmartlabs.lacinia.schema :as schema]
-            [com.walmartlabs.lacinia.util :as util]
+            [com.walmartlabs.lacinia.util :as lacinia.util]
             [com.walmartlabs.lacinia.pedestal2]
             [com.walmartlabs.lacinia.pedestal :refer [inject]]
             [com.walmartlabs.lacinia.pedestal.subscriptions :as sub]
@@ -41,90 +41,85 @@
            [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
 
 
-(defn about-page
-  [_]
-  (ring-resp/response (format "Clojure %s - served from %s"
-                              (clojure-version)
-                              (route/url-for ::about-page))))
-
-(defn home-page
-  [_]
-  (ring-resp/response "Hello World!"))
-
 #_(def service-error-handler
-  "References:
+    "References:
    http://pedestal.io/reference/error-handling
    https://stuarth.github.io/clojure/error-dispatch/
    http://pedestal.io/cookbook/index#_how_to_handle_errors"
 
-  (error-int/error-dispatch
-    [context ex]
+    (error-int/error-dispatch
+      [context ex]
 
-    [{:exception-type :clojure.lang.ExceptionInfo
-      :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
-    (let [response (-> (ring.util.response/response (.getMessage ex)) :status)]
+      [{:exception-type :clojure.lang.ExceptionInfo
+        :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
+      (let [response (-> (ring.util.response/response (.getMessage ex)) :status)]
 
-      (assoc context :response response))
+        (assoc context :response response))
 
-    :else
-    (assoc context :io.pedestal.interceptor.chain/error ex)))
+      :else
+      (assoc context :io.pedestal.interceptor.chain/error ex)))
 
 #_(def throwing-interceptor
-  (interceptor/interceptor {:name ::throwing-interceptor
-                            :enter (fn [_ctx]
-                                     ;; Simulated processing error
-                                     (/ 1 0))
-                            :error (fn [ctx ex]
-                                     ;; Here's where you'd handle the exception
-                                     ;; Remember to base your handling decision
-                                     ;; on the ex-data of the exception.
+    (interceptor/interceptor {:name ::throwing-interceptor
+                              :enter (fn [_ctx]
+                                       ;; Simulated processing error
+                                       (/ 1 0))
+                              :error (fn [ctx ex]
+                                       ;; Here's where you'd handle the exception
+                                       ;; Remember to base your handling decision
+                                       ;; on the ex-data of the exception.
 
-                                     (let [{:keys [_exception-type _exception]} (ex-data ex)]
-                                       ;; If you cannot handle the exception, re-attach it to the ctx
-                                       ;; using the `:io.pedestal.interceptor.chain/error` key
-                                       (assoc ctx ::chain/error ex)))}))
+                                       (let [{:keys [_exception-type _exception]} (ex-data ex)]
+                                         ;; If you cannot handle the exception, re-attach it to the ctx
+                                         ;; using the `:io.pedestal.interceptor.chain/error` key
+                                         (assoc ctx ::chain/error ex)))}))
 
 (defroutes legacy-routes
   ;; Defines "/" and "/about" routes with their associated :get handlers.
   ;; The interceptors defined after the verb map (e.g., {:get home-page}
   ;; apply to / and its children (/about).
-  [[["/" {:get home-page} ^:interceptors [(body-params/body-params) http/html-body]
-     ["/about" {:get about-page}]]]]
+  #_[[["/" {:get home-page} ^:interceptors [(body-params/body-params) http/html-body]
+       ["/about" {:get about-page}]]]]
 
   #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
-       ["/about" {:get about-page}]]]])
+       ["/about" {:get about-page}]]]]
+
+  [])
 
 (def ws-clients (atom {}))
 
-(defn new-ws-client
-  [ws-session send-ch]
+(defn new-ws-client [ws-session send-ch]
+
   (async/put! send-ch "This will be a text message")
+
+  (log/info :ws-session ws-session)
   (swap! ws-clients assoc ws-session send-ch))
 
 ;; This is just for demo purposes
 #_(defn send-and-close! []
-  (let [[ws-session send-ch] (first @ws-clients)]
-    (async/put! send-ch "A message from the server")
-    ;; And now let's close it down...
-    (async/close! send-ch)
-    ;; And now clean up
-    (swap! ws-clients dissoc ws-session)))
+    (let [[ws-session send-ch] (first @ws-clients)]
+      (async/put! send-ch "A message from the server")
+      ;; And now let's close it down...
+      (async/close! send-ch)
+      ;; And now clean up
+      (swap! ws-clients dissoc ws-session)))
 
 ;; Also for demo purposes...
-(defn send-message-to-all!
-  [message]
-  (doseq [[^Session session channel] @ws-clients]
-    ;; The Pedestal Websocket API performs all defensive checks before sending,
-    ;;  like `.isOpen`, but this example shows you can make calls directly on
-    ;;  on the Session object if you need to
-    (when (.isOpen session)
-      (async/put! channel message))))
+#_(defn send-message-to-all!
+    [message]
+    (doseq [[^Session session channel] @ws-clients]
+      ;; The Pedestal Websocket API performs all defensive checks before sending,
+      ;;  like `.isOpen`, but this example shows you can make calls directly on
+      ;;  on the Session object if you need to
+      (when (.isOpen session)
+        (async/put! channel message))))
 
 (def ws-paths
   {"/ws" {:on-connect (ws/start-ws-connection new-ws-client)
           :on-text (fn [msg] (log/info :msg (str "A client sent - " msg)))
           :on-binary (fn [payload _offset _length] (log/info :msg "Binary Message!" :bytes payload))
-          :on-error (fn [t] (log/error :msg "WS Error happened" :exception t))
+          :on-error (fn [t]
+                      (log/error :msg "WS Error happened" :exception t))
           :on-close (fn [_num-code reason-text]
                       (log/info :msg "WS Closed:" :reason reason-text))}})
 
@@ -135,17 +130,21 @@
 
 ;; NOTE subscription interceptor
 #_(def ^:private invoke-count-interceptor
-  "Used to demonstrate that subscription interceptor customization works."
-  (interceptor/interceptor
-    {:name ::invoke-count
-     :enter (fn [context]
-              ;; (println "invoke-count-interceptor CALLED")
-              ;; (clojure.pprint/pprint context)
-              context)}))
+    "Used to demonstrate that subscription interceptor customization works."
+    (interceptor/interceptor
+      {:name ::invoke-count
+       :enter (fn [context]
+                ;; (println "invoke-count-interceptor CALLED")
+                ;; (clojure.pprint/pprint context)
+                context)}))
 
 (defn auth-request-handler-ws [context]
 
-  (let [id-token (-> context :request :authorization
+  (let [token (if (-> context :request :authorization)
+                (-> context :request :authorization)
+                (-> context :connection-params :token))
+
+        id-token (-> token
                      (s/split #"Bearer ")
                      last)
 
@@ -165,7 +164,7 @@
                          ;; (println "Sanity id-token / " input)
                          (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
 
-                           (if (every? beatthemarket.util/exists? [errorCode message])
+                           (if (every? util/exists? [errorCode message])
                              (rop/fail (ex-info message checked-authentication))
                              (rop/succeed {:checked-authentication checked-authentication}))))
 
@@ -224,14 +223,21 @@
 
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
-      (util/attach-resolvers {:resolve-hello       graphql/resolve-hello
-                              :resolve-login       graphql/resolve-login
-                              :resolve-create-game graphql/resolve-create-game
-                              :resolve-buy-stock   graphql/resolve-buy-stock
-                              :resolve-sell-stock  graphql/resolve-sell-stock})
-      (util/attach-streamers {:stream-ping     graphql/stream-ping
-                              :stream-new-game graphql/stream-new-game})
+      (lacinia.util/attach-resolvers {:resolve-login                     graphql.core/resolve-login
+                                      :resolve-create-game               graphql.core/resolve-create-game
+                                      :resolve-start-game                graphql.core/resolve-start-game
+                                      :resolve-buy-stock                 graphql.core/resolve-buy-stock
+                                      :resolve-sell-stock                graphql.core/resolve-sell-stock
+                                      :resolve-account-balances          graphql.core/resolve-account-balances
+                                      :resolve-user                      graphql.core/resolve-user
+                                      :resolve-users                     graphql.core/resolve-users
+                                      :resolve-user-personal-profit-loss graphql.core/resolve-user-personal-profit-loss
+                                      :resolve-user-market-profit-loss   graphql.core/resolve-user-market-profit-loss})
+      (lacinia.util/attach-streamers {:stream-stock-ticks       graphql.core/stream-stock-ticks
+                                      :stream-portfolio-updates graphql.core/stream-portfolio-updates
+                                      :stream-game-events       graphql.core/stream-game-events})
       schema/compile))
+
 
 (defmethod ig/init-key :service/service [_ {:keys [env join? hostname port]}]
 
@@ -251,9 +257,8 @@
                  ::http/resource-path     "/public"
                  ::http/type              :jetty
                  ::http/container-options {:context-configurator #(ws/add-ws-endpoints % ws-paths)}
-
-                 ::http/host hostname
-                 ::http/port port}
+                 ::http/host              hostname
+                 ::http/port              port}
 
         compiled-schema (lacinia-schema)
         options' (merge options
@@ -262,22 +267,22 @@
 
     (default-service compiled-schema options')))
 
-(defn coerce-to-client [[time price]]
-  (json/write-str (vector (c/to-long time) price)))
+#_(defn coerce-to-client [[time price]]
+    (json/write-str (vector (c/to-long time) price)))
 
 #_(defn stream-stock-data []
-  (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
-       (datasource/combined-data-sequence-with-datetime (t/now))
-       (map coerce-to-client)
-       (take 100)
-       (run! send-message-to-all!)))
+    (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
+         (datasource/combined-data-sequence-with-datetime (t/now))
+         (map coerce-to-client)
+         (take 100)
+         (run! send-message-to-all!)))
 
 #_(comment
 
-  (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
-       (datasource/combined-data-sequence-with-datetime (t/now))
-       (map coerce-to-client)
-       (take 30)
-       clojure.pprint/pprint)
+    (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
+         (datasource/combined-data-sequence-with-datetime (t/now))
+         (map coerce-to-client)
+         (take 30)
+         clojure.pprint/pprint)
 
-  (stream-stock-data))
+    (stream-stock-data))

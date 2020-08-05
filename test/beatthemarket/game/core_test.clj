@@ -1,15 +1,22 @@
 (ns beatthemarket.game.core-test
   (:require [clojure.test :refer :all]
             [datomic.client.api :as d]
+            [com.rpl.specter :refer [transform ALL]]
+            [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.repl.state :as repl.state]
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.bookkeeping.core :as bookkeeping]
-            [beatthemarket.persistence.core :as persistence.core]
+
+            [beatthemarket.state.core :as state.core]
+            [beatthemarket.migration.core :as migration.core]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :as util]
+            [beatthemarket.bookkeeping.core :as bookkeeping]
+            [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.migration.core :as migration.core]
+            [beatthemarket.bookkeeping.core :as bookkeeping.core])
   (:import [java.util UUID]
            [clojure.lang ExceptionInfo]))
 
@@ -43,6 +50,8 @@
 
         ;; Initialize Game
         game (game.core/initialize-game! conn user-entity)
+
+
         result-game-id (-> (d/q '[:find ?e
                                   :in $ ?game-id
                                   :where [?e :game/id ?game-id]]
@@ -58,14 +67,28 @@
       (testing "User has bound game"
 
         (-> game-users first :game.user/user :user/email (= email) is)
-
         (is (= pulled-user (-> game-users first :game.user/user))))
 
       (testing "User's stock subscriptions are a part of the games stocks"
-        (let [game-stocks (:game/stocks pulled-game)
-              game-user-subscriptions (-> game-users first :game.user/subscriptions)]
+        (let [expected-accounts #{{:bookkeeping.account/amount 0
+                                   :bookkeeping.account/name "Cash"
+                                   :bookkeeping.account/orientation :bookkeeping.account.orientation/debit
+                                   :bookkeeping.account/type :bookkeeping.account.type/asset
+                                   :bookkeeping.account/balance (float 100000.0)}
+                                  {:bookkeeping.account/amount 0
+                                   :bookkeeping.account/name "Equity"
+                                   :bookkeeping.account/orientation :bookkeeping.account.orientation/credit
+                                   :bookkeeping.account/type :bookkeeping.account.type/equity
+                                   :bookkeeping.account/balance (float 100000.0)}}
 
-          (is (some (into #{} game-stocks) game-user-subscriptions)))))))
+              game-user-accounts (->> game-users first
+                                      :game.user/accounts
+                                      (into #{})
+                                      (transform [ALL] #(dissoc % :db/id :bookkeeping.account/id))
+                                      (transform [ALL :bookkeeping.account/type] :db/ident)
+                                      (transform [ALL :bookkeeping.account/orientation] :db/ident))]
+
+          (is (= expected-accounts game-user-accounts)))))))
 
 (deftest buy-stock!-test
 
@@ -96,7 +119,7 @@
 
               (let [pulled-tentry               (persistence.core/pull-entity conn tentry-id)
                     pulled-stock                (persistence.core/pull-entity conn stock-id)
-                    expected-stock-account-name (format "STOCK.%s" (:game.stock/name pulled-stock))
+                    expected-stock-account-name (bookkeeping.core/->stock-account-name (:game.stock/name pulled-stock))
                     new-stock-account           (-> pulled-tentry
                                                     :bookkeeping.tentry/credits first
                                                     :bookkeeping.credit/account)]
@@ -136,8 +159,7 @@
 
                     (->> game-pulled
                          :game/users first
-                         :game.user/user
-                         :user/accounts
+                         :game.user/accounts
                          (map :bookkeeping.account/id)
                          (some #{(:bookkeeping.account/id new-stock-account)})
                          is)
@@ -152,8 +174,7 @@
 
                             game-user-accounts (->> game-pulled
                                                     :game/users first
-                                                    :game.user/user
-                                                    :user/accounts)]
+                                                    :game.user/accounts)]
 
                         (->> game-user-accounts
                              (filter #(= "Cash" (:bookkeeping.account/name %)))
@@ -177,9 +198,14 @@
           stock-amount             100
           stock-price              50.47
           starting-cash-balance    0.0
-          user-id                  (:db/id (test-util/generate-user! conn starting-cash-balance))
+          user-id                  (:db/id (test-util/generate-user! conn))
           sink-fn                  identity
-          {{game-id :db/id} :game} (game.games/create-game! conn user-id sink-fn)
+          {{game-id :db/id} :game} (game.games/create-game! conn user-id sink-fn
+                                                            :game-level/one
+                                                            (game.games/->data-sequence)
+                                                            {:accounts (game.core/->game-user-accounts starting-cash-balance)})
+
+
           {stock-id :db/id}        (ffirst (test-util/generate-stocks! conn 1))]
 
       (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price))))))
@@ -225,7 +251,7 @@
 
                   (let [pulled-tentry               (persistence.core/pull-entity conn tentry-id)
                         pulled-stock                (persistence.core/pull-entity conn stock-id)
-                        expected-stock-account-name (format "STOCK.%s" (:game.stock/name pulled-stock))
+                        expected-stock-account-name (bookkeeping.core/->stock-account-name (:game.stock/name pulled-stock))
                         new-stock-account           (-> pulled-tentry
                                                         :bookkeeping.tentry/credits first
                                                         :bookkeeping.credit/account)]
@@ -265,8 +291,7 @@
 
                         (->> game-pulled
                              :game/users first
-                             :game.user/user
-                             :user/accounts
+                             :game.user/accounts
                              (map :bookkeeping.account/id)
                              (some #{(:bookkeeping.account/id new-stock-account)})
                              is)
@@ -282,8 +307,7 @@
 
                                 game-user-accounts (->> game-pulled
                                                         :game/users first
-                                                        :game.user/user
-                                                        :user/accounts)]
+                                                        :game.user/accounts)]
 
                             (->> game-user-accounts
                                  (filter #(= "Cash" (:bookkeeping.account/name %)))
@@ -331,8 +355,8 @@
          util/pprint+identity
          (def user-pulled)))
 
-  ;; (cash-account-by-user user-pulled)
-  ;; (equity-account-by-user user-pulled)
+  ;; (cash-account-by-game-user user-pulled)
+  ;; (equity-account-by-game-user user-pulled)
 
   ;; TODO Input
   #_{:stockId 1234
@@ -360,7 +384,7 @@
         counter-party (select-keys stock-pulled [:db/id])]
 
     (def account (apply bookkeeping/->account
-                        [(->> stock-pulled :game.stock/name (format "STOCK.%s"))
+                        [(->> stock-pulled :game.stock/name bookkeeping.core/->stock-account-name)
                          :bookkeeping.account.type/asset
                          :bookkeeping.account.orientation/debit
                          counter-party]))
@@ -374,7 +398,7 @@
 
 
   ;; TENTRY
-  (let [cash-account (:db/id (cash-account-by-user user-pulled))
+  (let [cash-account (:db/id (cash-account-by-game-user user-pulled))
         debit-value 1234.45
 
         credit-account {:db/id stock-account-id}

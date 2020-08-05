@@ -1,7 +1,13 @@
 (ns user
   (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [integrant.core :as ig]
+            [clojure.edn :as edn]
+            [clojure.data.json :as json]
             [clojure.java.io :refer [resource]]
+            [clojure.core.async :as core.async
+              :refer [go-loop chan close! timeout alts! >! <! >!!]]
+            [clj-time.core :as t]
+            [clojure.core.match :refer [match]]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.migration.core :as migration.core]
             [beatthemarket.util :as util]))
@@ -51,18 +57,5 @@
   (->> (#'clojure.tools.namespace.dir/dirs-on-classpath)
        (#'clojure.tools.namespace.dir/find-files)
        (#'clojure.tools.namespace.dir/deleted-files (track/tracker)))
-
-  #_(binding [clojure.tools.namespace.dir/update-files
-            (fn [tracker deleted modified]
-              (let [now (System/currentTimeMillis)]
-                (-> tracker
-                    (update-in [::files] #(if % (apply disj % deleted) #{}))
-                    (file/remove-files deleted)
-                    (update-in [::files] into modified)
-                    (file/add-files modified)
-                    (assoc ::time now))))]
-
-    (pprint (#'clojure.tools.namespace.dir/scan-all (track/tracker))))
-
 
   (pprint (#'beatthemarket.dir/scan-all (track/tracker))))

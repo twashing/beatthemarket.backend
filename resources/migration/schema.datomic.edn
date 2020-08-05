@@ -1,5 +1,4 @@
 [
-
  ;; USER
 
  ;; NOTE This entity is a Firebase user, tied to an external Identity Provider
@@ -17,11 +16,6 @@
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         "User's ID in the external Authentication system (Firebase)"}
- {:db/ident       :user/accounts
-  :db/valueType   :db.type/ref ;; List of default :account
-  :db/cardinality :db.cardinality/many
-  :db/isComponent true
-  :db/doc         ""}
 
 
  ;; GAME LEVELS
@@ -78,11 +72,25 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
- {:db/ident       :game.user/subscriptions
-  :db/valueType   :db.type/ref ;; List of :stock
+
+ {:db/ident       :game.user/accounts
+  :db/valueType   :db.type/ref ;; List of default :account
   :db/cardinality :db.cardinality/many
   :db/isComponent true
   :db/doc         ""}
+
+ {:db/ident       :game.user/user-client
+  :db/valueType   :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/isComponent false
+  :db/doc         ""}
+
+ {:db/ident       :game.user/profit-loss
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
+ 
  {:db/ident       :game.user/portfolio
   :db/valueType   :db.type/ref ;; :bookkeeping.portfolio
   :db/cardinality :db.cardinality/one
@@ -246,13 +254,6 @@
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
 
- #_{:db/ident        :bookkeeping.debit/validate
-  :db.entity/attrs [:bookkeeping.debit/id :bookkeeping.debit/account :bookkeeping.debit/value]}
-
-
- #_{:db/ident :bookkeeping.credit/validate
-  :db.entity/attrs [:bookkeeping.credit/id :bookkeeping.credit/account :bookkeeping.credit/value]}
-
  {:db/ident       :bookkeeping.credit/id
   :db/valueType   :db.type/uuid
   :db/cardinality :db.cardinality/one
@@ -273,6 +274,4 @@
  {:db/ident       :bookkeeping.credit/amount
   :db/valueType   :db.type/long
   :db/cardinality :db.cardinality/one
-  :db/doc         ""}
-
- ]
+  :db/doc         ""}]

@@ -3,6 +3,7 @@
             [clj-time.coerce :as c]
             [com.rpl.specter :refer [select-one  pred ALL]]
             [integrant.core :as ig]
+            [integrant.repl.state :as repl.state]
             [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.persistence.core :as persistence.core]
@@ -21,25 +22,29 @@
                                          (-> % :game.user/user :db/id)))]
               game))
 
-(defn ->game [game-level stocks user]
+(defn ->game
 
-  (let [subscriptions          (take 1 stocks)
-        portfolio-with-journal (bookkeeping/->portfolio
-                                 (bookkeeping/->journal))
+  ([game-level stocks user accounts]
+   (->game game-level stocks user accounts {:game-id (UUID/randomUUID)}))
 
-        game-users (-> (hash-map
-                         :game.user/user user
-                         :game.user/subscriptions subscriptions
-                         :game.user/portfolio portfolio-with-journal)
-                       persistence.core/bind-temporary-id
-                       list)]
+  ([game-level stocks user accounts {game-id :game-id}]
 
-    (hash-map
-      :game/id (UUID/randomUUID)
-      :game/start-time (c/to-date (t/now))
-      :game/level game-level
-      :game/stocks stocks
-      :game/users game-users)))
+   (let [portfolio-with-journal (bookkeeping/->portfolio
+                                  (bookkeeping/->journal))
+
+         game-users (-> (hash-map
+                          :game.user/user user
+                          :game.user/accounts accounts
+                          :game.user/portfolio portfolio-with-journal)
+                        persistence.core/bind-temporary-id
+                        list)]
+
+     (hash-map
+       :game/id (or game-id (UUID/randomUUID))
+       :game/start-time (c/to-date (t/now))
+       :game/level game-level
+       :game/stocks stocks
+       :game/users game-users))))
 
 (defn ->stock
 
@@ -51,6 +56,17 @@
              :game.stock/symbol symbol)
      (util/exists? price-history) (assoc :game.stock/price-history price-history))))
 
+(defn ->game-user-accounts
+
+  ([] (->game-user-accounts (-> repl.state/config :game/game :starting-balance)))
+
+  ([starting-balance]
+   (let [starting-amount 0
+         counter-party   nil]
+     (->> [["Cash" :bookkeeping.account.type/asset :bookkeeping.account.orientation/debit starting-balance starting-amount counter-party]
+           ["Equity" :bookkeeping.account.type/equity :bookkeeping.account.orientation/credit starting-balance starting-amount counter-party]]
+          (map #(apply bookkeeping/->account %))))))
+
 (defn generate-stocks! [amount]
   (->> (name-generator/generate-names amount)
        (map (juxt :stock-name :stock-symbol))
@@ -60,26 +76,32 @@
 (defn initialize-game!
 
   ([conn user-entity]
+   (initialize-game! conn user-entity (->game-user-accounts)))
 
-   (initialize-game! conn user-entity (->> (name-generator/generate-names 4)
-                                           (map (juxt :stock-name :stock-symbol))
-                                           (map #(apply ->stock %))
-                                           (map persistence.core/bind-temporary-id))))
-  ([conn user-entity stocks]
+  ([conn user-entity accounts]
+   (initialize-game! conn user-entity accounts :game-level/one))
 
-   (let [game-level :game-level/one
-         game       (->game game-level stocks user-entity)]
+  ([conn user-entity accounts game-level]
+   (initialize-game! conn user-entity accounts game-level (->> (name-generator/generate-names 4)
+                                                               (map (juxt :stock-name :stock-symbol))
+                                                               (map #(apply ->stock %))
+                                                               (map persistence.core/bind-temporary-id))))
+
+  ([conn user-entity accounts game-level stocks]
+   (initialize-game! conn user-entity accounts game-level stocks {}))
+
+  ([conn user-entity accounts game-level stocks opts]
+   (let [game (->game game-level stocks user-entity accounts)]
 
      (as-> game gm
        (persistence.datomic/transact-entities! conn gm)
        (:db-after gm)
-       (d/q '[:find ?e
+       (d/q '[:find (pull ?e [*])
               :in $ ?id
               :where [?e :game/id ?id]]
             gm
             (:game/id game))
-       (ffirst gm)
-       (persistence.core/pull-entity conn gm)))))
+       (ffirst gm)))))
 
 
 (comment ;; Portfolio
@@ -178,8 +200,8 @@
          util/pprint+identity
          (def user-pulled)))
 
-  ;; (cash-account-by-user user-pulled)
-  ;; (equity-account-by-user user-pulled)
+  ;; (cash-account-by-game-user user-pulled)
+  ;; (equity-account-by-game-user user-pulled)
 
   ;; TODO Input
   #_{:stockId   1234
@@ -224,7 +246,7 @@
 
 
   ;; TENTRY
-  (let [cash-account (:db/id (cash-account-by-user user-pulled))
+  (let [cash-account (:db/id (cash-account-by-game-user user-pulled))
         debit-value  1234.45
 
         credit-account {:db/id stock-account-id}

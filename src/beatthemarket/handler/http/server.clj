@@ -9,7 +9,9 @@
             [aero.core :as aero]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :as util]
+
+            [beatthemarket.migration.core :as migration.core]))
 
 
 (defmethod ig/init-key :server/server [_ {:keys [service]}]
@@ -58,8 +60,12 @@
 
     (println "\nCreating your server...")
 
-    (state.core/set-prep)
-    (state.core/init-components)))
+    ;; (state.core/set-prep)
+    ;; (state.core/init-components)
+
+    (state.core/set-prep :development)
+    (state.core/init-components)
+    (migration.core/run-migrations)))
 
 
 (comment ;; Main
