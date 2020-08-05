@@ -41,9 +41,10 @@
           (go (>! control-channel {:message :exit}))
           (close! control-channel)
 
-          (close! stock-tick-stream)
-          (close! portfolio-update-stream)
-          (close! game-event-stream))
+          ;; (close! stock-tick-stream)
+          ;; (close! portfolio-update-stream)
+          ;; (close! game-event-stream)
+          )
         (-> games deref vals)))
 
 ;; BUY | SELL

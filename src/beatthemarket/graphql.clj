@@ -271,20 +271,24 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :stock-tick-stream)
-        cleanup-fn                                          (constantly (core.async/close! stock-tick-stream))]
+        cleanup-fn                                          (constantly (util/pprint+identity "We should NOT be closing")) 
+        #_(constantly (core.async/close! stock-tick-stream))]
 
     (core.async/go-loop [] 
-      (when-let [stock-ticks (core.async/<! stock-tick-stream)]
-      (beatthemarket.util/pprint+identity stock-ticks)
-        (->> stock-ticks
-             (map #(clojure.set/rename-keys %
-                                            {:game.stock.tick/id :stockTickId
-                                             :game.stock.tick/trade-time :stockTickTime
-                                             :game.stock.tick/close :stockTickClose
-                                             :game.stock/id :stockId
-                                             :game.stock/name :stockName}))
-              source-stream)
-        (recur)))
+      (let [stock-ticks (core.async/<! stock-tick-stream)]
+
+     ;; (println (core.async/closed? stock-tick-stream))
+      
+  (->> stock-ticks
+       (map #(clojure.set/rename-keys %
+                                      {:game.stock.tick/id :stockTickId
+                                       :game.stock.tick/trade-time :stockTickTime
+                                       :game.stock.tick/close :stockTickClose
+                                       :game.stock/id :stockId
+                                       :game.stock/name :stockName}))
+       util/pprint+identity
+       source-stream)
+  (recur)))
 
     ;; Return a cleanup fn
     cleanup-fn))
@@ -304,7 +308,8 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :portfolio-update-stream)
-        cleanup-fn                                          (constantly (core.async/close! portfolio-update-stream))]
+        cleanup-fn                                          (constantly :noop) #_(constantly (core.async/close! portfolio-update-stream))
+        ]
 
     (core.async/go-loop []
       (when-let [portfolio-update (core.async/<! portfolio-update-stream)]
