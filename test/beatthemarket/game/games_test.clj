@@ -159,14 +159,14 @@
          :as                          game-control}
         (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
 
-        start-position 3
+        start-position               3
         [historical-data iterations] (game.games/start-workbench! conn result-user-id game-control start-position)]
 
 
     (testing "Game's startPosition is seeking to the correct location"
 
       (let [expected-price 120.0
-            result-price (-> iterations ffirst :stock-ticks first :game.stock.tick/close)]
+            result-price   (-> iterations ffirst :stock-ticks first :game.stock.tick/close)]
 
         (is (= expected-price result-price))))
 

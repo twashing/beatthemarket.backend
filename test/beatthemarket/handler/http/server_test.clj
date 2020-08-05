@@ -304,7 +304,11 @@
                                 :payload
                                 {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
-                                           message
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
                                          }
                                        }"
                                  :variables {:id id}}})
@@ -418,7 +422,11 @@
                               :payload
                               {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
-                                           message
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
                                          }
                                        }"
                                :variables {:id id}}})
@@ -506,7 +514,11 @@
                               :payload
                               {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
-                                           message
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
                                          }
                                        }"
                                :variables {:id id}}})
@@ -612,7 +624,11 @@
                           :payload
                           {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
-                                           message
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
                                          }
                                        }"
                            :variables {:id id}}})
@@ -737,3 +753,54 @@
         (first ss)
         (= expected-game-events ss)
         (is ss)))))
+
+(deftest user-market-profit-loss-test
+
+  (let [{gameId :id :as createGameAck} (stock-buy-happy-path)
+        email                          "twashing@gmail.com"]
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   991
+                            :type :start
+                            :payload
+                            {:query "query UserPersonalProfitLoss($email: String!, $gameId: String!) {
+                                       userPersonalProfitLoss(email: $email, gameId: $gameId) {
+                                         profitLoss
+                                         stockId
+                                         gameId
+                                         profitLossType
+                                       }
+                                     }"
+                             :variables {:email email
+                                         :gameId gameId}}}))
+
+    (test-util/<message!! 1000)
+
+    (testing "We are returned expected game information [stocks subscriptions id]"
+
+      (let [profit-loss (-> (test-util/<message!! 1000) :payload :data :userPersonalProfitLoss util/pprint+identity)
+
+            expected-profit-loss-keys #{:gameId :stockId :profitLoss :profitLossType}
+            expected-profit-losses #{{:profitLoss (float 0.0)
+                                      :profitLossType "realized"}
+                                     {:profitLoss (float 0.0)
+                                      :profitLossType "running"}}]
+
+        (->> (map #(into #{} (keys %)) profit-loss)
+             (map #(= expected-profit-loss-keys %))
+             (every? true?)
+             is)
+
+        (->> profit-loss
+             (map #(dissoc % :gameId :stockId))
+             (into #{})
+             (= expected-profit-losses)
+             is)))
+
+
+    (as-> (:game/games state/system) gs
+      (deref gs)
+      (get gs (UUID/fromString gameId))
+      (:control-channel gs)
+      (core.async/>!! gs {:message :exit}))))

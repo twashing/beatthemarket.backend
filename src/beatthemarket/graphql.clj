@@ -10,6 +10,7 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.game.core :as game.core]
+            [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.games :as game.games]
             [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
@@ -181,23 +182,16 @@
                                                                 :user/name :userName
                                                                 :user/external-uid :userExternalUid})))))
 
+(defn resolve-user-personal-profit-loss [context {email :email gameId :gameId :as args} _]
 
+  (let [game-id (UUID/fromString gameId)
 
+        realized-profit-loss (map graphql.encoder/profit-loss->graphql
+                                  (game.calculation/collect-realized-profit-loss game-id))
+        running-profit-loss (map graphql.encoder/profit-loss->graphql
+                                 (game.calculation/collect-running-profit-loss game-id))]
 
-(defn resolve-user-personal-profit-loss [context {email :email} _]
-
-  "Lists out a User's personal Profit/Loss, per game, per stock"
-  [:ProfitLoss]
-
-  [{:profitLoss 56123.73
-    :stockId "stockid1"
-    :gameId "gameid1"}
-   {:profitLoss 1293.73
-    :stockId "stockid2"
-    :gameId "gameid1"}
-   {:profitLoss -10460.73
-    :stockId "stockid3"
-    :gameId "gameid1"}])
+    (concat realized-profit-loss running-profit-loss)))
 
 (defn resolve-user-market-profit-loss [context {email :email} _]
 
@@ -235,33 +229,6 @@
                                                                           :bookkeeping.account/balance :balance
                                                                           :bookkeeping.account/amount :amount
                                                                           :bookkeeping.account/counter-party :counterParty})))))
-
-(defn resolve-stock-time-series [context {:keys [gameId stockId range]} _]
-
-  ;; (trace [gameId stockId range])
-
-  [:StockTick]
-
-  [{:stockTickId "32bd40bb-c4b3-4f07-9667-781c67d4e1f5"
-    :stockTickTime "1595692766979"
-    :stockTickClose 149.02000427246094
-    :stockId "d658021f-ca4e-4e34-a6ee-2a9fc8bb253d"
-    :stockName "Outside Church"}
-   {:stockTickId "df09933d-5879-45e5-b038-40498d7ca198"
-    :stockTickTime "1595692766979"
-    :stockTickClose 149.02000427246094
-    :stockId "942349f5-94ef-4ed3-8470-a9fb1123dbb8"
-    :stockName "Sick Dough"}
-   {:stockTickId "324e662b-24ac-4b0d-8f91-ebee01f029d9"
-    :stockTickTime "1595692766979"
-    :stockTickClose 149.02000427246094
-    :stockId "97fa4791-47f8-42ff-8683-a235284de178"
-    :stockName "Vigorous Grip"}
-   {:stockTickId "cce40bb5-279e-47d6-a3c1-0e587c8e097b"
-    :stockTickTime "1595692766979"
-    :stockTickClose 149.02000427246094
-    :stockId "e02e81a7-15c1-4c4e-996a-bc65c8de4a9a"
-    :stockName "Color-blind Maintenance"}])
 
 
 ;; STREAMERS

@@ -354,6 +354,22 @@
   (map partitioned-entities->transaction-entities
        (stocks->partitioned-entities stocks-with-tick-data)))
 
+
+(defn stock-tick-by-id [id stock-ticks]
+  (first (filter #(= id (:game.stock/id %))
+                 stock-ticks)))
+
+(defn recalculate-profitloss-perstock-fn [stock-ticks profit-loss]
+  (reduce-kv (fn [m k v]
+               (if-let [{price :game.stock.tick/close}
+                        (stock-tick-by-id k stock-ticks)]
+                 (assoc
+                   m k
+                   (recalculate-profit-loss-on-tick-perstock price v))
+                 m))
+             {}
+             profit-loss))
+
 (defn initialize-game!
 
   ([conn user-entity accounts sink-fn]
@@ -372,9 +388,6 @@
           {saved-game-level :db/ident} :game/level
           :as     game}        (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
          stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
-         stock-tick-by-id      (fn [id stock-ticks]
-                                 (first (filter #(= id (:game.stock/id %))
-                                                stock-ticks)))
 
          stream-buffer           80
          control-channel         (core.async/chan stream-buffer)
@@ -391,16 +404,6 @@
                               :profit-threshold profit-threshold
                               :lose-threshold lose-threshold})
 
-         recalculate-perstock-fn (fn [stock-ticks profit-loss]
-                                   (reduce-kv (fn [m k v]
-                                                (if-let [{price :game.stock.tick/close}
-                                                         (stock-tick-by-id k stock-ticks)]
-                                                  (assoc
-                                                    m k
-                                                    (recalculate-profit-loss-on-tick-perstock price v))
-                                                  m))
-                                              {}
-                                              profit-loss))
          game-control
          {:game                  game
           :profit-loss           (or profit-loss {})
@@ -433,7 +436,7 @@
                                                        (get game-id)
                                                        ;; ((util/pprint+identity (dissoc % :stocks-with-tick-data)))
                                                        :profit-loss
-                                                       ((partial recalculate-perstock-fn stock-ticks)))]
+                                                       ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
                                                (->> updated-profit-loss-calculations
                                                     (game.persistence/track-profit-loss-wholesale! game-id)

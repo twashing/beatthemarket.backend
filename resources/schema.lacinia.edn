@@ -49,7 +49,7 @@
    {:profitLoss {:type (non-null Float)}
     :stockId    {:type (non-null String)}
     :gameId     {:type (non-null String)}
-    ;; :profitLossType {:type (non-null :ProfitLossType)}
+    :profitLossType {:type (non-null :ProfitLossType)}
     }}
 
   :AccountBalance
@@ -165,8 +165,9 @@
    :description "Lists all the users in the system"}
 
   :userPersonalProfitLoss
-  {:type (list (non-null :ProfitLoss))
-   :args {:email {:type (non-null String)}}
+  {:type (list :ProfitLoss)
+   :args {:gameId {:type (non-null String)}
+          :email {:type (non-null String)}}
    :resolve :resolve-user-personal-profit-loss
    :description "Lists out a User's personal Profit/Loss, per game, per stock"}
 

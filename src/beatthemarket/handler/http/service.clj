@@ -232,7 +232,6 @@
                               :resolve-buy-stock                 graphql/resolve-buy-stock
                               :resolve-sell-stock                graphql/resolve-sell-stock
                               :resolve-account-balances          graphql/resolve-account-balances
-                              :resolve-stock-time-series         graphql/resolve-stock-time-series
                               :resolve-user                      graphql/resolve-user
                               :resolve-users                     graphql/resolve-users
                               :resolve-user-personal-profit-loss graphql/resolve-user-personal-profit-loss
