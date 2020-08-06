@@ -19,6 +19,14 @@
   {:fields
    {:message {:type (non-null String)}}}
 
+  :ControlEvent
+  {:description "Possible control events that the client can send to the server"
+   :fields
+   {:event {:type (non-null :ControlEventType)}
+    :gameId {:type (non-null String)}}}
+
+
+
   :User
   {:fields
    {:userEmail {:type String}
@@ -29,7 +37,9 @@
   {:fields
    {:id     {:type (non-null String)}
     :name   {:type (non-null String)}
-    :symbol {:type (non-null String)}}}
+    :symbol {:type (non-null String)}
+    ;; logo {:type (non-null String)} ;; URL where we can get image
+    }}
 
   :StockTick
   {:fields
@@ -39,9 +49,6 @@
     :stockId        {:type (non-null String)}
     :stockName      {:type (non-null String)}}}
 
-  :PortfolioUpdate
-  {:fields
-   {:message {:type (list (non-null String))}}}
 
   :ProfitLoss
   {:description "Container for portfolio updates"
@@ -49,8 +56,7 @@
    {:profitLoss {:type (non-null Float)}
     :stockId    {:type (non-null String)}
     :gameId     {:type (non-null String)}
-    :profitLossType {:type (non-null :ProfitLossType)}
-    }}
+    :profitLossType {:type (non-null :ProfitLossType)}}}
 
   :AccountBalance
   {:description "Account Balance message"
@@ -61,26 +67,29 @@
     :counterParty {:type String :description "Name of the stock attached to this account"}
     :amount       {:type Int :description "The amount of units (stock shares) of the counterparty"}}}
 
-  :GameEvent
-  {:description "Game events"
+  :LevelStatus
+  {:description "Possible level status updates that the server can send to the client"
    :fields
-   #_{:message {:type (non-null String)}}
-   {:message {:type (non-null :GameEventMessage)}}
-   #_{:type    {:type (non-null :GameEventType)}
-      :gameId  {:type (non-null String)}
-      :message {:type (non-null :GameEventMessage)}}}
+   {:event {:type (non-null :LevelStatusType)}
+    :gameId {:type (non-null String)}
+    :profitLoss {:type (non-null String)}
+    :level {:type (non-null String)} }}
 
   :LevelTimer
-  {:description "The amount of time a user has left in a given level"
+  {:description "Timer countdown events, streamed from server to client"
    :fields
-   {:level         {:type (non-null Int)}
-    :timeRemaining {:type (non-null Int)}}}
+   {:gameId {:type (non-null String)}
+    :level {:type (non-null String)}
+    :minutesRemaining {:type (non-null Int)}
+    :secondsRemaining {:type (non-null Int)}}}
 
-  :LevelStatus
-  {:description "Tells user if they've won or lost a level"
+
+
+  :GameStatus
+  {:description "The status of a user's game, in the system"
    :fields
-   {:level      {:type (non-null Int)}
-    :status     {:type (non-null :GameEventMessage #_:LevelStatusMessage)}
+   {:gameId {:type (non-null String)}
+    :status {:type (non-null :GameStatusType)}
     :profitLoss {:type (non-null Float)}}}}
 
 
@@ -92,25 +101,24 @@
   :ProfitLossType
   {:values [:running :realized]}
 
-  :GameEventType
-  {:values [:control :levelStatus :levelTimer]}
+  :ControlEventType
+  {:values      [:pause :resume :exit]}
 
-  :GameEventMessage
-  ;; {:values [:ControlMessage :LevelTimer :LevelStatus]}
-  {:values [:pause :resume :exit :win :lose]}
+  :LevelStatusType
+  {:values [:win :lose]}
 
-  ;; :ControlMessage
-  ;; {:description "Possible game event messages that can be sent to the client"
-  ;;  :values      [:pause :resume :exit]}
-  ;; :LevelStatusMessage
-  ;; {:values [:win :lose]}
-  }
+  :GameStatusType
+  {:values [:running :paused :won :lost :exited]}}
 
 
  ;; //
- ;; :unions
- ;; {:PortfolioUpdate
- ;;  {:members [:ProfitLoss :AccountBalance]}}
+ :unions
+ {:GameEvent
+  {:members [:ControlEvent :LevelStatus :LevelTimer]}
+
+  :PortfolioUpdate
+  {:members [:ProfitLoss :AccountBalance ;; :ControlEvent :LevelStatus :LevelTimer
+             ]}}
 
 
  ;; //
@@ -167,13 +175,17 @@
   {:type (list (non-null :ProfitLoss))
    :args {:email {:type (non-null String)}}
    :resolve :resolve-user-market-profit-loss
-   :description "Lists out a User's amrket Profit/Loss, per stock"}}
+   :description "Lists out a User's market Profit/Loss, per stock"}
+
+  :listGames
+  {:type (list :GameStatus)
+   :resolve :resolve-list-games
+   :description "Lists out a User's open, running and finished games, per device"}}
 
 
  ;; //
  :mutations
- {
-  :login
+ {:login
   {:type        :LoginAck
    :description "Logs a user in, using Firebase's ID JWT"
    :resolve     :resolve-login}
@@ -194,6 +206,7 @@
     :startPosition {:type Int :description "Optionally start the game at a given position in the tick time series.
                                             Note: This will start all stocks at this position."}}}
 
+
   :buyStock
   {:type    :BuyStockAck
    :args    {:input {:type :BuyStock}}
@@ -202,7 +215,26 @@
   :sellStock
   {:type    :SellStockAck
    :args    {:input {:type :SellStock}}
-   :resolve :resolve-sell-stock}}
+   :resolve :resolve-sell-stock}
+
+
+  :pauseGame
+  {:type :ControlEvent
+   :resolve :resolve-pause-game
+   :args
+   {:gameId {:type (non-null String)}}}
+
+  :resumeGame
+  {:type :ControlEvent
+   :resolve :resolve-resume-game
+   :args
+   {:gameId {:type (non-null String)}}}
+
+  :exitGame
+  {:type :ControlEvent
+   :resolve :resolve-exit-game
+   :args
+   {:gameId {:type (non-null String)}}}}
 
 
  ;; //

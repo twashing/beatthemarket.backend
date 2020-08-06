@@ -4,6 +4,7 @@
             [datomic.client.api :as d]
             [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
             [integrant.repl.state :as repl.state]
+            [com.walmartlabs.lacinia.schema :as lacinia.schema]
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.persistence :as iam.persistence]
@@ -230,13 +231,56 @@
                                                                           :bookkeeping.account/amount :amount
                                                                           :bookkeeping.account/counter-party :counterParty})))))
 
+(defn resolve-pause-game [context {gameId :gameId} _]
+
+  (let [game-id (UUID/fromString gameId)]
+
+    (->> repl.state/system :game/games deref (#(get % game-id))
+         :paused? (#(reset! % true))))
+
+  {:event :pause
+   :gameId gameId})
+
+(defn resolve-resume-game [context {gameId :gameId} _]
+
+  (let [game-id (UUID/fromString gameId)]
+
+    (->> repl.state/system :game/games deref (#(get % game-id))
+         :paused? (#(reset! % false))))
+
+  {:event :resume
+   :gameId gameId})
+
+(defn resolve-exit-game [context {gameId :gameId} _]
+
+  (let [game-id (UUID/fromString gameId)
+        event {:event :exit
+               :gameId gameId}
+
+        send #(core.async/go (core.async/>!! % event))]
+
+    (->> repl.state/system :game/games deref (#(get % game-id))
+         :control-channel
+         send)
+
+    event))
+
+(defn resolve-list-games [context {gameId :gameId} _]
+
+  (let [{{{email :email :as checked-authentication} :checked-authentication}
+         :request}                                   context]
+
+    ;; TODO
+    [{:gameId gameId
+      :status :running
+      :profitLoss 0.0}]))
+
+
 
 ;; STREAMERS
 
 ;; https://lacinia-pedestal.readthedocs.io/en/latest/subscriptions.html#overview
 ;; When a streamer passes nil to the callback, a clean shutdown of the subscription occurs; the client is sent a completion message. The completion message informs the client that the stream of events has completed, and that it should not attempt to reconnect.
-
-
 (defn stream-stock-ticks [context {id :gameId :as args} source-stream]
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -304,11 +348,39 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :game-event-stream)
-        cleanup-fn                                          (constantly :noop #_(core.async/close! game-event-stream))]
+        cleanup-fn                                          (constantly :noop #_(core.async/close! game-event-stream))
+
+        tag-with-type-wrapped #(let [t (:type %)]
+                                 (lacinia.schema/tag-with-type % t))]
+
+    #_:ControlEvent
+    #_{:description "Possible control events that the client can send to the server"
+       :fields
+       {:event {:type (non-null :ControlEventType)}
+        :gameId {:type (non-null String)}}}
+
+    #_:LevelStatus
+    #_{:description "Possible level status updates that the server can send to the client"
+       :fields
+       {:event {:type (non-null :LevelStatusType)}
+        :gameId {:type (non-null String)}
+        :profitLoss {:type (non-null String)}
+        :level {:type (non-null String)} }}
+
+    #_:LevelTimer
+    #_{:description "Timer countdown events, streamed from server to client"
+       :fields
+       {:gameId {:type (non-null String)}
+        :level {:type (non-null String)}
+        :minutesRemaining {:type (non-null Int)}
+        :secondsRemaining {:type (non-null Int)}}}
 
     (core.async/go-loop []
       (when-let [game-event (core.async/<! game-event-stream)]
-        (source-stream game-event)
+
+        (->> (clojure.set/rename-keys game-event {:game-id :gameId})
+             tag-with-type-wrapped
+             source-stream)
         (recur)))
 
     ;; Return a cleanup fn

@@ -232,7 +232,11 @@
                                       :resolve-user                      graphql.core/resolve-user
                                       :resolve-users                     graphql.core/resolve-users
                                       :resolve-user-personal-profit-loss graphql.core/resolve-user-personal-profit-loss
-                                      :resolve-user-market-profit-loss   graphql.core/resolve-user-market-profit-loss})
+                                      :resolve-user-market-profit-loss   graphql.core/resolve-user-market-profit-loss
+                                      :resolve-pause-game                graphql.core/resolve-pause-game
+                                      :resolve-resume-game               graphql.core/resolve-resume-game
+                                      :resolve-exit-game                 graphql.core/resolve-exit-game
+                                      :resolve-list-games                graphql.core/resolve-list-games})
       (lacinia.util/attach-streamers {:stream-stock-ticks       graphql.core/stream-stock-ticks
                                       :stream-portfolio-updates graphql.core/stream-portfolio-updates
                                       :stream-game-events       graphql.core/stream-game-events})

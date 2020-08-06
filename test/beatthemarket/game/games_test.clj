@@ -1244,7 +1244,7 @@
             expected-message {:game-id     gameId
                               :level       :game-level/one
                               :profit-loss 1750.0
-                              :message     :win}
+                              :event :win}
             result-messages  (test-util/to-coll game-event-stream)]
 
         (are [x y] (= x y)
@@ -1327,8 +1327,9 @@
             expected-messages [{:game-id     gameId
                                 :level       :game-level/one
                                 :profit-loss -9500.0
-                                :message     :lose}
-                               {:message :exit}]
+                                :event     :lose}
+                               {:event :exit
+                                :game-id gameId}]
             result-messages   (test-util/to-coll game-event-stream)]
 
         (are [x y] (= x y)

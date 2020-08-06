@@ -34,11 +34,15 @@
   (run! (fn [{:keys [stock-tick-stream
                     portfolio-update-stream
                     game-event-stream
-                    control-channel]}]
+                    control-channel
+                    game]}]
 
           (println "Closing Game channels...")
 
-          (go (>! control-channel {:message :exit}))
+          (let [{game-id :db/id} game]
+            (go (>! control-channel {:type "ControlEvent"
+                                     :event :exit
+                                     :gameId game-id})))
           (close! control-channel)
 
           (close! stock-tick-stream)
@@ -482,10 +486,10 @@
                                                       game-event-message (cond-> {:game-id game-id
                                                                                   :level level
                                                                                   :profit-loss running+realized-pl}
-                                                                           profit-threshold-met? (assoc :message :win)
-                                                                           lose-threshold-met? (assoc :message :lose))]
+                                                                           profit-threshold-met? (assoc :event :win)
+                                                                           lose-threshold-met? (assoc :event :lose))]
 
-                                                  (when (:message game-event-message)
+                                                  (when (:event game-event-message)
                                                     ;; (util/pprint+identity game-event-message)
                                                     ;; (core.async/go (core.async/>! game-event-stream game-event-message))
                                                     (core.async/go (core.async/>! control-channel game-event-message))))
@@ -493,7 +497,7 @@
                                                 result))
 
           :close-sink-fn   (partial sink-fn nil)
-          :sink-fn         #(sink-fn {:message %})}]
+          :sink-fn         #(sink-fn {:event %})}]
 
      (register-game-control! game game-control)
      game-control)))
@@ -568,20 +572,21 @@
        (conditionally-level-up! conn game-id)))
 
 
-(defmulti handle-control-event (fn [_ _ {m :message} _ _] m))
+(defmulti handle-control-event (fn [_ _ {m :event} _ _] m))
 
-(defmethod handle-control-event :pause-exit [conn game-event-stream control now end]
+(defmethod handle-control-event :pause-exit [_ game-event-stream control now end]
 
   (let [remaining (calculate-remaining-time now end)]
 
     (println (format "< Paused > %s / Exiting..." (format-remaining-time remaining))))
   [])
 
-(defmethod handle-control-event :exit [conn game-event-stream control now end]
+(defmethod handle-control-event :exit [_ game-event-stream control now end]
 
   (let [remaining (calculate-remaining-time now end)]
 
     (println (format "%s / Exiting" (format-remaining-time remaining)))
+    ;; (util/pprint+identity control)
     (core.async/>!! game-event-stream control))
   [])
 
@@ -599,15 +604,15 @@
   (let [remaining (calculate-remaining-time now end)]
     (println (format "Lose %s" (format-remaining-time remaining)))
     (core.async/>!! game-event-stream control)
-    (handle-control-event conn game-event-stream {:message :exit} now end)))
+    (handle-control-event conn game-event-stream {:event :exit :game-id (:game-id control)} now end)))
 
-(defmethod handle-control-event :timeout [conn game-event-stream control now end]
+(defmethod handle-control-event :timeout [_ game-event-stream control now end]
 
   (let [remaining (calculate-remaining-time now end)]
     (println (format "Running %s / TIME'S UP!!" (format-remaining-time remaining))))
   [])
 
-(defmethod handle-control-event :continue [conn game-event-stream control now end]
+(defmethod handle-control-event :continue [_ game-event-stream control now end]
 
   (let [remaining (calculate-remaining-time now end)]
     #_(println (format "Running %s" (format-remaining-time remaining))))
@@ -650,16 +655,16 @@
 
     (let [x                                    (ffirst iters)
           remaining                            (calculate-remaining-time now end)
-          [{message :message :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
-                                                                  control-channel])
+          [{event :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
+                                                              control-channel])
 
           ;; pause
           ;; control
           ;; timer
           _ (println (format "game-loop %s / %s" remaining (if controlv controlv :running)))
-          [nowA endA] (match [@pause-atom message (time-expired? remaining)]
+          [nowA endA] (match [@pause-atom event (time-expired? remaining)]
 
-                             [true :exit _] (handle-control-event conn game-event-stream (assoc controlv :message :pause-exit) now end)
+                             [true :exit _] (handle-control-event conn game-event-stream (assoc controlv :event :pause-exit) now end)
                              [true _ _] (let [new-end   (t/plus end (t/seconds 1))
                                               remaining (calculate-remaining-time now new-end)]
                                           (println (format "< Paused > %s" (format-remaining-time remaining)))
@@ -670,7 +675,7 @@
                              [_ :lose _] (handle-control-event conn game-event-stream controlv now end)
                              [_ _ false] (when x
                                            [(t/now) end])
-                             [_ _ true] (handle-control-event conn game-event-stream {:message :timeout} now end))]
+                             [_ _ true] (handle-control-event conn game-event-stream {:event :timeout} now end))]
 
       (when (and nowA endA)
         (recur nowA endA (next iters))))))
@@ -721,12 +726,12 @@
      (let [remaining (calculate-remaining-time now end)
            expired? (time-expired? remaining)
 
-           [{message :message :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
-           {message :message :as controlv} (if (nil? controlv) {:message :continue} controlv)
+           [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
+           {message :event :as controlv} (if (nil? controlv) {:event :continue} controlv)
 
            [nowA endA] (match [message expired?]
                               [_ false] (handle-control-event conn game-event-stream controlv now end)
-                              [_ true] (handle-control-event conn game-event-stream {:message :timeout} now end))]
+                              [_ true] (handle-control-event conn game-event-stream {:event :timeout} now end))]
 
        (when (and nowA endA)
          (recur nowA endA))))
