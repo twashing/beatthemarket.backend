@@ -292,7 +292,6 @@
 
 (defn track-profit-loss+stream-portfolio-update! [conn gameId game-db-id user-id tentry]
 
-  ;; NOTE breaking
   (game.persistence/track-profit-loss! tentry)
 
   (let [portfolio-update-stream (-> repl.state/system :game/games deref
@@ -367,8 +366,7 @@
                (-> tentry :bookkeeping.tentry/id))
           (ffirst ent)
           ;; (game.persistence/track-profit-loss! ent)
-          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent)
-          #_(identity ent))))))
+          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent))))))
 
 (defn sell-stock! [conn game-db-id user-db-id stock-db-id stock-amount stock-price]
 

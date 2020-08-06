@@ -142,7 +142,6 @@
                                   flatten)])))
                  (map #(apply hash-map %)))]
 
-        ;; NOTE breaking
         (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
