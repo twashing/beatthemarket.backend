@@ -380,12 +380,12 @@
 
   ([conn user-entity accounts sink-fn]
 
-   (initialize-game! conn user-entity accounts sink-fn :game-level/one (->data-sequence) {}))
+   (initialize-game! conn user-entity accounts sink-fn :game-level/one ->data-sequence {}))
 
-  ([conn user-entity accounts sink-fn game-level data-sequence {:keys [level-timer-sec tick-sleep-ms game-id
-                                                                       input-sequence profit-loss
-                                                                       stream-stock-tick-mappingfn stream-portfolio-update-mappingfn
-                                                                       collect-profit-loss-mappingfn check-level-complete-mappingfn]}]
+  ([conn user-entity accounts sink-fn game-level data-sequence-fn {:keys [level-timer-sec tick-sleep-ms game-id
+                                                                          input-sequence profit-loss
+                                                                          stream-stock-tick-mappingfn stream-portfolio-update-mappingfn
+                                                                          collect-profit-loss-mappingfn check-level-complete-mappingfn]}]
 
    (let [stocks               (game.core/generate-stocks! 4)
          initialize-game-opts {:game-id game-id}
@@ -394,7 +394,7 @@
           stocks  :game/stocks
           {saved-game-level :db/ident} :game/level
           :as     game}        (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
-         stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
+         stocks-with-tick-data (map #(bind-data-sequence (data-sequence-fn) %) stocks)
 
          stream-buffer           10
          control-channel         (core.async/chan (core.async/sliding-buffer stream-buffer))
@@ -438,11 +438,6 @@
                                                    stock-ticks)))
           :calculate-profit-loss-mappingfn (fn [stock-ticks]
 
-                                             #_(->> repl.state/system :game/games deref
-                                                  (#(get % game-id))
-                                                  ;; (#(dissoc :stocks-with-tick-data :inputs-sequence))
-                                                  util/pprint+identity)
-
                                              (let [updated-profit-loss-calculations
                                                    (-> repl.state/system :game/games
                                                        deref
@@ -465,7 +460,6 @@
                                                  (fn [{:keys [profit-loss] :as result}]
 
                                                    (log/debug :game.games (format ">> STREAM portfolio-update / %s" result))
-                                                   ;; (util/pprint+identity result)
                                                    (when profit-loss
                                                      (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
                                                    result))
@@ -515,11 +509,11 @@
    (create-game! conn user-id sink-fn :game-level/one))
 
   ([conn user-id sink-fn game-level]
-   (create-game! conn user-id sink-fn game-level (->data-sequence) {:accounts (game.core/->game-user-accounts)}))
+   (create-game! conn user-id sink-fn game-level ->data-sequence {:accounts (game.core/->game-user-accounts)}))
 
-  ([conn user-id sink-fn game-level data-sequence {accounts :accounts :as opts}]
+  ([conn user-id sink-fn game-level data-sequence-fn {accounts :accounts :as opts}]
    (let [user-entity (hash-map :db/id user-id)]
-     (initialize-game! conn user-entity accounts sink-fn game-level data-sequence opts))))
+     (initialize-game! conn user-entity accounts sink-fn game-level data-sequence-fn opts))))
 
 ;; START
 (defn game->new-game-message [game user-id]
@@ -732,9 +726,7 @@
                                                                   (t/now) new-end))
 
                                [_ :pause _] (let [new-end   (t/plus end (t/seconds 1))
-                                                  remaining (calculate-remaining-time now new-end)
-                                                  #_controlv  #_{:game-id game-id
-                                                             :event   :pause}]
+                                                  remaining (calculate-remaining-time now new-end)]
 
                                               (handle-control-event conn game-event-stream
                                                                     (assoc controlv :message "< Paused >")
@@ -745,7 +737,7 @@
                                [_ _ false] (let [controlv {:event   :continue
                                                            :game-id game-id
                                                            :level   (:level @current-level)
-                                                           :type :ControlEvent}]
+                                                           :type :LevelTimer}]
 
                                              (handle-control-event conn game-event-stream controlv now end))
 

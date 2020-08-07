@@ -73,8 +73,8 @@
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
-        data-sequence-A [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
-        tick-length     (count data-sequence-A)
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length     (count (data-sequence-fn))
 
 
         ;; C create-game!
@@ -99,7 +99,7 @@
          control-channel              :control-channel
          game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
         [_ iterations] (game.games/start-workbench! conn result-user-id game-control)]
 
@@ -131,8 +131,8 @@
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
-        data-sequence-A [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
-        tick-length     (count data-sequence-A)
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length     (count (data-sequence-fn))
 
 
         ;; C create-game!
@@ -157,7 +157,7 @@
          control-channel              :control-channel
          game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
         start-position               3
         [historical-data iterations] (game.games/start-workbench! conn result-user-id game-control start-position)]
@@ -197,8 +197,8 @@
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
-        data-sequence-B [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
-        tick-length     (count data-sequence-B)
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length     (count (data-sequence-fn))
 
 
         ;; C create-game!
@@ -224,7 +224,7 @@
          control-channel                    :control-channel
          game-event-stream                  :game-event-stream
          :as                                game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
         [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
@@ -252,7 +252,7 @@
         (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId1 (Float. (- tickPrice1 1))))))
 
       #_(testing "Error is thrown when submitted tick is no the latest"
-        (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
+          (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stockId stockAmount tickId0 (Float. tickPrice0)))))
 
       (testing "Returned Tentry matches what was submitted"
         (let [{tickPriceL :game.stock.tick/close
@@ -296,8 +296,8 @@
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
-        data-sequence-B [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
-        tick-length     (count data-sequence-B)
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length     (count (data-sequence-fn))
 
 
         ;; C create-game!
@@ -323,7 +323,7 @@
          control-channel                :control-channel
          game-event-stream              :game-event-stream
          :as                            game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
         [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
 
@@ -427,8 +427,8 @@
            userId         :user/external-uid} (test-util/generate-user! conn)
 
           ;; B
-          data-sequence-B      [100.0 110.0 , 120.0 130.0]
-          data-sequence-length (count data-sequence-B)
+          data-sequence-fn     (constantly [100.0 110.0 , 120.0 130.0])
+          data-sequence-length (count (data-sequence-fn))
 
 
           ;; C create-game!
@@ -454,7 +454,7 @@
            control-channel                :control-channel
            game-event-stream              :game-event-stream
            :as                            game-control}
-          (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-B opts)
+          (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
           [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
           {stockId   :game.stock/id
@@ -522,15 +522,15 @@
 
       (testing "We correct game.games/collect-realized-profit-loss"
 
-          (-> (game.calculation/collect-realized-profit-loss gameId)
-              first
-              :profit-loss
-              (= 3000.0)
-              is)))))
+        (-> (game.calculation/collect-realized-profit-loss gameId)
+            first
+            :profit-loss
+            (= 3000.0)
+            is)))))
 
 (deftest calculate-profit-loss-multiple-buy-single-sell-test
 
-    (testing "Testing buy / sells with this pattern
+  (testing "Testing buy / sells with this pattern
 
             + 75
             + 25
@@ -541,102 +541,102 @@
             + 37
             - 200"
 
-      (let [;; A
-            conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-            {result-user-id :db/id
-             userId         :user/external-uid} (test-util/generate-user! conn)
+    (let [;; A
+          conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+          {result-user-id :db/id
+           userId         :user/external-uid} (test-util/generate-user! conn)
 
-            ;; B
-            data-sequence-length 7
-            data-sequence-A      (take data-sequence-length (iterate (partial + 10) 100.00))
-
-
-            ;; C create-game!
-            sink-fn                identity
-            test-stock-ticks       (atom [])
-            test-portfolio-updates (atom [])
-
-            opts       {:level-timer-sec                   5
-                        :accounts                          (game.core/->game-user-accounts)
-                        :stream-stock-tick-mappingfn       (fn [a]
-                                                             (let [stock-ticks (game.games/group-stock-tick-pairs a)]
-                                                               (swap! test-stock-ticks
-                                                                      (fn [b]
-                                                                        (conj b stock-ticks)))
-                                                               stock-ticks))
-                        :stream-portfolio-update-mappingfn (fn [a]
-                                                             (swap! test-portfolio-updates (fn [b] (conj b a)))
-                                                             a)}
-            game-level :game-level/one
-            {{gameId     :game/id
-              game-db-id :db/id
-              stocks     :game/stocks :as game} :game
-             control-channel                :control-channel
-             game-event-stream              :game-event-stream
-             :as                            game-control}
-            (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
-
-            [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
-            {stockId   :game.stock/id
-             stockName :game.stock/name} (first stocks)
-
-            opts {:conn    conn
-                  :userId  userId
-                  :gameId  gameId
-                  :stockId stockId}
-            ops  [{:op :buy :stockAmount 75}
-                  {:op :buy :stockAmount 25}
-                  {:op :sell :stockAmount 100}
-                  {:op :buy :stockAmount 120}
-                  {:op :buy :stockAmount 43}
-                  {:op :buy :stockAmount 37}
-                  {:op :sell :stockAmount 200}]]
+          ;; B
+          data-sequence-length 7
+          data-sequence-fn      (constantly (take data-sequence-length (iterate (partial + 10) 100.00)))
 
 
-        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+          ;; C create-game!
+          sink-fn                identity
+          test-stock-ticks       (atom [])
+          test-portfolio-updates (atom [])
 
-                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
-                      (assoc v :local-transact-input (merge stock-tick op))))
-                  iterations
-                  ops)
-             (map #(local-transact-stock! opts %))
-             (take data-sequence-length)
-             doall)
+          opts       {:level-timer-sec                   5
+                      :accounts                          (game.core/->game-user-accounts)
+                      :stream-stock-tick-mappingfn       (fn [a]
+                                                           (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                             (swap! test-stock-ticks
+                                                                    (fn [b]
+                                                                      (conj b stock-ticks)))
+                                                             stock-ticks))
+                      :stream-portfolio-update-mappingfn (fn [a]
+                                                           (swap! test-portfolio-updates (fn [b] (conj b a)))
+                                                           a)}
+          game-level :game-level/one
+          {{gameId     :game/id
+            game-db-id :db/id
+            stocks     :game/stocks :as game} :game
+           control-channel                :control-channel
+           game-event-stream              :game-event-stream
+           :as                            game-control}
+          (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+
+          [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+          {stockId   :game.stock/id
+           stockName :game.stock/name} (first stocks)
+
+          opts {:conn    conn
+                :userId  userId
+                :gameId  gameId
+                :stockId stockId}
+          ops  [{:op :buy :stockAmount 75}
+                {:op :buy :stockAmount 25}
+                {:op :sell :stockAmount 100}
+                {:op :buy :stockAmount 120}
+                {:op :buy :stockAmount 43}
+                {:op :buy :stockAmount 37}
+                {:op :sell :stockAmount 200}]]
 
 
-        (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, single sell (multiple times)"
+      (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
 
-          (let [profit-loss (-> repl.state/system
-                                :game/games deref (get gameId)
-                                :profit-loss
-                                (get stockId))
+                  (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                    (assoc v :local-transact-input (merge stock-tick op))))
+                iterations
+                ops)
+           (map #(local-transact-stock! opts %))
+           (take data-sequence-length)
+           doall)
 
-                [{gl1 :pershare-gain-or-loss}
-                 {gl2 :pershare-gain-or-loss}
 
-                 {gl3 :pershare-gain-or-loss}
-                 {gl4 :pershare-gain-or-loss}
-                 {gl5 :pershare-gain-or-loss}] (filter #(= :BUY (:op %)) profit-loss)
+      (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, single sell (multiple times)"
 
-                [{pl1 :realized-profit-loss}
-                 {pl2 :realized-profit-loss}] (filter #(= :SELL (:op %)) profit-loss)]
+        (let [profit-loss (-> repl.state/system
+                              :game/games deref (get gameId)
+                              :profit-loss
+                              (get stockId))
 
-            (are [x y] (= x y)
-              20.0                  gl1
-              10.0                  gl2
-              30.0                  gl3
-              20.0                  gl4
-              10.0                  gl5
-              2250.0                pl1
-              (.floatValue 7425.21) pl2)))
+              [{gl1 :pershare-gain-or-loss}
+               {gl2 :pershare-gain-or-loss}
 
-        (testing "game.calculation game.games/collect-realized-profit-loss"
+               {gl3 :pershare-gain-or-loss}
+               {gl4 :pershare-gain-or-loss}
+               {gl5 :pershare-gain-or-loss}] (filter #(= :BUY (:op %)) profit-loss)
 
-          (-> (game.calculation/collect-realized-profit-loss gameId)
-              first
-              :profit-loss
-              (= (.floatValue 9675.21))
-              is)))))
+              [{pl1 :realized-profit-loss}
+               {pl2 :realized-profit-loss}] (filter #(= :SELL (:op %)) profit-loss)]
+
+          (are [x y] (= x y)
+            20.0                  gl1
+            10.0                  gl2
+            30.0                  gl3
+            20.0                  gl4
+            10.0                  gl5
+            2250.0                pl1
+            (.floatValue 7425.21) pl2)))
+
+      (testing "game.calculation game.games/collect-realized-profit-loss"
+
+        (-> (game.calculation/collect-realized-profit-loss gameId)
+            first
+            :profit-loss
+            (= (.floatValue 9675.21))
+            is)))))
 
 (deftest calculate-profit-loss-multiple-buy-multiple-sell-test
 
@@ -664,7 +664,7 @@
 
           ;; B
           data-sequence-length 12
-          data-sequence-A      (take data-sequence-length (iterate (partial + 10) 100.00))
+          data-sequence-fn      (constantly (take data-sequence-length (iterate (partial + 10) 100.00)))
 
 
           ;; C create-game!
@@ -690,7 +690,7 @@
            control-channel                :control-channel
            game-event-stream              :game-event-stream
            :as                            game-control}
-          (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+          (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
           [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
           {stockId   :game.stock/id
@@ -934,7 +934,7 @@
 
           ;; B
           data-sequence-length 3
-          data-sequence-A (take data-sequence-length (iterate (partial + 10) 100.00))
+          data-sequence-fn (constantly (take data-sequence-length (iterate (partial + 10) 100.00)))
 
 
           ;; C create-game!
@@ -961,7 +961,7 @@
            stock-tick-stream              :stock-tick-stream
            portfolio-update-stream        :portfolio-update-stream
            game-event-stream              :game-event-stream
-           :as                            game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+           :as                            game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
           [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
           {stockId   :game.stock/id
@@ -1061,7 +1061,7 @@
                               (remove empty?)
                               ((juxt first second)))]
 
-            (->> (map (fn [l r]
+          (->> (map (fn [l r]
                       (< l r))
                     (extract-pl pl0)
                     (extract-pl pl1))
@@ -1077,8 +1077,8 @@
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
-        data-sequence-A [100.0 110.0 105.0 120.0 110.0 125.0 130.0]
-        data-sequence-length (count data-sequence-A)
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        data-sequence-length (count (data-sequence-fn))
 
 
         ;; C create-game!
@@ -1098,7 +1098,7 @@
           stocks     :game/stocks :as game} :game
          control-channel                :control-channel
          portfolio-update-stream        :portfolio-update-stream
-         :as                            game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+         :as                            game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
         [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
@@ -1200,7 +1200,7 @@
 
         ;; B
         data-sequence-length     12
-        data-sequence-A (take data-sequence-length (iterate (partial + 10) 100.00))
+        data-sequence-fn (constantly (take data-sequence-length (iterate (partial + 10) 100.00)))
 
         opts {:tick-sleep-ms 500
               :level-timer-sec 10
@@ -1213,7 +1213,7 @@
           stocks     :game/stocks :as game} :game
          game-event-stream              :game-event-stream
          :as                            game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)]
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)]
 
 
     (testing "Pause, resume and exit signals"
@@ -1239,7 +1239,7 @@
                                 {:event :resume
                                  :game-id gameId}}
 
-              expected-level-timer-keys #{:remaining-in-minutes :remaining-in-seconds :game-id :level :event}
+              expected-level-timer-keys #{:remaining-in-minutes :remaining-in-seconds :game-id :type :level :event}
 
               game-events (test-util/to-coll game-event-stream)]
 
@@ -1278,7 +1278,7 @@
 
         ;; B
         data-sequence-length     12
-        data-sequence-A (take data-sequence-length (iterate (partial + 10) 100.00))
+        data-sequence-fn (constantly (take data-sequence-length (iterate (partial + 10) 100.00)))
 
         opts {:level-timer-sec 2
               :accounts        (game.core/->game-user-accounts)}
@@ -1292,7 +1292,7 @@
          control-channel                :control-channel
          game-event-stream              :game-event-stream
          :as                            game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
         [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
@@ -1363,7 +1363,7 @@
 
         ;; B
         data-sequence-length     12
-        data-sequence-A (take data-sequence-length (iterate (partial - 10) 100.00))
+        data-sequence-fn (constantly (take data-sequence-length (iterate (partial - 10) 100.00)))
 
         opts {:level-timer-sec 5
               :accounts        (game.core/->game-user-accounts)}
@@ -1377,7 +1377,7 @@
          control-channel                :control-channel
          game-event-stream              :game-event-stream
          :as                            game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
 
         [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
@@ -1442,12 +1442,7 @@
               expected-db-game-level current-db-game-level)))))))
 
 
-;; pause
-;; resume
-;; exit
-;; leveltimer
 ;; win
 ;; lose
-
 ;; :timer
 ;; :timeout

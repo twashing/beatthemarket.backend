@@ -798,8 +798,6 @@
                              :variables {:email email
                                          :gameId gameId}}}))
 
-    (test-util/<message!! 1000)
-
     (testing "We are returned expected game information [stocks subscriptions id]"
 
       (let [profit-loss (-> (test-util/<message!! 1000) :payload :data :userPersonalProfitLoss)
@@ -816,11 +814,10 @@
              is)
 
         (->> profit-loss
-             (map #(dissoc % :gameId :stockId))
+             (map #(select-keys % [:profitLoss :profitLossType]))
              (into #{})
              (= expected-profit-losses)
              is)))
-
 
     (as-> (:game/games state/system) gs
       (deref gs)

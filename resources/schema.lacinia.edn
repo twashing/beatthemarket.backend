@@ -117,8 +117,7 @@
   {:members [:ControlEvent :LevelStatus :LevelTimer]}
 
   :PortfolioUpdate
-  {:members [:ProfitLoss :AccountBalance ;; :ControlEvent :LevelStatus :LevelTimer
-             ]}}
+  {:members [:ProfitLoss :AccountBalance]}}
 
 
  ;; //

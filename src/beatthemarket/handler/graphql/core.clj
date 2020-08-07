@@ -4,7 +4,6 @@
             [datomic.client.api :as d]
             [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
             [integrant.repl.state :as repl.state]
-            [com.walmartlabs.lacinia.schema :as lacinia.schema]
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.persistence :as iam.persistence]
@@ -63,19 +62,6 @@
       (assoc base-response :message :useradded)
       (assoc base-response :message :userexists))))
 
-(def game-level-map
-  {"one" :game-level/one
-   "two" :game-level/two
-   "three" :game-level/three
-   "four" :game-level/four
-   "five" :game-level/five
-   "six" :game-level/six
-   "seven" :game-level/seven
-   "eight" :game-level/eight
-   "nine" :game-level/nine
-   "ten" :game-level/ten
-   "market" :game-level/market})
-
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -87,7 +73,7 @@
                                                                    (d/db conn)
                                                                    email))
 
-        mapped-game-level (get game-level-map gameLevel)
+        mapped-game-level (get graphql.encoder/game-level-map gameLevel)
 
         ;; NOTE sink-fn updates once we start to stream a game
         sink-fn                identity
@@ -344,39 +330,14 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :game-event-stream)
-        cleanup-fn                                          (constantly :noop #_(core.async/close! game-event-stream))
-
-        tag-with-type-wrapped #(let [t (:type %)]
-                                 (lacinia.schema/tag-with-type % t))]
-
-    #_:ControlEvent
-    #_{:description "Possible control events that the client can send to the server"
-       :fields
-       {:event {:type (non-null :ControlEventType)}
-        :gameId {:type (non-null String)}}}
-
-    #_:LevelStatus
-    #_{:description "Possible level status updates that the server can send to the client"
-       :fields
-       {:event {:type (non-null :LevelStatusType)}
-        :gameId {:type (non-null String)}
-        :profitLoss {:type (non-null String)}
-        :level {:type (non-null String)} }}
-
-    #_:LevelTimer
-    #_{:description "Timer countdown events, streamed from server to client"
-       :fields
-       {:gameId {:type (non-null String)}
-        :level {:type (non-null String)}
-        :minutesRemaining {:type (non-null Int)}
-        :secondsRemaining {:type (non-null Int)}}}
+        cleanup-fn                                          (constantly :noop #_(core.async/close! game-event-stream))]
 
     (core.async/go-loop []
       (when-let [game-event (core.async/<! game-event-stream)]
 
-        (->> (clojure.set/rename-keys game-event {:game-id :gameId})
-             tag-with-type-wrapped
-             source-stream)
+        (source-stream
+          (graphql.encoder/game-event->graphql game-event))
+
         (recur)))
 
     ;; Return a cleanup fn

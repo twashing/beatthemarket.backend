@@ -15,12 +15,7 @@
   test-util/migration-fixture
   (test-util/subscriptions-fixture "ws://localhost:8081/ws"))
 
-;; pause
-;; resume
-;; exit
-
-
-(deftest pause-game-test
+(deftest game-events-control-events-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -200,3 +195,99 @@
               exit-message (test-util/<message!! 1000)]
 
           (is (= expected-exit-message exit-message)))))))
+
+(deftest game-events-level-timer-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        email "twashing@gmail.com"
+        gameLevel "one"]
+
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation CreateGame($gameLevel: String!) {
+                                     createGame(gameLevel: $gameLevel) {
+                                       id
+                                       stocks { id name symbol }
+                                     }
+                                   }"
+                           :variables {:gameLevel gameLevel}}})
+
+    (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+
+      (test-util/send-data {:id   992
+                            :type :start
+                            :payload
+                            {:query "subscription GameEvents($gameId: String!) {
+                                       gameEvents(gameId: $gameId) {
+                                         ... on ControlEvent {
+                                           event
+                                           gameId
+                                         }
+                                         ... on LevelStatus {
+                                           event
+                                           gameId
+                                           profitLoss
+                                           level
+                                         }
+                                         ... on LevelTimer {
+                                           gameId
+                                           level
+                                           minutesRemaining
+                                           secondsRemaining
+                                         }
+                                       }
+                                     }"
+                             :variables {:gameId gameId}}})
+
+      (test-util/send-data {:id   988
+                            :type :start
+                            :payload
+                            {:query "mutation StartGame($id: String!) {
+                                         startGame(id: $id) {
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
+                                         }
+                                       }"
+                             :variables {:id gameId}}})
+
+      (test-util/<message!! 1000)
+      (test-util/<message!! 1000)
+
+      (Thread/sleep 100)
+
+      (let [expected-timer-event {:type "data"
+                                  :id 992
+                                  :payload
+                                  {:data
+                                   {:gameEvents
+                                    {:gameId gameId
+                                     :level "one"
+                                     :minutesRemaining 5
+                                     :secondsRemaining 0}}}}
+
+            timer-event (->> (test-util/consume-subscriptions)
+                             (filter #(= 992 (:id %)))
+                             first)]
+
+        (is (= expected-timer-event timer-event)))
+
+
+      ;; >> ================ >>
+
+      (test-util/send-data {:id   993
+                            :type :start
+                            :payload
+                            {:query "mutation exitGame($gameId: String!) {
+                                       exitGame(gameId: $gameId) {
+                                         event
+                                         gameId
+                                       }
+                                     }"
+                             :variables {:gameId gameId}}}))))
