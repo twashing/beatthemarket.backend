@@ -1,4 +1,4 @@
-(ns beatthemarket.handler.http.inspect-game-test
+(ns beatthemarket.handler.http.integration.inspect-game-test
   (:require [clojure.test :refer :all]
             [integrant.repl.state :as state]
             [com.rpl.specter :refer [transform ALL]]
