@@ -1269,9 +1269,6 @@
 
         (is expected-game-events game-events)))))
 
-:timer
-:timeout
-
 (deftest check-level-win-test
 
   (let [;; A
@@ -1451,3 +1448,6 @@
 ;; leveltimer
 ;; win
 ;; lose
+
+;; :timer
+;; :timeout

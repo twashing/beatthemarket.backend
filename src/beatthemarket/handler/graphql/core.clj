@@ -234,7 +234,8 @@
 (defn resolve-pause-game [context {gameId :gameId} _]
 
   (let [game-id (UUID/fromString gameId)
-        event {:event :pause
+        event {:type :ControlEvent
+               :event :pause
                :game-id game-id}]
 
     (-> (game.games/send-control-event! game-id event)
@@ -243,8 +244,9 @@
 (defn resolve-resume-game [context {gameId :gameId} _]
 
   (let [game-id (UUID/fromString gameId)
-        event {:game-id game-id
-               :event :resume}]
+        event {:type :ControlEvent
+               :event :resume
+               :game-id game-id}]
 
     (-> (game.games/send-control-event! game-id event)
         (assoc :gameId gameId))))
@@ -252,7 +254,8 @@
 (defn resolve-exit-game [context {gameId :gameId} _]
 
   (let [game-id (UUID/fromString gameId)
-        event {:event  :exit
+        event {:type :ControlEvent
+               :event  :exit
                :gameId game-id}]
 
     (-> (game.games/send-control-event! game-id event)

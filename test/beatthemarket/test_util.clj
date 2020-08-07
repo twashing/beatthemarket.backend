@@ -296,3 +296,13 @@
       (if-not v
         coll
         (recur (conj coll v))))))
+
+(defn consume-subscriptions []
+
+  (let [subscriptions (atom [])]
+    (loop [r (<message!! 1000)]
+      (if (= ::timed-out r)
+        @subscriptions
+        (do
+          (swap! subscriptions #(conj % r))
+          (recur (<message!! 1000)))))))

@@ -393,16 +393,6 @@
           (reset! latest-tick r)
           (recur (test-util/<message!! 1000)))))))
 
-(defn- consume-subscriptions []
-
-  (let [subscriptions (atom [])]
-    (loop [r (test-util/<message!! 1000)]
-      (if (= :beatthemarket.test-util/timed-out r)
-        @subscriptions
-        (do
-          (swap! subscriptions #(conj % r))
-          (recur (test-util/<message!! 1000)))))))
-
 (deftest buy-stock-test
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
@@ -466,7 +456,7 @@
                               :game-id id}))
 
 
-        (let [latest-tick (->> (consume-subscriptions)
+        (let [latest-tick (->> (test-util/consume-subscriptions)
                                (filter #(= 989 (:id %)))
                                last)
               [{stockTickId :stockTickId
@@ -560,7 +550,7 @@
                               :game-id id}))
 
 
-        (let [latest-tick (->> (consume-subscriptions)
+        (let [latest-tick (->> (test-util/consume-subscriptions)
                                (filter #(= 989 (:id %)))
                                last)
               [{stockTickId :stockTickId
@@ -663,7 +653,7 @@
 
     (test-util/<message!! 1000)
 
-    (let [latest-tick (->> (consume-subscriptions)
+    (let [latest-tick (->> (test-util/consume-subscriptions)
                            (filter #(= 989 (:id %)))
                            last)
           [{stockTickId :stockTickId
@@ -717,7 +707,7 @@
                           :game-id id}))
 
     (let [expected-subscription-keys #{:game-id :stock-id :profit-loss-type :profit-loss}
-          result (as-> (consume-subscriptions) ss
+          result (as-> (test-util/consume-subscriptions) ss
                    (filter #(= 991 (:id %)) ss)
                    (-> ss first :payload :data :portfolioUpdates :message)
                    (map #(clojure.edn/read-string %) ss))]
@@ -726,24 +716,6 @@
            (map #(= expected-subscription-keys %))
            (every? true?)
            is))))
-
-;; union Result = Book | Author
-;;
-;; type Book {
-;;            title: String
-;;            }
-;;
-;; type Author {
-;;              name: String
-;;              }
-;;
-;; type Query {
-;;             search: [Result]
-;;             }
-
-
-;; union GameEvent = ControlEvent | LevelStatus | LevelTimer
-
 
 (deftest stream-game-events-test
 
@@ -799,7 +771,7 @@
                                  {:gameEvents
                                   {:event "exit" :gameId id}}}}]
 
-      (as-> (consume-subscriptions) ss
+      (as-> (test-util/consume-subscriptions) ss
         (filter #(= 992 (:id %)) ss)
         (first ss)
         (= expected-game-events ss)

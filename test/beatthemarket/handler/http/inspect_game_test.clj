@@ -18,7 +18,6 @@
                     :userName "Timothy Washington"})
 (def expected-user-keys #{:userEmail :userName :userExternalUid})
 
-
 (deftest query-user-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
@@ -178,6 +177,4 @@
                                          :range [0 10]}}})
 
       (test-util/<message!! 1000)
-      (test-util/<message!! 1000)
-
-      )))
+      (test-util/<message!! 1000))))

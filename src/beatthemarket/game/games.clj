@@ -545,7 +545,8 @@
 (defn send-control-event! [game-id event]
   (->> repl.state/system :game/games deref (#(get % game-id))
        :control-channel
-       (#(core.async/go (core.async/>!! % event)))))
+       (#(core.async/go (core.async/>!! % event))))
+  event)
 
 (defn game-paused? [game-id]
   (->> repl.state/system :game/games deref (#(get % game-id)) :paused?))
@@ -723,7 +724,8 @@
                                                 remaining (calculate-remaining-time now new-end)
                                                 controlv  {:event   :paused
                                                            :game-id game-id
-                                                           :level   (:level @current-level)}]
+                                                           :level   (:level @current-level)
+                                                           :type :ControlEvent}]
 
                                             (handle-control-event conn game-event-stream
                                                                   (assoc controlv :message "< Paused >")
@@ -731,7 +733,7 @@
 
                                [_ :pause _] (let [new-end   (t/plus end (t/seconds 1))
                                                   remaining (calculate-remaining-time now new-end)
-                                                  controlv  {:game-id game-id
+                                                  #_controlv  #_{:game-id game-id
                                                              :event   :pause}]
 
                                               (handle-control-event conn game-event-stream
@@ -742,7 +744,8 @@
 
                                [_ _ false] (let [controlv {:event   :continue
                                                            :game-id game-id
-                                                           :level   (:level @current-level)}]
+                                                           :level   (:level @current-level)
+                                                           :type :ControlEvent}]
 
                                              (handle-control-event conn game-event-stream controlv now end))
 
