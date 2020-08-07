@@ -153,28 +153,7 @@
 
 
 
-  ;; USER
-#_(defn generate-user!
-
-  ([conn] (generate-user! conn (-> repl.state/config :game/game :starting-balance)))
-
-  ([conn starting-balance]
-
-   (let [id-token               (->id-token)
-         checked-authentication (iam.auth/check-authentication id-token)]
-
-     (as-> checked-authentication obj
-       (iam.user/conditionally-add-new-user! conn obj starting-balance)
-       (:db-after obj)
-       (d/q '[:find ?e
-              :in $ ?email
-              :where [?e :user/email ?email]]
-            obj
-            (-> checked-authentication
-                :claims (get "email")))
-       (ffirst obj)
-       (persistence.core/pull-entity conn obj)))))
-
+;; USER
 (defn generate-user! [conn]
 
   (let [id-token               (->id-token)
@@ -219,8 +198,10 @@
 
 (defn send-data
   [data]
+
+  ;; (log/debug :reason ::send-data :data data)
   (log/debug :reason ::send-data :data data)
-  (g/send-msg *session* (json/write-str data) ))
+  (g/send-msg *session* (json/write-str (util/pprint+identity data)) ))
 
 (defn send-init
   ([]
@@ -233,11 +214,12 @@
   ([]
    (<message!! 75))
   ([timeout-ms]
-   #_(util/pprint+identity
-       (alt!!
-         *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))
-   (alt!!
-     *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)))
+
+   #_(alt!!
+       *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)
+   (util/pprint+identity
+     (alt!!
+       *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))))
 
 (defmacro expect-message
   [expected]

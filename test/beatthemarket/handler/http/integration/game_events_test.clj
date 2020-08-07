@@ -1,4 +1,4 @@
-(ns beatthemarket.handler.http.integration.inspect-game-test
+(ns beatthemarket.handler.http.integration.game-events-test
   (:require [clojure.test :refer :all]
             [clojure.core.async :as core.async]
             [integrant.repl.state :as state]
