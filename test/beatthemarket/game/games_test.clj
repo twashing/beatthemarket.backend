@@ -1227,24 +1227,47 @@
       (is (game.games/game-paused? gameId))
 
 
-
       (game.games/send-control-event! gameId {:event :resume :game-id gameId})
       (Thread/sleep 1000)
       (is (not (game.games/game-paused? gameId)))
 
 
-      ;; check game-message
-      ;; ...
+      (testing "Checking game-message after a pause, then resume"
+
+        (let [expected-events #{{:event :pause
+                                 :game-id gameId}
+                                {:event :resume
+                                 :game-id gameId}}
+
+              expected-level-timer-keys #{:remaining-in-minutes :remaining-in-seconds :game-id :level :event}
+
+              game-events (test-util/to-coll game-event-stream)]
+
+          (->> game-events
+               (filter #(some #{:pause :resume} #{(:event %)}))
+               (map #(select-keys % [:event :game-id]))
+               (into #{})
+               (= expected-events)
+               is)
+
+          (->> game-events
+               (filter #(= :continue (:event %)))
+               (map keys)
+               (map #(into #{} %))
+               (every? #(= expected-level-timer-keys %))
+               is)))
 
       (game.games/send-control-event! gameId {:event :exit :game-id gameId})
       (Thread/sleep 1000)
       (is (not (game.games/game-paused? gameId))))
 
 
+    (testing "Checking game-message after an exit"
 
-    ;; check game-message
+      (let [expected-game-events [{:event :exit :game-id gameId}]
+            game-events (test-util/to-coll game-event-stream)]
 
-    ))
+        (is expected-game-events game-events)))))
 
 :timer
 :timeout
