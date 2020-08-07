@@ -233,37 +233,30 @@
 
 (defn resolve-pause-game [context {gameId :gameId} _]
 
-  (let [game-id (UUID/fromString gameId)]
+  (let [game-id (UUID/fromString gameId)
+        event {:event :pause
+               :game-id game-id}]
 
-    (->> repl.state/system :game/games deref (#(get % game-id))
-         :paused? (#(reset! % true))))
-
-  {:event :pause
-   :gameId gameId})
+    (-> (game.games/send-control-event! game-id event)
+        (assoc :gameId gameId))))
 
 (defn resolve-resume-game [context {gameId :gameId} _]
 
-  (let [game-id (UUID/fromString gameId)]
+  (let [game-id (UUID/fromString gameId)
+        event {:game-id game-id
+               :event :resume}]
 
-    (->> repl.state/system :game/games deref (#(get % game-id))
-         :paused? (#(reset! % false))))
-
-  {:event :resume
-   :gameId gameId})
+    (-> (game.games/send-control-event! game-id event)
+        (assoc :gameId gameId))))
 
 (defn resolve-exit-game [context {gameId :gameId} _]
 
   (let [game-id (UUID/fromString gameId)
-        event {:event :exit
-               :gameId gameId}
+        event {:event  :exit
+               :gameId game-id}]
 
-        send #(core.async/go (core.async/>!! % event))]
-
-    (->> repl.state/system :game/games deref (#(get % game-id))
-         :control-channel
-         send)
-
-    event))
+    (-> (game.games/send-control-event! game-id event)
+        (assoc :gameId gameId))))
 
 (defn resolve-list-games [context {gameId :gameId} _]
 

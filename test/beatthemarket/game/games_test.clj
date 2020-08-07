@@ -1191,6 +1191,64 @@
              (= expected-profit-loss-values)
              is)))))
 
+(deftest check-game-status-test
+
+  (let [;; A
+        conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid} (test-util/generate-user! conn)
+
+        ;; B
+        data-sequence-length     12
+        data-sequence-A (take data-sequence-length (iterate (partial + 10) 100.00))
+
+        opts {:tick-sleep-ms 500
+              :level-timer-sec 10
+              :accounts        (game.core/->game-user-accounts)}
+
+        ;; C create-game!
+        sink-fn    identity
+        game-level :game-level/one
+        {{gameId     :game/id
+          stocks     :game/stocks :as game} :game
+         game-event-stream              :game-event-stream
+         :as                            game-control}
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-A opts)]
+
+
+    (testing "Pause, resume and exit signals"
+
+      (game.games/start-game! conn result-user-id game-control)
+      (is (not (game.games/game-paused? gameId)))
+
+
+      (game.games/send-control-event! gameId {:event :pause :game-id gameId})
+      (Thread/sleep 1000)
+      (is (game.games/game-paused? gameId))
+
+
+
+      (game.games/send-control-event! gameId {:event :resume :game-id gameId})
+      (Thread/sleep 1000)
+      (is (not (game.games/game-paused? gameId)))
+
+
+      ;; check game-message
+      ;; ...
+
+      (game.games/send-control-event! gameId {:event :exit :game-id gameId})
+      (Thread/sleep 1000)
+      (is (not (game.games/game-paused? gameId))))
+
+
+
+    ;; check game-message
+
+    ))
+
+:timer
+:timeout
+
 (deftest check-level-win-test
 
   (let [;; A
@@ -1218,7 +1276,8 @@
 
         [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
         {stockId   :game.stock/id
-         stockName :game.stock/name} (first stocks)
+         ;; stockName :game.stock/name
+         } (first stocks)
 
         opts                   {:conn    conn
                                 :userId  userId
@@ -1361,3 +1420,11 @@
             (are [x y] (= x y)
               expected-game-level    current-game-level
               expected-db-game-level current-db-game-level)))))))
+
+
+;; pause
+;; resume
+;; exit
+;; leveltimer
+;; win
+;; lose
