@@ -1,4 +1,4 @@
-(ns beatthemarket.handler.http.server-test
+(ns beatthemarket.handler.http.integration.standard-workflow-test
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
             [clojure.core.async :as core.async
@@ -393,16 +393,6 @@
           (reset! latest-tick r)
           (recur (test-util/<message!! 1000)))))))
 
-(defn- consume-subscriptions []
-
-  (let [subscriptions (atom [])]
-    (loop [r (test-util/<message!! 1000)]
-      (if (= :beatthemarket.test-util/timed-out r)
-        @subscriptions
-        (do
-          (swap! subscriptions #(conj % r))
-          (recur (test-util/<message!! 1000)))))))
-
 (deftest buy-stock-test
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
@@ -466,7 +456,7 @@
                               :game-id id}))
 
 
-        (let [latest-tick (->> (consume-subscriptions)
+        (let [latest-tick (->> (test-util/consume-subscriptions)
                                (filter #(= 989 (:id %)))
                                last)
               [{stockTickId :stockTickId
@@ -560,7 +550,7 @@
                               :game-id id}))
 
 
-        (let [latest-tick (->> (consume-subscriptions)
+        (let [latest-tick (->> (test-util/consume-subscriptions)
                                (filter #(= 989 (:id %)))
                                last)
               [{stockTickId :stockTickId
@@ -608,99 +598,14 @@
               (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
                      ack))))))))
 
-(defn- stock-buy-happy-path []
-
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)
-        gameLevel "one"]
-
-    (test-util/login-assertion service id-token)
-
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation CreateGame($gameLevel: String!) {
-                                       createGame(gameLevel: $gameLevel) {
-                                         id
-                                         stocks { id name symbol }
-                                       }
-                                     }"
-                           :variables {:gameLevel gameLevel}}}))
-
-
-  (let [{:keys [stocks id] :as createGameAck} (-> (test-util/<message!! 1000) :payload :data :createGame)]
-
-    (test-util/send-data {:id   988
-                          :type :start
-                          :payload
-                          {:query "mutation StartGame($id: String!) {
-                                         startGame(id: $id) {
-                                           stockTickId
-                                           stockTickTime
-                                           stockTickClose
-                                           stockId
-                                           stockName
-                                         }
-                                       }"
-                           :variables {:id id}}})
-
-    (test-util/<message!! 1000)
-    (test-util/<message!! 1000)
-
-    (test-util/send-data {:id   989
-                          :type :start
-                          :payload
-                          {:query "subscription StockTicks($gameId: String!) {
-                                           stockTicks(gameId: $gameId) {
-                                             stockTickId
-                                             stockTickTime
-                                             stockTickClose
-                                             stockId
-                                             stockName
-                                         }
-                                       }"
-                           :variables {:gameId id}}})
-
-    (test-util/<message!! 1000)
-
-    (let [latest-tick (->> (consume-subscriptions)
-                           (filter #(= 989 (:id %)))
-                           last)
-          [{stockTickId :stockTickId
-            stockTickTime :stockTickTime
-            stockTickClose :stockTickClose
-            stockId :stockId
-            stockName :stockName}]
-          (-> latest-tick :payload :data :stockTicks)]
-
-      (test-util/send-data {:id   990
-                            :type :start
-                            :payload
-                            {:query "mutation BuyStock($input: BuyStock!) {
-                                         buyStock(input: $input) {
-                                           message
-                                         }
-                                     }"
-                             :variables {:input {:gameId      id
-                                                 :stockId     stockId
-                                                 :stockAmount 100
-                                                 :tickId      stockTickId
-                                                 :tickTime    (.intValue (Long/parseLong stockTickTime))
-                                                 :tickPrice   stockTickClose}}}})
-
-      (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
-      (test-util/<message!! 1000) ;;{:type "complete", :id 990}
-      )
-
-    createGameAck))
-
 (deftest stream-portfolio-updates-test
 
-  (let [{id :id :as createGameAck} (stock-buy-happy-path)]
+  (let [{id :id :as createGameAck} (test-util/stock-buy-happy-path)]
 
     (test-util/send-data {:id   991
                           :type :start
                           :payload
+
                           {:query "subscription PortfolioUpdates($gameId: String!) {
                                          portfolioUpdates(gameId: $gameId) {
                                            message
@@ -717,7 +622,7 @@
                           :game-id id}))
 
     (let [expected-subscription-keys #{:game-id :stock-id :profit-loss-type :profit-loss}
-          result (as-> (consume-subscriptions) ss
+          result (as-> (test-util/consume-subscriptions) ss
                    (filter #(= 991 (:id %)) ss)
                    (-> ss first :payload :data :portfolioUpdates :message)
                    (map #(clojure.edn/read-string %) ss))]
@@ -727,36 +632,18 @@
            (every? true?)
            is))))
 
-;; union Result = Book | Author
-;;
-;; type Book {
-;;            title: String
-;;            }
-;;
-;; type Author {
-;;              name: String
-;;              }
-;;
-;; type Query {
-;;             search: [Result]
-;;             }
-
-
-;; union GameEvent = ControlEvent | LevelStatus | LevelTimer
-
-
 (deftest stream-game-events-test
 
-  (let [{id :id :as createGameAck} (stock-buy-happy-path)]
+  (let [{id :id :as createGameAck} (test-util/stock-buy-happy-path)]
 
     (test-util/send-data {:id   991
                           :type :start
                           :payload
                           {:query "subscription PortfolioUpdates($gameId: String!) {
-                                         portfolioUpdates(gameId: $gameId) {
-                                           message
-                                         }
-                                       }"
+                                     portfolioUpdates(gameId: $gameId) {
+                                       message
+                                     }
+                                   }"
                            :variables {:gameId id}}})
 
     (test-util/send-data {:id   992
@@ -799,15 +686,16 @@
                                  {:gameEvents
                                   {:event "exit" :gameId id}}}}]
 
-      (as-> (consume-subscriptions) ss
-        (filter #(= 992 (:id %)) ss)
+      (as-> (test-util/consume-subscriptions) ss
+        (filter #(and (= 992 (:id %))
+                      (= "exit" (-> % :payload :data :gameEvents :event))) ss)
         (first ss)
         (= expected-game-events ss)
         (is ss)))))
 
 (deftest user-market-profit-loss-test
 
-  (let [{gameId :id :as createGameAck} (stock-buy-happy-path)
+  (let [{gameId :id :as createGameAck} (test-util/stock-buy-happy-path)
         email                          "twashing@gmail.com"]
 
     (testing "Create a Game"
@@ -826,8 +714,6 @@
                              :variables {:email email
                                          :gameId gameId}}}))
 
-    (test-util/<message!! 1000)
-
     (testing "We are returned expected game information [stocks subscriptions id]"
 
       (let [profit-loss (-> (test-util/<message!! 1000) :payload :data :userPersonalProfitLoss)
@@ -844,11 +730,10 @@
              is)
 
         (->> profit-loss
-             (map #(dissoc % :gameId :stockId))
+             (map #(select-keys % [:profitLoss :profitLossType]))
              (into #{})
              (= expected-profit-losses)
              is)))
-
 
     (as-> (:game/games state/system) gs
       (deref gs)

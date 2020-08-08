@@ -4,7 +4,6 @@
             [datomic.client.api :as d]
             [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
             [integrant.repl.state :as repl.state]
-            [com.walmartlabs.lacinia.schema :as lacinia.schema]
             [beatthemarket.util :as util]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.persistence :as iam.persistence]
@@ -20,7 +19,6 @@
 
 
 (defn coerce-uuid->str [k v]
-
   (if (= :accountId k)
     (str v)
     v))
@@ -63,19 +61,6 @@
       (assoc base-response :message :useradded)
       (assoc base-response :message :userexists))))
 
-(def game-level-map
-  {"one" :game-level/one
-   "two" :game-level/two
-   "three" :game-level/three
-   "four" :game-level/four
-   "five" :game-level/five
-   "six" :game-level/six
-   "seven" :game-level/seven
-   "eight" :game-level/eight
-   "nine" :game-level/nine
-   "ten" :game-level/ten
-   "market" :game-level/market})
-
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
 
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -87,7 +72,7 @@
                                                                    (d/db conn)
                                                                    email))
 
-        mapped-game-level (get game-level-map gameLevel)
+        mapped-game-level (get graphql.encoder/game-level-map gameLevel)
 
         ;; NOTE sink-fn updates once we start to stream a game
         sink-fn                identity
@@ -233,37 +218,33 @@
 
 (defn resolve-pause-game [context {gameId :gameId} _]
 
-  (let [game-id (UUID/fromString gameId)]
+  (let [game-id (UUID/fromString gameId)
+        event {:type :ControlEvent
+               :event :pause
+               :game-id game-id}]
 
-    (->> repl.state/system :game/games deref (#(get % game-id))
-         :paused? (#(reset! % true))))
-
-  {:event :pause
-   :gameId gameId})
+    (-> (game.games/send-control-event! game-id event)
+        (assoc :gameId gameId))))
 
 (defn resolve-resume-game [context {gameId :gameId} _]
 
-  (let [game-id (UUID/fromString gameId)]
+  (let [game-id (UUID/fromString gameId)
+        event {:type :ControlEvent
+               :event :resume
+               :game-id game-id}]
 
-    (->> repl.state/system :game/games deref (#(get % game-id))
-         :paused? (#(reset! % false))))
-
-  {:event :resume
-   :gameId gameId})
+    (-> (game.games/send-control-event! game-id event)
+        (assoc :gameId gameId))))
 
 (defn resolve-exit-game [context {gameId :gameId} _]
 
   (let [game-id (UUID/fromString gameId)
-        event {:event :exit
-               :gameId gameId}
+        event {:type :ControlEvent
+               :event  :exit
+               :gameId game-id}]
 
-        send #(core.async/go (core.async/>!! % event))]
-
-    (->> repl.state/system :game/games deref (#(get % game-id))
-         :control-channel
-         send)
-
-    event))
+    (-> (game.games/send-control-event! game-id event)
+        (assoc :gameId gameId))))
 
 (defn resolve-list-games [context {gameId :gameId} _]
 
@@ -274,7 +255,6 @@
     [{:gameId gameId
       :status :running
       :profitLoss 0.0}]))
-
 
 
 ;; STREAMERS
@@ -325,9 +305,13 @@
         cleanup-fn                                          (constantly :noop #_(core.async/close! portfolio-update-stream))]
 
     (core.async/go-loop []
+
       (when-let [portfolio-update (core.async/<! portfolio-update-stream)]
+
         (when-not (empty? portfolio-update)
-          (source-stream {:message portfolio-update}))
+          (source-stream
+            (map graphql.encoder/portfolio-update->graphql portfolio-update)))
+
         (recur)))
 
     ;; Return a cleanup fn
@@ -348,39 +332,14 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :game-event-stream)
-        cleanup-fn                                          (constantly :noop #_(core.async/close! game-event-stream))
-
-        tag-with-type-wrapped #(let [t (:type %)]
-                                 (lacinia.schema/tag-with-type % t))]
-
-    #_:ControlEvent
-    #_{:description "Possible control events that the client can send to the server"
-       :fields
-       {:event {:type (non-null :ControlEventType)}
-        :gameId {:type (non-null String)}}}
-
-    #_:LevelStatus
-    #_{:description "Possible level status updates that the server can send to the client"
-       :fields
-       {:event {:type (non-null :LevelStatusType)}
-        :gameId {:type (non-null String)}
-        :profitLoss {:type (non-null String)}
-        :level {:type (non-null String)} }}
-
-    #_:LevelTimer
-    #_{:description "Timer countdown events, streamed from server to client"
-       :fields
-       {:gameId {:type (non-null String)}
-        :level {:type (non-null String)}
-        :minutesRemaining {:type (non-null Int)}
-        :secondsRemaining {:type (non-null Int)}}}
+        cleanup-fn                                          (constantly :noop #_(core.async/close! game-event-stream))]
 
     (core.async/go-loop []
       (when-let [game-event (core.async/<! game-event-stream)]
 
-        (->> (clojure.set/rename-keys game-event {:game-id :gameId})
-             tag-with-type-wrapped
-             source-stream)
+        (source-stream
+          (graphql.encoder/game-event->graphql game-event))
+
         (recur)))
 
     ;; Return a cleanup fn

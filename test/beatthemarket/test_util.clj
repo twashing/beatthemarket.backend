@@ -153,28 +153,7 @@
 
 
 
-  ;; USER
-#_(defn generate-user!
-
-  ([conn] (generate-user! conn (-> repl.state/config :game/game :starting-balance)))
-
-  ([conn starting-balance]
-
-   (let [id-token               (->id-token)
-         checked-authentication (iam.auth/check-authentication id-token)]
-
-     (as-> checked-authentication obj
-       (iam.user/conditionally-add-new-user! conn obj starting-balance)
-       (:db-after obj)
-       (d/q '[:find ?e
-              :in $ ?email
-              :where [?e :user/email ?email]]
-            obj
-            (-> checked-authentication
-                :claims (get "email")))
-       (ffirst obj)
-       (persistence.core/pull-entity conn obj)))))
-
+;; USER
 (defn generate-user! [conn]
 
   (let [id-token               (->id-token)
@@ -219,8 +198,10 @@
 
 (defn send-data
   [data]
+
   (log/debug :reason ::send-data :data data)
-  (g/send-msg *session* (json/write-str data) ))
+  #_(g/send-msg *session* (json/write-str data))
+  (g/send-msg *session* (json/write-str (util/pprint+identity data)) ))
 
 (defn send-init
   ([]
@@ -233,11 +214,12 @@
   ([]
    (<message!! 75))
   ([timeout-ms]
-   #_(util/pprint+identity
-       (alt!!
-         *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))
-   (alt!!
-     *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)))
+
+   #_(alt!!
+       *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)
+   (util/pprint+identity
+     (alt!!
+       *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))))
 
 (defmacro expect-message
   [expected]
@@ -296,3 +278,98 @@
       (if-not v
         coll
         (recur (conj coll v))))))
+
+(defn consume-subscriptions []
+
+  (let [subscriptions (atom [])]
+    (loop [r (<message!! 1000)]
+      (if (= ::timed-out r)
+        @subscriptions
+        (do
+          (swap! subscriptions #(conj % r))
+          (recur (<message!! 1000)))))))
+
+(defn stock-buy-happy-path []
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (->id-token)
+        gameLevel "one"]
+
+    (login-assertion service id-token)
+
+    (send-data {:id   987
+                :type :start
+                :payload
+                {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
+                                         id
+                                         stocks { id name symbol }
+                                       }
+                                     }"
+                 :variables {:gameLevel gameLevel}}}))
+
+
+  (let [{:keys [stocks id] :as createGameAck} (-> (<message!! 1000) :payload :data :createGame)]
+
+    (send-data {:id   988
+                :type :start
+                :payload
+                {:query "mutation StartGame($id: String!) {
+                                         startGame(id: $id) {
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
+                                         }
+                                       }"
+                 :variables {:id id}}})
+
+    (<message!! 1000)
+    (<message!! 1000)
+
+    (send-data {:id   989
+                :type :start
+                :payload
+                {:query "subscription StockTicks($gameId: String!) {
+                                           stockTicks(gameId: $gameId) {
+                                             stockTickId
+                                             stockTickTime
+                                             stockTickClose
+                                             stockId
+                                             stockName
+                                         }
+                                       }"
+                 :variables {:gameId id}}})
+
+    (<message!! 1000)
+
+    (let [latest-tick (->> (consume-subscriptions)
+                           (filter #(= 989 (:id %)))
+                           last)
+          [{stockTickId :stockTickId
+            stockTickTime :stockTickTime
+            stockTickClose :stockTickClose
+            stockId :stockId
+            stockName :stockName}]
+          (-> latest-tick :payload :data :stockTicks)]
+
+      (send-data {:id   990
+                  :type :start
+                  :payload
+                  {:query "mutation BuyStock($input: BuyStock!) {
+                                         buyStock(input: $input) {
+                                           message
+                                         }
+                                     }"
+                   :variables {:input {:gameId      id
+                                       :stockId     stockId
+                                       :stockAmount 100
+                                       :tickId      stockTickId
+                                       :tickTime    (.intValue (Long/parseLong stockTickTime))
+                                       :tickPrice   stockTickClose}}}})
+
+      (<message!! 1000)
+      (<message!! 1000))
+
+    createGameAck))

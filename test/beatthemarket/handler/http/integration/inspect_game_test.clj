@@ -1,4 +1,4 @@
-(ns beatthemarket.handler.http.inspect-game-test
+(ns beatthemarket.handler.http.integration.inspect-game-test
   (:require [clojure.test :refer :all]
             [integrant.repl.state :as state]
             [com.rpl.specter :refer [transform ALL]]
@@ -17,7 +17,6 @@
 (def expected-user {:userEmail "twashing@gmail.com"
                     :userName "Timothy Washington"})
 (def expected-user-keys #{:userEmail :userName :userExternalUid})
-
 
 (deftest query-user-test
 
@@ -137,47 +136,3 @@
                                  (into #{}))]
 
             (is (= expected-user-account-balances result-accounts))))))
-
-(deftest query-stock-time-series-test
-
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)
-        email "twashing@gmail.com"
-        gameLevel "one"]
-
-    (test-util/login-assertion service id-token)
-
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation CreateGame($gameLevel: String!) {
-                                     createGame(gameLevel: $gameLevel) {
-                                       id
-                                       stocks { id name symbol }
-                                     }
-                                   }"
-                           :variables {:gameLevel gameLevel}}})
-
-    (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)
-          stockId "asdf"]
-
-      (test-util/send-data {:id   988
-                            :type :start
-                            :payload
-                            {:query "query StockTimeSeries($gameId: String!, $stockId: String!, $range: [Int]) {
-                                       stockTimeSeries(gameId: $gameId, stockId: $stockId, range: $range) {
-                                         stockTickId
-                                         stockTickTime
-                                         stockTickClose
-                                         stockId
-                                         stockName
-                                       }
-                                   }"
-                             :variables {:gameId gameId
-                                         :stockId stockId
-                                         :range [0 10]}}})
-
-      (test-util/<message!! 1000)
-      (test-util/<message!! 1000)
-
-      )))

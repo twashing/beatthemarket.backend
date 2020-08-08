@@ -117,8 +117,7 @@
   {:members [:ControlEvent :LevelStatus :LevelTimer]}
 
   :PortfolioUpdate
-  {:members [:ProfitLoss :AccountBalance ;; :ControlEvent :LevelStatus :LevelTimer
-             ]}}
+  {:members [:ProfitLoss :AccountBalance]}}
 
 
  ;; //
@@ -246,7 +245,7 @@
    {:gameId {:type (non-null String)}}}
 
   :portfolioUpdates
-  {:type   :PortfolioUpdate
+  {:type   (list :PortfolioUpdate)
    :stream :stream-portfolio-updates
    :args
    {:gameId {:type (non-null String)}}}

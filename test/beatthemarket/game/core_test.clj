@@ -202,7 +202,7 @@
           sink-fn                  identity
           {{game-id :db/id} :game} (game.games/create-game! conn user-id sink-fn
                                                             :game-level/one
-                                                            (game.games/->data-sequence)
+                                                            game.games/->data-sequence
                                                             {:accounts (game.core/->game-user-accounts starting-cash-balance)})
 
 

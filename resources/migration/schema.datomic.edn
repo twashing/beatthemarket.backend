@@ -32,6 +32,14 @@
  {:db/ident :game-level/market}
 
 
+ ;; GAME STATUSes
+ {:db/ident :game-status/running}
+ {:db/ident :game-status/paused}
+ {:db/ident :game-status/won}
+ {:db/ident :game-status/lost}
+ {:db/ident :game-status/exited}
+
+
  ;; GAME PROPER
 
  ;; NOTE :earnings is a calculated attribute
@@ -39,6 +47,7 @@
   :db/valueType   :db.type/uuid
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
+
  {:db/ident       :game/start-time
   :db/valueType   :db.type/instant
   :db/cardinality :db.cardinality/one
@@ -54,11 +63,18 @@
   :db/isComponent true
   :db/doc         ""}
 
+ {:db/ident       :game/status
+  :db/valueType   :db.type/ref ;; :game-status
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
+
  {:db/ident       :game/level
   :db/valueType   :db.type/ref ;; :game-level
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
+
  {:db/ident       :game/stocks
   :db/valueType   :db.type/ref ;; List of :stock
   :db/cardinality :db.cardinality/many
@@ -90,7 +106,7 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
- 
+
  {:db/ident       :game.user/portfolio
   :db/valueType   :db.type/ref ;; :bookkeeping.portfolio
   :db/cardinality :db.cardinality/one
