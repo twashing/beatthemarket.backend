@@ -199,8 +199,8 @@
 (defn send-data
   [data]
 
-  ;; (log/debug :reason ::send-data :data data)
   (log/debug :reason ::send-data :data data)
+  #_(g/send-msg *session* (json/write-str data))
   (g/send-msg *session* (json/write-str (util/pprint+identity data)) ))
 
 (defn send-init
@@ -288,3 +288,88 @@
         (do
           (swap! subscriptions #(conj % r))
           (recur (<message!! 1000)))))))
+
+(defn stock-buy-happy-path []
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (->id-token)
+        gameLevel "one"]
+
+    (login-assertion service id-token)
+
+    (send-data {:id   987
+                :type :start
+                :payload
+                {:query "mutation CreateGame($gameLevel: String!) {
+                                       createGame(gameLevel: $gameLevel) {
+                                         id
+                                         stocks { id name symbol }
+                                       }
+                                     }"
+                 :variables {:gameLevel gameLevel}}}))
+
+
+  (let [{:keys [stocks id] :as createGameAck} (-> (<message!! 1000) :payload :data :createGame)]
+
+    (send-data {:id   988
+                :type :start
+                :payload
+                {:query "mutation StartGame($id: String!) {
+                                         startGame(id: $id) {
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
+                                         }
+                                       }"
+                 :variables {:id id}}})
+
+    (<message!! 1000)
+    (<message!! 1000)
+
+    (send-data {:id   989
+                :type :start
+                :payload
+                {:query "subscription StockTicks($gameId: String!) {
+                                           stockTicks(gameId: $gameId) {
+                                             stockTickId
+                                             stockTickTime
+                                             stockTickClose
+                                             stockId
+                                             stockName
+                                         }
+                                       }"
+                 :variables {:gameId id}}})
+
+    (<message!! 1000)
+
+    (let [latest-tick (->> (consume-subscriptions)
+                           (filter #(= 989 (:id %)))
+                           last)
+          [{stockTickId :stockTickId
+            stockTickTime :stockTickTime
+            stockTickClose :stockTickClose
+            stockId :stockId
+            stockName :stockName}]
+          (-> latest-tick :payload :data :stockTicks)]
+
+      (send-data {:id   990
+                  :type :start
+                  :payload
+                  {:query "mutation BuyStock($input: BuyStock!) {
+                                         buyStock(input: $input) {
+                                           message
+                                         }
+                                     }"
+                   :variables {:input {:gameId      id
+                                       :stockId     stockId
+                                       :stockAmount 100
+                                       :tickId      stockTickId
+                                       :tickTime    (.intValue (Long/parseLong stockTickTime))
+                                       :tickPrice   stockTickClose}}}})
+
+      (<message!! 1000)
+      (<message!! 1000))
+
+    createGameAck))

@@ -1,5 +1,6 @@
 (ns beatthemarket.handler.graphql.encoder
-  (:require [com.walmartlabs.lacinia.schema :as lacinia.schema]))
+  (:require [com.walmartlabs.lacinia.schema :as lacinia.schema]
+            [beatthemarket.util :as util]))
 
 
 (def game-level-map
@@ -39,6 +40,9 @@
   (let [t (:type a)]
     (lacinia.schema/tag-with-type a t)))
 
+
+
+
 (defmulti game-event->graphql :event)
 
 (defmethod game-event->graphql :pause [game-event]
@@ -61,43 +65,37 @@
       (update :level #((clojure.set/map-invert game-level-map) %))
       tag-with-type-wrapped))
 
-#_:ControlEvent
-#_{:description "Possible control events that the client can send to the server"
-   :fields
-   {:event {:type (non-null :ControlEventType)}
-    :gameId {:type (non-null String)}}}
 
 
-#_:LevelTimer
-#_{:description "Timer countdown events, streamed from server to client"
-   :fields
-   {:gameId {:type (non-null String)}
-    :level {:type (non-null String)}
-    :minutesRemaining {:type (non-null Int)}
-    :secondsRemaining {:type (non-null Int)}}}
 
+(defmulti portfolio-update->graphql #(cond (:bookkeeping.account/id %) :AccountBalance
+                                           (:profit-loss-type %) :ProfitLoss))
 
-#_:LevelStatus
-#_{:description "Possible level status updates that the server can send to the client"
-   :fields
-   {:event {:type (non-null :LevelStatusType)}
-    :gameId {:type (non-null String)}
-    :profitLoss {:type (non-null String)}
-    :level {:type (non-null String)} }}
+(defmethod portfolio-update->graphql :AccountBalance [portfolio-update]
 
-#_:ProfitLoss
-#_{:description "Container for portfolio updates"
-   :fields
-   {:profitLoss {:type (non-null Float)}
-    :stockId    {:type (non-null String)}
-    :gameId     {:type (non-null String)}
-    :profitLossType {:type (non-null :ProfitLossType)}}}
+  (-> (assoc portfolio-update
+             :bookkeeping.account/id (-> portfolio-update :bookkeeping.account/id str)
+             :bookkeeping.account/counter-party (-> portfolio-update :bookkeeping.account/counter-party :game.stock/name)
+             :type :AccountBalance)
+      (clojure.set/rename-keys {:bookkeeping.account/id :id
+                                :bookkeeping.account/name :name
+                                :bookkeeping.account/balance :balance
+                                :bookkeeping.account/amount :amount
+                                :bookkeeping.account/counter-party :counterParty})
+      tag-with-type-wrapped))
 
-#_:AccountBalance
-#_{:description "Account Balance message"
-   :fields
-   {:id           {:type (non-null String)}
-    :name         {:type (non-null String)}
-    :balance      {:type (non-null Float)}
-    :counterParty {:type String :description "Name of the stock attached to this account"}
-    :amount       {:type Int :description "The amount of units (stock shares) of the counterparty"}}}
+(defmethod portfolio-update->graphql :ProfitLoss [portfolio-update]
+
+  (let [transform-profit-loss-types #({:running-profit-loss :running
+                                       :realized-profit-loss :realized} %)]
+
+    (-> (assoc portfolio-update
+               :game-id (-> portfolio-update :game-id str)
+               :stock-id (-> portfolio-update :stock-id str)
+               :profit-loss-type (-> portfolio-update :profit-loss-type transform-profit-loss-types)
+               :type :ProfitLoss)
+        (clojure.set/rename-keys {:game-id :gameId
+                                  :stock-id :stockId
+                                  :profit-loss-type :profitLossType
+                                  :profit-loss :profitLoss})
+        tag-with-type-wrapped)))

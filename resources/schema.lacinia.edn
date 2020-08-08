@@ -245,7 +245,7 @@
    {:gameId {:type (non-null String)}}}
 
   :portfolioUpdates
-  {:type   :PortfolioUpdate
+  {:type   (list :PortfolioUpdate)
    :stream :stream-portfolio-updates
    :args
    {:gameId {:type (non-null String)}}}

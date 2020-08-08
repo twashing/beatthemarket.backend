@@ -19,7 +19,6 @@
 
 
 (defn coerce-uuid->str [k v]
-
   (if (= :accountId k)
     (str v)
     v))
@@ -258,7 +257,6 @@
       :profitLoss 0.0}]))
 
 
-
 ;; STREAMERS
 
 ;; https://lacinia-pedestal.readthedocs.io/en/latest/subscriptions.html#overview
@@ -307,9 +305,13 @@
         cleanup-fn                                          (constantly :noop #_(core.async/close! portfolio-update-stream))]
 
     (core.async/go-loop []
+
       (when-let [portfolio-update (core.async/<! portfolio-update-stream)]
+
         (when-not (empty? portfolio-update)
-          (source-stream {:message portfolio-update}))
+          (source-stream
+            (map graphql.encoder/portfolio-update->graphql portfolio-update)))
+
         (recur)))
 
     ;; Return a cleanup fn
