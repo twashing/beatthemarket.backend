@@ -478,7 +478,6 @@
                                                      :stockId     stockId
                                                      :stockAmount 100
                                                      :tickId      stockTickId
-                                                     :tickTime    (.intValue (Long/parseLong stockTickTime))
                                                      :tickPrice   stockTickClose}}}})
 
 
@@ -572,8 +571,7 @@
                                                      :stockId     stockId
                                                      :stockAmount 100
                                                      :tickId      stockTickId
-                                                     :tickTime    (.intValue (Long/parseLong stockTickTime))
-                                                     :tickPrice   stockTickClose}}}})
+                                                                   :tickPrice   stockTickClose}}}})
 
           (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
           (test-util/<message!! 1000) ;;{:type "complete", :id 990}
@@ -591,8 +589,7 @@
                                                        :stockId     stockId
                                                        :stockAmount 100
                                                        :tickId      stockTickId
-                                                       :tickTime    (.intValue (Long/parseLong stockTickTime))
-                                                       :tickPrice   stockTickClose}}}})
+                                                                       :tickPrice   stockTickClose}}}})
 
             (let [ack (test-util/<message!! 1000)]
               (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}

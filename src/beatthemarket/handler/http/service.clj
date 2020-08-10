@@ -41,50 +41,17 @@
            [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
 
 
-#_(def service-error-handler
-    "References:
-   http://pedestal.io/reference/error-handling
-   https://stuarth.github.io/clojure/error-dispatch/
-   http://pedestal.io/cookbook/index#_how_to_handle_errors"
+#_(defroutes legacy-routes
+    ;; Defines "/" and "/about" routes with their associated :get handlers.
+    ;; The interceptors defined after the verb map (e.g., {:get home-page}
+    ;; apply to / and its children (/about).
+    #_[[["/" {:get home-page} ^:interceptors [(body-params/body-params) http/html-body]
+         ["/about" {:get about-page}]]]]
 
-    (error-int/error-dispatch
-      [context ex]
+    #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
+         ["/about" {:get about-page}]]]]
 
-      [{:exception-type :clojure.lang.ExceptionInfo
-        :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
-      (let [response (-> (ring.util.response/response (.getMessage ex)) :status)]
-
-        (assoc context :response response))
-
-      :else
-      (assoc context :io.pedestal.interceptor.chain/error ex)))
-
-#_(def throwing-interceptor
-    (interceptor/interceptor {:name ::throwing-interceptor
-                              :enter (fn [_ctx]
-                                       ;; Simulated processing error
-                                       (/ 1 0))
-                              :error (fn [ctx ex]
-                                       ;; Here's where you'd handle the exception
-                                       ;; Remember to base your handling decision
-                                       ;; on the ex-data of the exception.
-
-                                       (let [{:keys [_exception-type _exception]} (ex-data ex)]
-                                         ;; If you cannot handle the exception, re-attach it to the ctx
-                                         ;; using the `:io.pedestal.interceptor.chain/error` key
-                                         (assoc ctx ::chain/error ex)))}))
-
-(defroutes legacy-routes
-  ;; Defines "/" and "/about" routes with their associated :get handlers.
-  ;; The interceptors defined after the verb map (e.g., {:get home-page}
-  ;; apply to / and its children (/about).
-  #_[[["/" {:get home-page} ^:interceptors [(body-params/body-params) http/html-body]
-       ["/about" {:get about-page}]]]]
-
-  #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
-       ["/about" {:get about-page}]]]]
-
-  [])
+    [])
 
 (def ws-clients (atom {}))
 
@@ -125,24 +92,16 @@
 
 (def ^:private default-api-path "/api")
 (def ^:private default-asset-path "/assets/graphiql")
-;; (def ^:private default-subscriptions-path "/ws")
-
-
-;; NOTE subscription interceptor
-#_(def ^:private invoke-count-interceptor
-    "Used to demonstrate that subscription interceptor customization works."
-    (interceptor/interceptor
-      {:name ::invoke-count
-       :enter (fn [context]
-                ;; (println "invoke-count-interceptor CALLED")
-                ;; (clojure.pprint/pprint context)
-                context)}))
 
 (defn auth-request-handler-ws [context]
 
-  (let [token (if (-> context :request :authorization)
-                (-> context :request :authorization)
-                (-> context :connection-params :token))
+  ;; (util/pprint+identity context)
+
+  (let [token (-> context :request :authorization)
+
+        #_(if (-> context :request :authorization)
+            (-> context :request :authorization)
+            (-> context :connection-params :token))
 
         id-token (-> token
                      (s/split #"Bearer ")
@@ -161,7 +120,6 @@
 
         authenticated? (fn [{id-token :id-token}]
 
-                         ;; (println "Sanity id-token / " input)
                          (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
 
                            (if (every? util/exists? [errorCode message])
@@ -197,6 +155,39 @@
      (let [auth-h (.getHeader req "Authorization")]
        (assoc-in ctx [:request :authorization] auth-h)))})
 
+#_(defn default-service
+    "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
+  See docs there."
+    [compiled-schema options]
+    (let [{:keys [api-path ide-path asset-path app-context port]
+           :or {api-path default-api-path
+                ide-path "/ide"
+                asset-path default-asset-path}} options
+
+          interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
+
+          full-routes
+          (concat legacy-routes
+                  (route/expand-routes
+                    (into #{[api-path :post interceptors :route-name ::graphql-api]
+                            [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+                          (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
+
+      (-> (merge options {::http/routes full-routes})
+          com.walmartlabs.lacinia.pedestal2/enable-graphiql
+          (com.walmartlabs.lacinia.pedestal2/enable-subscriptions compiled-schema options))))
+
+
+#_{:subscription-interceptors
+   (-> (sub/default-subscription-interceptors compiled-schema nil)
+       (inject auth-request-interceptor :before ::sub/query-parser))
+
+   :init-context
+   (fn [ctx ^ServletUpgradeRequest req _resp]
+
+     (let [auth-h (.getHeader req "Authorization")]
+       (assoc-in ctx [:request :authorization] auth-h)))}
+
 (defn default-service
   "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
   See docs there."
@@ -208,12 +199,10 @@
 
         interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
 
-        full-routes
-        (concat legacy-routes
-                (route/expand-routes
-                  (into #{[api-path :post interceptors :route-name ::graphql-api]
-                          [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
-                        (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
+        full-routes (route/expand-routes
+                      (into #{[api-path :post interceptors :route-name ::graphql-api]
+                              [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+                            (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path)))]
 
     (-> (merge options {::http/routes full-routes})
         com.walmartlabs.lacinia.pedestal2/enable-graphiql

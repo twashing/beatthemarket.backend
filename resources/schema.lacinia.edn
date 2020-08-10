@@ -129,7 +129,6 @@
     :stockId     {:type (non-null String)}
     :stockAmount {:type (non-null Int)}
     :tickId      {:type (non-null String)}
-    :tickTime    {:type (non-null Int)}
     :tickPrice   {:type (non-null Float)}}}
 
   :SellStock
@@ -139,7 +138,6 @@
     :stockId     {:type (non-null String)}
     :stockAmount {:type (non-null Int)}
     :tickId      {:type (non-null String)}
-    :tickTime    {:type (non-null Int)}
     :tickPrice   {:type (non-null Float)}}}}
 
 
