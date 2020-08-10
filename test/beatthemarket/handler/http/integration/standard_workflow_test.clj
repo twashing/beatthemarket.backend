@@ -488,29 +488,29 @@
 
 (deftest sell-stock-test
 
-    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-          id-token (test-util/->id-token)
-          gameLevel "one"]
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        gameLevel "one"]
 
-      (test-util/login-assertion service id-token)
+    (test-util/login-assertion service id-token)
 
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "mutation CreateGame($gameLevel: String!) {
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation CreateGame($gameLevel: String!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }"
-                             :variables {:gameLevel gameLevel}}})
+                           :variables {:gameLevel gameLevel}}})
 
-      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+    (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
-        (test-util/send-data {:id   988
-                              :type :start
-                              :payload
-                              {:query "mutation StartGame($id: String!) {
+      (test-util/send-data {:id   988
+                            :type :start
+                            :payload
+                            {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
                                            stockTickId
                                            stockTickTime
@@ -519,15 +519,15 @@
                                            stockName
                                          }
                                        }"
-                               :variables {:id id}}})
+                             :variables {:id id}}})
 
-        (test-util/<message!! 1000)
-        (test-util/<message!! 1000)
+      (test-util/<message!! 1000)
+      (test-util/<message!! 1000)
 
-        (test-util/send-data {:id   989
-                              :type :start
-                              :payload
-                              {:query "subscription StockTicks($gameId: String!) {
+      (test-util/send-data {:id   989
+                            :type :start
+                            :payload
+                            {:query "subscription StockTicks($gameId: String!) {
                                            stockTicks(gameId: $gameId) {
                                              stockTickId
                                              stockTickTime
@@ -536,34 +536,52 @@
                                              stockName
                                          }
                                        }"
-                               :variables {:gameId id}}})
+                             :variables {:gameId id}}})
 
-        (test-util/<message!! 1000)
+      (test-util/<message!! 1000)
 
-        (as-> (:game/games state/system) gs
-          (deref gs)
-          (get gs (UUID/fromString id))
-          (:control-channel gs)
-          (core.async/>!! gs {:type :ControlEvent
-                              :event :exit
-                              :game-id id}))
+      (as-> (:game/games state/system) gs
+        (deref gs)
+        (get gs (UUID/fromString id))
+        (:control-channel gs)
+        (core.async/>!! gs {:type :ControlEvent
+                            :event :exit
+                            :game-id id}))
 
 
-        (let [latest-tick (->> (test-util/consume-subscriptions)
-                               (filter #(= 989 (:id %)))
-                               last)
-              [{stockTickId :stockTickId
-                stockTickTime :stockTickTime
-                stockTickClose :stockTickClose
-                stockId :stockId
-                stockName :stockName}]
-              (-> latest-tick :payload :data :stockTicks)]
+      (let [latest-tick (->> (test-util/consume-subscriptions)
+                             (filter #(= 989 (:id %)))
+                             last)
+            [{stockTickId :stockTickId
+              stockTickTime :stockTickTime
+              stockTickClose :stockTickClose
+              stockId :stockId
+              stockName :stockName}]
+            (-> latest-tick :payload :data :stockTicks)]
 
-          (test-util/send-data {:id   990
+        (test-util/send-data {:id   990
+                              :type :start
+                              :payload
+                              {:query "mutation BuyStock($input: BuyStock!) {
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                               :variables {:input {:gameId      id
+                                                   :stockId     stockId
+                                                   :stockAmount 100
+                                                   :tickId      stockTickId
+                                                   :tickPrice   stockTickClose}}}})
+
+        (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
+        (test-util/<message!! 1000) ;;{:type "complete", :id 990}
+
+        (testing "Selling the stock"
+          (test-util/send-data {:id   991
                                 :type :start
                                 :payload
-                                {:query "mutation BuyStock($input: BuyStock!) {
-                                           buyStock(input: $input) {
+                                {:query "mutation SellStock($input: SellStock!) {
+                                           sellStock(input: $input) {
                                              message
                                            }
                                          }"
@@ -571,29 +589,11 @@
                                                      :stockId     stockId
                                                      :stockAmount 100
                                                      :tickId      stockTickId
-                                                                   :tickPrice   stockTickClose}}}})
+                                                     :tickPrice   stockTickClose}}}})
 
-          (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
-          (test-util/<message!! 1000) ;;{:type "complete", :id 990}
-
-          (testing "Selling the stock"
-            (test-util/send-data {:id   991
-                                  :type :start
-                                  :payload
-                                  {:query "mutation SellStock($input: SellStock!) {
-                                           sellStock(input: $input) {
-                                             message
-                                           }
-                                         }"
-                                   :variables {:input {:gameId      id
-                                                       :stockId     stockId
-                                                       :stockAmount 100
-                                                       :tickId      stockTickId
-                                                                       :tickPrice   stockTickClose}}}})
-
-            (let [ack (test-util/<message!! 1000)]
-              (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
-                     ack))))))))
+          (let [ack (test-util/<message!! 1000)]
+            (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
+                   ack))))))))
 
 (deftest stream-portfolio-updates-test
 

@@ -1,7 +1,9 @@
 (ns beatthemarket.iam.authentication-test
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer [response-for]]
+            [clojure.edn :refer [read-string]]
             [integrant.repl.state :as state]
+            [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.iam.authentication :as sut]))
 
@@ -58,10 +60,14 @@
 (deftest authentication-interceptor-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        {status :status} (response-for service
-                                       :get "/"
-                                       :headers {"Authorization"
-                                                 (str "Bearer sample-JWT_String")})
+        {status :status
+         body   :body} (response-for service
+                                     :get "/"
+                                     :headers {"Authorization"
+                                               (str "Bearer sample-JWT_String")})
+        body-edn (read-string body)
         expected-error-status 401]
 
-    (is (= expected-error-status status))))
+    (are [x y] (= x y)
+      expected-error-status status
+      true (every? :message (:errors body-edn)))))

@@ -10,7 +10,7 @@
             [io.pedestal.http.route.definition :refer [defroutes]]
 
             [ring.util.response :as ring-resp]
-            [clojure.core.async :as async]
+            [clojure.core.async :as core.async]
             [clojure.data.json :as json]
             [clj-time.core :as t]
             [clj-time.coerce :as c]
@@ -41,23 +41,11 @@
            [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
 
 
-#_(defroutes legacy-routes
-    ;; Defines "/" and "/about" routes with their associated :get handlers.
-    ;; The interceptors defined after the verb map (e.g., {:get home-page}
-    ;; apply to / and its children (/about).
-    #_[[["/" {:get home-page} ^:interceptors [(body-params/body-params) http/html-body]
-         ["/about" {:get about-page}]]]]
-
-    #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
-         ["/about" {:get about-page}]]]]
-
-    [])
-
 (def ws-clients (atom {}))
 
 (defn new-ws-client [ws-session send-ch]
 
-  (async/put! send-ch "This will be a text message")
+  (core.async/put! send-ch "This will be a text message")
 
   (log/info :ws-session ws-session)
   (swap! ws-clients assoc ws-session send-ch))
@@ -95,13 +83,9 @@
 
 (defn auth-request-handler-ws [context]
 
-  ;; (util/pprint+identity context)
-
-  (let [token (-> context :request :authorization)
-
-        #_(if (-> context :request :authorization)
-            (-> context :request :authorization)
-            (-> context :connection-params :token))
+  (let [token (if (-> context :request :authorization)
+                (-> context :request :authorization)
+                (-> context :connection-params :token))
 
         id-token (-> token
                      (s/split #"Bearer ")
@@ -138,55 +122,33 @@
       (let [{checked-authentication :checked-authentication} result]
         (assoc-in context [:request :checked-authentication] checked-authentication)))))
 
-(def auth-request-interceptor
+(def auth-subscription-request-interceptor
   (interceptor/interceptor
     {:name ::auth-request
-     :enter auth-request-handler-ws}))
+     :enter auth-request-handler-ws
+     :error (fn [context ^Throwable t]
+              (let [{:keys [id response-data-ch]} (:request context)
+
+                    ;; Strip off the wrapper exception added by Pedestal
+                    ;; payload (#'sub/construct-exception-payload (.getCause t))
+                    payload (#'sub/construct-exception-payload t)]
+                (core.async/put! response-data-ch {:type :error
+                                                   :id id
+                                                   :payload payload})
+                (core.async/close! response-data-ch)))}))
+
 
 (defn options-builder
   [compiled-schema]
   {:subscription-interceptors
    (-> (sub/default-subscription-interceptors compiled-schema nil)
-       (inject auth-request-interceptor :before ::sub/query-parser))
+       (inject auth-subscription-request-interceptor :before ::sub/query-parser))
 
    :init-context
    (fn [ctx ^ServletUpgradeRequest req _resp]
 
      (let [auth-h (.getHeader req "Authorization")]
        (assoc-in ctx [:request :authorization] auth-h)))})
-
-#_(defn default-service
-    "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
-  See docs there."
-    [compiled-schema options]
-    (let [{:keys [api-path ide-path asset-path app-context port]
-           :or {api-path default-api-path
-                ide-path "/ide"
-                asset-path default-asset-path}} options
-
-          interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
-
-          full-routes
-          (concat legacy-routes
-                  (route/expand-routes
-                    (into #{[api-path :post interceptors :route-name ::graphql-api]
-                            [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
-                          (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
-
-      (-> (merge options {::http/routes full-routes})
-          com.walmartlabs.lacinia.pedestal2/enable-graphiql
-          (com.walmartlabs.lacinia.pedestal2/enable-subscriptions compiled-schema options))))
-
-
-#_{:subscription-interceptors
-   (-> (sub/default-subscription-interceptors compiled-schema nil)
-       (inject auth-request-interceptor :before ::sub/query-parser))
-
-   :init-context
-   (fn [ctx ^ServletUpgradeRequest req _resp]
-
-     (let [auth-h (.getHeader req "Authorization")]
-       (assoc-in ctx [:request :authorization] auth-h)))}
 
 (defn default-service
   "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
@@ -236,7 +198,6 @@
 
   (let [options {:env         env
                  ::http/join? join?
-                 ;; ::http/routes legacy-routes
 
                  ;; Uncomment next line to enable CORS support, add
                  ;; string(s) specifying scheme, host and port for

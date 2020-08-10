@@ -144,6 +144,4 @@
                                          gameId
                                        }
                                      }"
-                             :variables {:gameId id}}})
-
-      #_(Thread/sleep 1000))))
+                             :variables {:gameId id}}}))))

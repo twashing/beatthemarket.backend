@@ -1,8 +1,9 @@
 (ns beatthemarket.handler.authentication
   (:require [clojure.tools.logging :as log]
             [clojure.string :as s]
-            [io.pedestal.interceptor :as interceptor]
             [ring.util.response]
+            [io.pedestal.interceptor :as interceptor]
+            [com.walmartlabs.lacinia.util :refer [as-error-map]]
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.util :refer [exists?]]))
 
@@ -35,7 +36,8 @@
               (assoc context :request (auth-request-handler (:request context))))
 
      :error (fn [context ex]
-              (let [response (-> (ring.util.response/response (.getMessage ex))
+              (let [response (-> (ring.util.response/response {:errors [(-> (as-error-map ex)
+                                                                            (dissoc :extensions))]})
                                  (assoc :status 401))]
                 (assoc context :response response)))}))
 
