@@ -394,8 +394,7 @@
           stocks  :game/stocks
           {saved-game-level :db/ident} :game/level
           :as     game}        (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
-         stocks-with-tick-data (map (partial bind-data-sequence data-sequence) stocks)
-
+          stocks-with-tick-data (map #(bind-data-sequence (->data-sequence) %) stocks)
          stream-buffer           10
          control-channel         (core.async/chan (core.async/sliding-buffer stream-buffer))
          stock-tick-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
