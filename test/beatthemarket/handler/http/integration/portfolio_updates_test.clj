@@ -114,7 +114,6 @@
                                        :stockId     stockId
                                        :stockAmount 100
                                        :tickId      stockTickId
-                                       :tickTime    (.intValue (Long/parseLong stockTickTime))
                                        :tickPrice   stockTickClose}}}})
 
       (let [expected-profit-loss-keys #{:profitLoss :stockId :gameId :profitLossType}
@@ -145,6 +144,4 @@
                                          gameId
                                        }
                                      }"
-                             :variables {:gameId id}}})
-
-      (Thread/sleep 1000))))
+                             :variables {:gameId id}}}))))

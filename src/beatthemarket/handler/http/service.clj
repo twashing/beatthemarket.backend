@@ -10,7 +10,7 @@
             [io.pedestal.http.route.definition :refer [defroutes]]
 
             [ring.util.response :as ring-resp]
-            [clojure.core.async :as async]
+            [clojure.core.async :as core.async]
             [clojure.data.json :as json]
             [clj-time.core :as t]
             [clj-time.coerce :as c]
@@ -41,56 +41,11 @@
            [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
 
 
-#_(def service-error-handler
-    "References:
-   http://pedestal.io/reference/error-handling
-   https://stuarth.github.io/clojure/error-dispatch/
-   http://pedestal.io/cookbook/index#_how_to_handle_errors"
-
-    (error-int/error-dispatch
-      [context ex]
-
-      [{:exception-type :clojure.lang.ExceptionInfo
-        :interceptor :beatthemarket.handler.authentication/auth-interceptor}]
-      (let [response (-> (ring.util.response/response (.getMessage ex)) :status)]
-
-        (assoc context :response response))
-
-      :else
-      (assoc context :io.pedestal.interceptor.chain/error ex)))
-
-#_(def throwing-interceptor
-    (interceptor/interceptor {:name ::throwing-interceptor
-                              :enter (fn [_ctx]
-                                       ;; Simulated processing error
-                                       (/ 1 0))
-                              :error (fn [ctx ex]
-                                       ;; Here's where you'd handle the exception
-                                       ;; Remember to base your handling decision
-                                       ;; on the ex-data of the exception.
-
-                                       (let [{:keys [_exception-type _exception]} (ex-data ex)]
-                                         ;; If you cannot handle the exception, re-attach it to the ctx
-                                         ;; using the `:io.pedestal.interceptor.chain/error` key
-                                         (assoc ctx ::chain/error ex)))}))
-
-(defroutes legacy-routes
-  ;; Defines "/" and "/about" routes with their associated :get handlers.
-  ;; The interceptors defined after the verb map (e.g., {:get home-page}
-  ;; apply to / and its children (/about).
-  #_[[["/" {:get home-page} ^:interceptors [(body-params/body-params) http/html-body]
-       ["/about" {:get about-page}]]]]
-
-  #_[[["/" {:get home-page} ^:interceptors [service-error-handler (body-params/body-params) http/html-body]
-       ["/about" {:get about-page}]]]]
-
-  [])
-
 (def ws-clients (atom {}))
 
 (defn new-ws-client [ws-session send-ch]
 
-  (async/put! send-ch "This will be a text message")
+  (core.async/put! send-ch "This will be a text message")
 
   (log/info :ws-session ws-session)
   (swap! ws-clients assoc ws-session send-ch))
@@ -125,18 +80,6 @@
 
 (def ^:private default-api-path "/api")
 (def ^:private default-asset-path "/assets/graphiql")
-;; (def ^:private default-subscriptions-path "/ws")
-
-
-;; NOTE subscription interceptor
-#_(def ^:private invoke-count-interceptor
-    "Used to demonstrate that subscription interceptor customization works."
-    (interceptor/interceptor
-      {:name ::invoke-count
-       :enter (fn [context]
-                ;; (println "invoke-count-interceptor CALLED")
-                ;; (clojure.pprint/pprint context)
-                context)}))
 
 (defn auth-request-handler-ws [context]
 
@@ -161,7 +104,6 @@
 
         authenticated? (fn [{id-token :id-token}]
 
-                         ;; (println "Sanity id-token / " input)
                          (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication id-token)]
 
                            (if (every? util/exists? [errorCode message])
@@ -180,16 +122,27 @@
       (let [{checked-authentication :checked-authentication} result]
         (assoc-in context [:request :checked-authentication] checked-authentication)))))
 
-(def auth-request-interceptor
+(def auth-subscription-request-interceptor
   (interceptor/interceptor
     {:name ::auth-request
-     :enter auth-request-handler-ws}))
+     :enter auth-request-handler-ws
+     :error (fn [context ^Throwable t]
+              (let [{:keys [id response-data-ch]} (:request context)
+
+                    ;; Strip off the wrapper exception added by Pedestal
+                    ;; payload (#'sub/construct-exception-payload (.getCause t))
+                    payload (#'sub/construct-exception-payload t)]
+                (core.async/put! response-data-ch {:type :error
+                                                   :id id
+                                                   :payload payload})
+                (core.async/close! response-data-ch)))}))
+
 
 (defn options-builder
   [compiled-schema]
   {:subscription-interceptors
    (-> (sub/default-subscription-interceptors compiled-schema nil)
-       (inject auth-request-interceptor :before ::sub/query-parser))
+       (inject auth-subscription-request-interceptor :before ::sub/query-parser))
 
    :init-context
    (fn [ctx ^ServletUpgradeRequest req _resp]
@@ -208,12 +161,10 @@
 
         interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
 
-        full-routes
-        (concat legacy-routes
-                (route/expand-routes
-                  (into #{[api-path :post interceptors :route-name ::graphql-api]
-                          [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
-                        (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
+        full-routes (route/expand-routes
+                      (into #{[api-path :post interceptors :route-name ::graphql-api]
+                              [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+                            (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path)))]
 
     (-> (merge options {::http/routes full-routes})
         com.walmartlabs.lacinia.pedestal2/enable-graphiql
@@ -247,7 +198,6 @@
 
   (let [options {:env         env
                  ::http/join? join?
-                 ;; ::http/routes legacy-routes
 
                  ;; Uncomment next line to enable CORS support, add
                  ;; string(s) specifying scheme, host and port for

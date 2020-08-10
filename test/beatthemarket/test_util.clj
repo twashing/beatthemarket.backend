@@ -200,8 +200,8 @@
   [data]
 
   (log/debug :reason ::send-data :data data)
-  #_(g/send-msg *session* (json/write-str data))
-  (g/send-msg *session* (json/write-str (util/pprint+identity data)) ))
+  (g/send-msg *session* (json/write-str data))
+  #_(g/send-msg *session* (json/write-str (util/pprint+identity data)) ))
 
 (defn send-init
   ([]
@@ -215,9 +215,9 @@
    (<message!! 75))
   ([timeout-ms]
 
-   #_(alt!!
+   (alt!!
        *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)
-   (util/pprint+identity
+   #_(util/pprint+identity
      (alt!!
        *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))))
 
@@ -366,7 +366,6 @@
                                        :stockId     stockId
                                        :stockAmount 100
                                        :tickId      stockTickId
-                                       :tickTime    (.intValue (Long/parseLong stockTickTime))
                                        :tickPrice   stockTickClose}}}})
 
       (<message!! 1000)

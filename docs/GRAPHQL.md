@@ -22,4 +22,4 @@ response: {"data":{"login":{"message":"userexists"}}}
 
 ### Examples
 
-For example GraphQL use case call and responses, see the `docs/graphql` directory, 
+For example GraphQL use case call and responses, see the `docs/graphql` [directory](docs/graphql).

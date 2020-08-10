@@ -611,8 +611,6 @@
 (defmethod handle-control-event :resume [_ game-event-stream
                                          {game-id :game-id :as control}
                                          now end]
-
-  (println "Sanity Check...")
   (resume-game! game-id)
 
   (let [remaining (calculate-remaining-time now end)]

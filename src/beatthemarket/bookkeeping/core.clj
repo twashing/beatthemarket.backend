@@ -365,7 +365,6 @@
                ent
                (-> tentry :bookkeeping.tentry/id))
           (ffirst ent)
-          ;; (game.persistence/track-profit-loss! ent)
           (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent))))))
 
 (defn sell-stock! [conn game-db-id user-db-id stock-db-id stock-amount stock-price]
@@ -428,7 +427,6 @@
                ent
                (-> tentry :bookkeeping.tentry/id))
           (ffirst ent)
-          ;; (game.persistence/track-profit-loss! ent)
           (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent)
           (identity ent))))))
 
