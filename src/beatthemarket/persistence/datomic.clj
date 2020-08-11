@@ -52,12 +52,9 @@
   (->datomic-client-local opts))
 
 
-(defmethod ig/init-key :persistence/datomic [_ {datomic-opts :datomic
-                                                data-proccesors :data-proccesors :as opts}]
+(defmethod ig/init-key :persistence/datomic [_ {datomic-opts :datomic :as opts}]
 
-  {:opts (->datomic-client (assoc datomic-opts :env (:env opts)))
-   :data-proccesors (->> (map resolve data-proccesors)
-                         (apply juxt)) })
+  {:opts (->datomic-client (assoc datomic-opts :env (:env opts)))})
 
 (defmethod ig/halt-key! :persistence/datomic [_ {datomic-component-map :opts}]
   (println "Closing database...")
@@ -66,11 +63,6 @@
 
 ;; DATABASE
 (defn transact! [conn data]
-
-  #_(let [data-proccesors (->> integrant.repl.state/system :persistence/datomic :data-proccesors)]
-    (data-proccesors data))
-
-  ;; (util/pprint+identity data)
   (d/transact conn {:tx-data data}))
 
 (comment

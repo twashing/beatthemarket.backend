@@ -3,6 +3,8 @@
             [integrant.repl :refer [go halt]]
             [integrant.core :as ig]
             [aero.core :as aero]
+            [magnet.payments.stripe]
+            [magnet.payments.core]
             [com.rpl.specter :refer [transform MAP-VALS]]
             [beatthemarket.util :as util]))
 
@@ -35,7 +37,10 @@
                        :beatthemarket.state/nrepl               :nrepl/nrepl
                        :beatthemarket.state/logging             :logging/logging
                        :beatthemarket.datasource/name-generator :name-generator/name-generator
-                       :beatthemarket.game/core                 :game/games}))
+                       :beatthemarket.game/core                 :game/games
+                       :magnet.payments/stripe                  :magnet.payments/stripe
+                       ;; :beatthemarket.payments/core             :magnet.payments/stripe
+                       }))
 
 (defn set-prep
 
@@ -45,8 +50,6 @@
    (set-prep+load-namespaces profile)))
 
 (defn init-components []
-
-  (halt)
   (go))
 
 (def halt-components halt)
