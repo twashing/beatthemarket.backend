@@ -17,13 +17,13 @@ lein test :only beatthemarket.handler.http.integration.game-events-test/game-eve
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                      createGame(gameLevel: $gameLevel) {
                                        id
                                        stocks { id name symbol }
                                      }
                                    }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
 
 
 # < server
@@ -210,13 +210,13 @@ lein test :only beatthemarket.handler.http.integration.game-events-test/game-eve
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                      createGame(gameLevel: $gameLevel) {
                                        id
                                        stocks { id name symbol }
                                      }
                                    }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
 
 
 # < server
@@ -303,7 +303,7 @@ lein test :only beatthemarket.handler.http.integration.game-events-test/game-eve
  {:data
   {:gameEvents
    {:gameId "0b3ba8e8-5045-40d8-99fb-666aeecc3c32",
-    :level "one",
+    :level 1,
     :minutesRemaining 5,
     :secondsRemaining 0}}}}
 

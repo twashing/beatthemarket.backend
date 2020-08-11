@@ -11,13 +11,13 @@ PortfolioUpdates comprise of two types of events: ProfitLoss and AccountBalance.
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
 
 
 # < server
