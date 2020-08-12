@@ -48,7 +48,8 @@
   (core.async/put! send-ch "This will be a text message")
 
   (log/info :ws-session ws-session)
-  (swap! ws-clients assoc ws-session send-ch))
+  (swap! ws-clients assoc ws-session send-ch)
+  (println (format "WS Clients / %s / %s" (count @ws-clients) @ws-clients)))
 
 ;; This is just for demo purposes
 #_(defn send-and-close! []
