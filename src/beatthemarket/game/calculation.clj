@@ -10,16 +10,16 @@
    (collect-profit-loss profit-loss-type game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
 
   ([profit-loss-type game-id profit-loss]
-   (->> (for [[k vs] profit-loss]
-          {:game-id          game-id
-           :stock-id         k
-           :profit-loss-type profit-loss-type
-           :profit-loss      (->> (filter profit-loss-type vs)
-                                  (reduce (fn [ac {pl profit-loss-type}]
-                                            (+ ac pl))
-                                          0.0)
-                                  (format "%.2f") (Float.))})
-        flatten)))
+
+   (for [[k vs] profit-loss]
+     {:game-id          game-id
+      :stock-id         k
+      :profit-loss-type profit-loss-type
+      :profit-loss      (->> (filter profit-loss-type vs)
+                             (reduce (fn [ac {pl profit-loss-type}]
+                                       (+ ac pl))
+                                     0.0)
+                             (format "%.2f") (Float.))})))
 
 (defn collect-realized-profit-loss
 

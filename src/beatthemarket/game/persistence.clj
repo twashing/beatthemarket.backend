@@ -15,14 +15,7 @@
 
   (swap! (:game/games repl.state/system)
          (fn [gs]
-           (update-in gs [game-id :profit-loss]
-                      #(->> updated-profit-loss-calculations
-                            (reduce (fn [acc kvs]
-                                      (reduce (fn [a [k v]]
-                                                (assoc acc k v))
-                                              kvs))
-                                    %)
-                            (apply hash-map))))))
+           (update-in gs [game-id :profit-loss] (constantly updated-profit-loss-calculations)))))
 
 (defn recalculate-profit-loss-on-tick [latest-price
                                        {:keys [trade-price
@@ -132,15 +125,18 @@
             updated-profit-loss-calculations
             (->> profit-loss
                  (map (fn [[k v]]
-                        (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
-                                                                 (concat v)
-                                                                 profit-loss->chunks
-                                                                 ((juxt butlast last)))]
-                          [k (->> latest-chunk
-                                  (map (partial recalculate-profit-loss-on-buy stock-account-amount price))
-                                  (concat butlast-chunks)
-                                  flatten)])))
-                 (map #(apply hash-map %)))]
+                        (if (= game-stock-id k)
+                          (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
+                                                                   (concat v)
+                                                                   profit-loss->chunks
+                                                                   ((juxt butlast last)))]
+                            [k (->> latest-chunk
+                                    (map (partial recalculate-profit-loss-on-buy stock-account-amount price))
+                                    (concat butlast-chunks)
+                                    flatten)])
+                          [k v])))
+                 (map #(apply hash-map %))
+                 (apply merge))]
 
         (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
 
@@ -195,16 +191,19 @@
             updated-profit-loss-calculations
             (->> profit-loss
                  (map (fn [[k v]]
-                        (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
-                                                                 (concat v)
-                                                                 profit-loss->chunks
-                                                                 ((juxt butlast last)))]
-                          [k (->> latest-chunk
-                                  (map (partial recalculate-profit-loss-on-sell old-account-amount stock-account-amount price))
-                                  calculate-realized-profit-loss
-                                  (concat butlast-chunks)
-                                  flatten)])))
-                 (map #(apply hash-map %)))]
+                        (if (= game-stock-id k)
+                          (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
+                                                                   (concat v)
+                                                                   profit-loss->chunks
+                                                                   ((juxt butlast last)))]
+                            [k (->> latest-chunk
+                                    (map (partial recalculate-profit-loss-on-sell old-account-amount stock-account-amount price))
+                                    calculate-realized-profit-loss
+                                    (concat butlast-chunks)
+                                    flatten)])
+                          [k v])))
+                 (map #(apply hash-map %))
+                 (apply merge))]
 
         (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
 
