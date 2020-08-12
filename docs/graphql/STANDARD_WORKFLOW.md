@@ -14,13 +14,13 @@ First create the game.
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
   
 
 # < server
@@ -85,13 +85,13 @@ Create game send and response.
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
 
 
 # < server
@@ -360,13 +360,13 @@ Create a game.
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks  { id name symbol }
                                        }
                                      }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
 
 
 # < server
@@ -478,13 +478,13 @@ lein test :only beatthemarket.handler.http.integration.standard-workflow-test/se
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
   
 
 # < server
@@ -647,13 +647,13 @@ lein test :only beatthemarket.handler.http.integration.standard-workflow-test/st
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
 
 
 # < server
@@ -838,13 +838,13 @@ lein test :only beatthemarket.handler.http.integration.standard-workflow-test/us
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
 
 
 # < server

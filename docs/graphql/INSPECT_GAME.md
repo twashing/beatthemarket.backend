@@ -78,13 +78,13 @@ lein test :only beatthemarket.handler.http.integration.inspect-game-test/query-a
  :type :start,
  :payload
  {:query
-  "mutation CreateGame($gameLevel: String!) {
+  "mutation CreateGame($gameLevel: Int!) {
                                      createGame(gameLevel: $gameLevel) {
                                        id
                                        stocks { id name symbol }
                                      }
                                    }",
-  :variables {:gameLevel "one"}}}
+  :variables {:gameLevel 1}}}
 
 
 # < server

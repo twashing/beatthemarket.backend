@@ -4,17 +4,17 @@
 
 
 (def game-level-map
-  {"one" :game-level/one
-   "two" :game-level/two
-   "three" :game-level/three
-   "four" :game-level/four
-   "five" :game-level/five
-   "six" :game-level/six
-   "seven" :game-level/seven
-   "eight" :game-level/eight
-   "nine" :game-level/nine
-   "ten" :game-level/ten
-   "market" :game-level/market})
+  {1 :game-level/one
+   2 :game-level/two
+   3 :game-level/three
+   4 :game-level/four
+   5 :game-level/five
+   6 :game-level/six
+   7 :game-level/seven
+   8 :game-level/eight
+   9 :game-level/nine
+   10 :game-level/ten
+   100 :game-level/market})
 
 (defn stock-tick->graphql [data]
   (clojure.set/rename-keys
@@ -59,9 +59,23 @@
 
 (defmethod game-event->graphql :continue [game-event]
 
-  (-> (clojure.set/rename-keys game-event {:game-id :gameId
+  (-> (clojure.set/rename-keys game-event {:game-id              :gameId
                                            :remaining-in-minutes :minutesRemaining
                                            :remaining-in-seconds :secondsRemaining})
+      (update :level #((clojure.set/map-invert game-level-map) %))
+      tag-with-type-wrapped))
+
+(defmethod game-event->graphql :win [game-event]
+
+  (-> (clojure.set/rename-keys game-event {:game-id     :gameId
+                                           :profit-loss :profitLoss})
+      (update :level #((clojure.set/map-invert game-level-map) %))
+      tag-with-type-wrapped))
+
+(defmethod game-event->graphql :lose [game-event]
+
+  (-> (clojure.set/rename-keys game-event {:game-id     :gameId
+                                           :profit-loss :profitLoss})
       (update :level #((clojure.set/map-invert game-level-map) %))
       tag-with-type-wrapped))
 

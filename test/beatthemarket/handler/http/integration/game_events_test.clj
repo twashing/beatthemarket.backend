@@ -20,14 +20,14 @@
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         email "twashing@gmail.com"
-        gameLevel "one"]
+        gameLevel 1]
 
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
                           :type :start
                           :payload
-                          {:query "mutation CreateGame($gameLevel: String!) {
+                          {:query "mutation CreateGame($gameLevel: Int!) {
                                      createGame(gameLevel: $gameLevel) {
                                        id
                                        stocks { id name symbol }
@@ -201,14 +201,14 @@
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         email "twashing@gmail.com"
-        gameLevel "one"]
+        gameLevel 1]
 
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
                           :type :start
                           :payload
-                          {:query "mutation CreateGame($gameLevel: String!) {
+                          {:query "mutation CreateGame($gameLevel: Int!) {
                                      createGame(gameLevel: $gameLevel) {
                                        id
                                        stocks { id name symbol }
@@ -268,7 +268,7 @@
                                   {:data
                                    {:gameEvents
                                     {:gameId gameId
-                                     :level "one"
+                                     :level 1
                                      :minutesRemaining 5
                                      :secondsRemaining 0}}}}
 

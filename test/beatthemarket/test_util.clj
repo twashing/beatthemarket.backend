@@ -293,14 +293,14 @@
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (->id-token)
-        gameLevel "one"]
+        gameLevel 1]
 
     (login-assertion service id-token)
 
     (send-data {:id   987
                 :type :start
                 :payload
-                {:query "mutation CreateGame($gameLevel: String!) {
+                {:query "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }

@@ -73,13 +73,13 @@
    {:event {:type (non-null :LevelStatusType)}
     :gameId {:type (non-null String)}
     :profitLoss {:type (non-null String)}
-    :level {:type (non-null String)} }}
+    :level {:type (non-null Int)} }}
 
   :LevelTimer
   {:description "Timer countdown events, streamed from server to client"
    :fields
    {:gameId {:type (non-null String)}
-    :level {:type (non-null String)}
+    :level {:type (non-null Int)}
     :minutesRemaining {:type (non-null Int)}
     :secondsRemaining {:type (non-null Int)}}}
 
@@ -192,7 +192,7 @@
    :description "Creates a new game"
    :resolve     :resolve-create-game
    :args
-   {:gameLevel {:type (non-null String)}}}
+   {:gameLevel {:type (non-null Int)}}}
 
   :startGame
   {:type        (list (list :StockTick))
