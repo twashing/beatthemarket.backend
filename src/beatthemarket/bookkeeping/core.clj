@@ -356,16 +356,16 @@
 
             entities [tentry updated-journal-entries]]
 
-        (as-> entities ent
-          (persistence.datomic/transact-entities! conn ent)
-          (:db-after ent)
+        (as-> entities v
+          (persistence.datomic/transact-entities! conn v)
+          (:db-after v)
           (d/q '[:find (pull ?e [*])
                  :in $ ?entry-id
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
-               ent
+               v
                (-> tentry :bookkeeping.tentry/id))
-          (ffirst ent)
-          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent))))))
+          (ffirst v)
+          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id v))))))
 
 (defn sell-stock! [conn game-db-id user-db-id stock-db-id stock-amount stock-price]
 

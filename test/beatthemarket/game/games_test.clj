@@ -411,6 +411,98 @@
     :noop)
   v)
 
+(deftest buy-stock!-multiple-test
+
+  ;; A
+  (let [;; A
+        conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid} (test-util/generate-user! conn)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length     (count (data-sequence-fn))
+
+
+        ;; C create-game!
+        sink-fn                identity
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec                   5
+                    :accounts                          (game.core/->game-user-accounts)
+                    :stream-stock-tick-mappingfn       (fn [a]
+                                                         (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                           (swap! test-stock-ticks
+                                                                  (fn [b]
+                                                                    (conj b stock-ticks)))
+                                                           stock-ticks))
+                    :stream-portfolio-update-mappingfn (fn [a]
+                                                         (swap! test-portfolio-updates (fn [b] (conj b a)))
+                                                         a)}
+        game-level :game-level/one
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks :as game} :game
+         control-channel                    :control-channel
+         game-event-stream                  :game-event-stream
+         :as                                game-control}
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+        {stockIdA   :game.stock/id
+         stockNameA :game.stock/name} (first stocks)
+        {stockIdB   :game.stock/id
+         stockNameB :game.stock/name} (second stocks)
+        stockAmount                  100]
+
+    (doall (take tick-length iterations))
+
+    ;; D
+    (testing "Returned Tentry matches what was submitted"
+      (let [{tickPriceA :game.stock.tick/close
+             tickIdA    :game.stock.tick/id}
+            (->> @test-stock-ticks
+                 last
+                 first)
+
+            {tickPriceB :game.stock.tick/close
+             tickIdB    :game.stock.tick/id}
+            (->> @test-stock-ticks
+                 last
+                 second)
+
+            expected-credit-value        (Float. (format "%.2f" (* stockAmount tickPriceA)))
+            expected-credit-account-name (format "STOCK.%s" stockNameA)
+
+            expected-debit-value        (- (-> repl.state/config :game/game :starting-balance) expected-credit-value)
+            expected-debit-account-name "Cash"
+
+            result-A (game.games/buy-stock! conn userId gameId stockIdA stockAmount tickIdA (Float. tickPriceA) false)
+            result-B (game.games/buy-stock! conn userId gameId stockIdB stockAmount tickIdB (Float. tickPriceB) false)
+
+            expected-pl-entry-count 2
+            expected-pl-calculation-keys
+            #{:amount :latest-price->trade-price :A :stock-account-amount :credit-account-id :op
+              :credit-account-name :trade-price :pershare-gain-or-loss :pershare-purchase-ratio}
+
+            game-profit-loss (-> repl.state/system :game/games
+                                 deref
+                                 (get gameId)
+                                 :profit-loss)
+            pl-entries ((juxt
+                          #(get % stockIdA)
+                          #(get % stockIdB)) game-profit-loss)]
+
+
+        (is (= expected-pl-entry-count (count pl-entries)))
+
+        (->> (map first pl-entries)
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= expected-pl-calculation-keys %))
+             is)))))
+
 (deftest calculate-profit-loss-single-buy-sell-test
 
   (testing "Testing buy / sells with this pattern
