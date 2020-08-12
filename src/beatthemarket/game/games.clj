@@ -575,14 +575,29 @@
                                                             constantly))))
         (throw (Exception. (format "Couldn't level up from to [%s %s]" source dest)))))))
 
+(defn conditionally-reset-level-time! [conn game-id [[source-level-name _
+                                                      :as source]
+                                                     [dest-level-name dest-level-config
+                                                      :as dest]]]
+
+  (when dest
+    (swap! (:game/games repl.state/system)
+           (fn [gs]
+             (update-in gs [game-id :level-timer-atom] (-> repl.state/config
+                                                           :game/game
+                                                           :level-timer-sec
+                                                           constantly))))))
+
 (defn transition-level! [conn game-id level]
 
-  (->> integrant.repl.state/config :game/game :levels seq
-       (sort-by (comp :order second))
-       (partition 2 1)
-       (filter (fn [[[level-name _] r]] (= level level-name)))
-       first
-       (conditionally-level-up! conn game-id)))
+  (let [a (->> repl.state/config :game/game :levels seq
+               (sort-by (comp :order second))
+               (partition 2 1)
+               (filter (fn [[[level-name _] r]] (= level level-name)))
+               first)]
+
+    (conditionally-level-up! conn game-id a)
+    (conditionally-reset-level-time! conn game-id a)))
 
 
 (defmulti handle-control-event (fn [_ _ {m :event} _ _] m))

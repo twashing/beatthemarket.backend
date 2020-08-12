@@ -59,9 +59,23 @@
 
 (defmethod game-event->graphql :continue [game-event]
 
-  (-> (clojure.set/rename-keys game-event {:game-id :gameId
+  (-> (clojure.set/rename-keys game-event {:game-id              :gameId
                                            :remaining-in-minutes :minutesRemaining
                                            :remaining-in-seconds :secondsRemaining})
+      (update :level #((clojure.set/map-invert game-level-map) %))
+      tag-with-type-wrapped))
+
+(defmethod game-event->graphql :win [game-event]
+
+  (-> (clojure.set/rename-keys game-event {:game-id     :gameId
+                                           :profit-loss :profitLoss})
+      (update :level #((clojure.set/map-invert game-level-map) %))
+      tag-with-type-wrapped))
+
+(defmethod game-event->graphql :lose [game-event]
+
+  (-> (clojure.set/rename-keys game-event {:game-id     :gameId
+                                           :profit-loss :profitLoss})
       (update :level #((clojure.set/map-invert game-level-map) %))
       tag-with-type-wrapped))
 
