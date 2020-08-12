@@ -459,8 +459,9 @@
           :stream-portfolio-update-mappingfn (or stream-portfolio-update-mappingfn
                                                  (fn [{:keys [profit-loss] :as result}]
 
-                                                   (log/debug :game.games (format ">> STREAM portfolio-update / %s" result))
-                                                   (when profit-loss
+                                                   (when (not (empty? profit-loss))
+
+                                                     (log/info :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
                                                      (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
                                                    result))
 
@@ -715,8 +716,9 @@
             :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
                                                    control-channel])]
 
-      (log/info :game.games (format "game-loop %s / %s"
-                                    (select-keys remaining [:remaining-in-minutes :remaining-in-seconds])
+      (log/info :game.games (format "game-loop %s:%s / %s"
+                                    (:remaining-in-minutes remaining)
+                                    (:remaining-in-seconds remaining)
                                     (if controlv controlv :running)))
 
       (let [x        (ffirst iters)

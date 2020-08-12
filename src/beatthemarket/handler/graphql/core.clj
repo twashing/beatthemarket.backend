@@ -263,6 +263,7 @@
 ;; When a streamer passes nil to the callback, a clean shutdown of the subscription occurs; the client is sent a completion message. The completion message informs the client that the stream of events has completed, and that it should not attempt to reconnect.
 (defn stream-stock-ticks [context {id :gameId :as args} source-stream]
 
+  (println "stream-stock-ticks CALLED")
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
         user-db-id                                          (ffirst
@@ -277,7 +278,10 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :stock-tick-stream)
-        cleanup-fn                                          (constantly :noop #_(core.async/close! stock-tick-stream))]
+        cleanup-fn                                          (constantly
+                                                              (do
+                                                                (println "stream-stock-ticks CLEANUP")
+                                                                :noop #_(core.async/close! stock-tick-stream)))]
 
     (core.async/go-loop []
       (when-let [stock-ticks (core.async/<! stock-tick-stream)]
@@ -288,6 +292,8 @@
     cleanup-fn))
 
 (defn stream-portfolio-updates [context {id :gameId :as args} source-stream]
+
+  (println "stream-portfolio-updates CALLED")
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
         user-db-id                                          (ffirst
@@ -302,7 +308,11 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :portfolio-update-stream)
-        cleanup-fn                                          (constantly :noop #_(core.async/close! portfolio-update-stream))]
+        cleanup-fn                                          (constantly
+
+                                                              (do
+                                                                (println "stream-portfolio-updates CLEANUP")
+                                                                :noop #_(core.async/close! portfolio-update-stream)))]
 
     (core.async/go-loop []
 
@@ -318,6 +328,8 @@
     cleanup-fn))
 
 (defn stream-game-events [context {id :gameId :as args} source-stream]
+
+  (println "stream-game-events CALLED")
   (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
         user-db-id                                          (ffirst
@@ -332,7 +344,10 @@
                                                                 deref
                                                                 (get (UUID/fromString id))
                                                                 :game-event-stream)
-        cleanup-fn                                          (constantly :noop #_(core.async/close! game-event-stream))]
+        cleanup-fn                                          (constantly
+                                                              (do
+                                                                (println "stream-game-events CLEANUP")
+                                                                :noop #_(core.async/close! game-event-stream)))]
 
     (core.async/go-loop []
       (when-let [game-event (core.async/<! game-event-stream)]
