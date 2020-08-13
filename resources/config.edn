@@ -73,12 +73,13 @@
 
  ;; MAIN
  :integrant #profile
- {:production {:service/service               {:join?    false
-                                               :hostname "0.0.0.0"
-                                               :port     5000}
+ {:production {:service/service               {:join?         false
+                                               :hostname      "0.0.0.0"
+                                               :port          5000
+                                               :keep-alive-ms 20000}
                :server/server                 {:service #ig/ref :service/service}
                :firebase/firebase             #ref [:secrets :firebase]
-               :persistence/datomic           {:datomic #ref [:secrets :production :persistence/datomic]
+               :persistence/datomic           {:datomic         #ref [:secrets :production :persistence/datomic]
                                                :data-proccesors [beatthemarket.game.persistence/track-profit-loss!]}
                :game/games                    {:datomic #ig/ref :persistence/datomic }
                :game/game                     #ref[:game]
@@ -86,13 +87,14 @@
                :logging/logging               #ref [:logging]
                :name-generator/name-generator {}}
 
-  :development {:service/service               {:join?    false
-                                                :hostname "0.0.0.0"
-                                                :port     8080}
+  :development {:service/service               {:join?         false
+                                                :hostname      "0.0.0.0"
+                                                :port          8080
+                                                :keep-alive-ms 20000}
                 :server/server                 {:service #ig/ref :service/service}
                 :firebase/firebase             #ref [:secrets :firebase]
-                :persistence/datomic           {:datomic {:db-name "beaththemarket"
-                                                          :config  {}}
+                :persistence/datomic           {:datomic         {:db-name "beaththemarket"
+                                                                  :config  {}}
                                                 :data-proccesors [beatthemarket.game.persistence/track-profit-loss!]}
                 :game/games                    {:datomic #ig/ref :persistence/datomic}
                 :game/game                     #ref[:game]
@@ -100,13 +102,14 @@
                 :logging/logging               #ref [:logging]
                 :name-generator/name-generator {}}
 
-  :test {:service/service               {:join?    false
-                                         :hostname "0.0.0.0"
-                                         :port     8081}
+  :test {:service/service               {:join?         false
+                                         :hostname      "0.0.0.0"
+                                         :port          8081
+                                         :keep-alive-ms 20000}
          :server/server                 {:service #ig/ref :service/service}
          :firebase/firebase             #ref [:secrets :firebase]
-         :persistence/datomic           {:datomic {:db-name "beaththemarket"
-                                                   :config  {}}
+         :persistence/datomic           {:datomic         {:db-name "beaththemarket"
+                                                           :config  {}}
                                          :data-proccesors [beatthemarket.game.persistence/track-profit-loss!]}
          :game/games                    {:datomic #ig/ref :persistence/datomic}
          :game/game                     #ref[:game]

@@ -38,6 +38,7 @@
             [rop.core :as rop])
 
   (:import [org.eclipse.jetty.websocket.api Session]
+           [org.eclipse.jetty.websocket.common WebSocketSession]
            [org.eclipse.jetty.websocket.servlet ServletUpgradeRequest]))
 
 
@@ -47,9 +48,11 @@
 
   (core.async/put! send-ch "This will be a text message")
 
+  ;; (.setIdleTimeout ^WebSocketSession session timeout-ms)
   (log/info :ws-session ws-session)
+
   (swap! ws-clients assoc ws-session send-ch)
-  (println (format "WS Clients / %s / %s" (count @ws-clients) @ws-clients)))
+  (log/info :ws-clients (format "WS Clients / %s / %s" (count @ws-clients) @ws-clients)))
 
 ;; This is just for demo purposes
 #_(defn send-and-close! []
@@ -197,8 +200,9 @@
 
 (defmethod ig/init-key :service/service [_ {:keys [env join? hostname port]}]
 
-  (let [options {:env         env
-                 ::http/join? join?
+  (let [options {:env           env
+                 :keep-alive-ms keep-alive-ms
+                 ::http/join?   join?
 
                  ;; Uncomment next line to enable CORS support, add
                  ;; string(s) specifying scheme, host and port for
