@@ -1,5 +1,9 @@
 (ns beatthemarket.datasource.core
-  (:import [org.apache.commons.math3.distribution BetaDistribution]))
+  (:require [random-seed.core :refer :all])
+  (:refer-clojure :exclude [rand rand-int rand-nth])
+  (:import [org.apache.commons.math3.distribution BetaDistribution]
+           [org.apache.commons.math3.random RandomGeneratorFactory]
+           [java.util Random]))
 
 
 ;; >> ================================ >>
@@ -18,19 +22,43 @@
 
    :alternating-price-changes {:alpha 3.0 :beta 2.65}})
 
-(defn ->beta-distribution [alpha beta]
-  (BetaDistribution. alpha beta))
+
+(defn random-seed
+
+  ([] (random-seed 10000000))
+
+  ([upper-bound]
+   (clojure.core/rand-int upper-bound)))
+
+(defn ->beta-distribution
+
+  ([alpha beta]
+   (->beta-distribution (random-seed 10000000) alpha beta))
+
+  ([seed alpha beta]
+
+   (let [rng (RandomGeneratorFactory/createRandomGenerator (Random. seed))]
+     (BetaDistribution. rng alpha beta))))
+
 
 ;; >> ================================ >>
+
 
 (defn random-double-in-range
   "Returns a random double between min and max.
 
    stolen from lazytest - no longer under active development
    https://github.com/stuartsierra/lazytest/blob/master/modules/lazytest/src/main/clojure/lazytest/random.clj"
-  [min max]
-  {:pre [(<= min max)]}
-  (+ min (* (- max min) (Math/random))))
+
+  ([min max]
+   (random-double-in-range (random-seed) min max))
+
+  ([seed min max]
+   {:pre [(<= min max)]}
+
+   (set-random-seed! seed)
+   (+ min (* (- max min) (rand)))))
+
 
 ;; >> ================================ >>
 

@@ -9,6 +9,7 @@
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.games :as game.games]
@@ -74,10 +75,17 @@
 
         mapped-game-level (get graphql.encoder/game-level-map gameLevel)
 
+
+        data-generators (-> repl.state/config :game/game :data-generators)
+        seed (beatthemarket.datasource.core/random-seed) ;; TODO ->> pull seed from DB (if resuming game)
+        combined-data-sequence-fn (fn [] (game.games/->data-sequence data-generators seed))
+
         ;; NOTE sink-fn updates once we start to stream a game
         sink-fn                identity
         {{game-id :game/id
-          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level)]
+          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level
+                                                        combined-data-sequence-fn
+                                                        {:accounts (game.core/->game-user-accounts)})]
 
     (->> (game.games/game->new-game-message game user-db-id)
          (transform [:stocks ALL] #(dissoc % :db/id))

@@ -7,7 +7,8 @@
             [beatthemarket.util :as util]
 
             ;; TODO Make configurable, loading of :data-processor namespaces
-            [beatthemarket.game.persistence]))
+            ;; [beatthemarket.game.persistence]
+            ))
 
 
 ;; COMPONENT

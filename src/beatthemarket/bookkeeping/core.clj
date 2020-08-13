@@ -292,6 +292,11 @@
 
 (defn track-profit-loss+stream-portfolio-update! [conn gameId game-db-id user-id tentry]
 
+  ;; >> TODO
+
+  ;; ? Save P/L to DB...
+  ;; ? Maybe recalculate P/L on resume
+  ;; ! Need the ability to replay stock-ticks + buys + sells
   (game.persistence/track-profit-loss! tentry)
 
   (let [portfolio-update-stream (-> repl.state/system :game/games deref

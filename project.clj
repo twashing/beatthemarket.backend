@@ -120,14 +120,16 @@
                  [com.rpl/specter "1.1.3"]
                  [rop "0.4.1"]
                  [orchestra "2018.12.06-2"]
-                 [org.kohsuke/wordnet-random-name "1.3"]]
+                 [org.kohsuke/wordnet-random-name "1.3"]
+                 [random-seed "1.0.0"]]
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]
 
   :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
                                       "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
-                       :dependencies [[clj-http "3.10.1"]
+                       :dependencies [[org.clojure/test.check "1.1.0"]
+                                      [clj-http "3.10.1"]
                                       [datomic-client-memdb "1.1.1"
                                        :exclusions
                                        [org.slf4j/slf4j-nop

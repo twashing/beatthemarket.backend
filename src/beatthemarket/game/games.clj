@@ -177,8 +177,11 @@
        :data-generators
        ->data-sequence))
 
-  ([data-sequence]
-   (apply (partial datasource/->combined-data-sequence datasource.core/beta-configurations) data-sequence)))
+  ([data-generators]
+   (->data-sequence data-generators (datasource.core/random-seed)))
+
+  ([data-generators seed]
+   (apply (partial datasource/->combined-data-sequence seed datasource.core/beta-configurations) data-generators)))
 
 (defn- bind-data-sequence
 
@@ -438,6 +441,8 @@
                                                    stock-ticks)))
           :calculate-profit-loss-mappingfn (fn [stock-ticks]
 
+                                             ;; >> TODO
+                                             ;; Pull P/L from DB
                                              (let [updated-profit-loss-calculations
                                                    (-> repl.state/system :game/games
                                                        deref
@@ -455,6 +460,9 @@
 
                                                    (->> (game.calculation/collect-running-profit-loss game-id profit-loss)
                                                         (assoc result :profit-loss))))
+
+          ;; >> TODO
+          ;; Push P/L to DB
           :transact-profit-loss-mappingfn    identity ;; (map transact-mappingfn)
           :stream-portfolio-update-mappingfn (or stream-portfolio-update-mappingfn
                                                  (fn [{:keys [profit-loss] :as result}]

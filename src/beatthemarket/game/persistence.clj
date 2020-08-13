@@ -6,12 +6,12 @@
 
 
 (defn track-profit-loss-wholesale! [game-id updated-profit-loss-calculations]
+
   (swap! (:game/games repl.state/system)
          (fn [gs]
-           (update-in gs [game-id :profit-loss]
-                      (constantly updated-profit-loss-calculations)))))
+           (update-in gs [game-id :profit-loss] (constantly updated-profit-loss-calculations)))))
 
-(defn track-profit-loss-by-stock-id! [game-id updated-profit-loss-calculations]
+#_(defn track-profit-loss-by-stock-id! [game-id updated-profit-loss-calculations]
 
   (swap! (:game/games repl.state/system)
          (fn [gs]
@@ -138,7 +138,7 @@
                  (map #(apply hash-map %))
                  (apply merge))]
 
-        (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
+        (track-profit-loss-wholesale! game-id updated-profit-loss-calculations)))))
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
 
@@ -205,7 +205,7 @@
                  (map #(apply hash-map %))
                  (apply merge))]
 
-        (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
+        (track-profit-loss-wholesale! game-id updated-profit-loss-calculations)))))
 
 
 ;; > Profit Calculation Use Cases
