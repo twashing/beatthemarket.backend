@@ -461,7 +461,7 @@
 
                                                    (when (not (empty? profit-loss))
 
-                                                     (log/info :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
+                                                     (log/debug :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
                                                      (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
                                                    result))
 
@@ -716,10 +716,10 @@
             :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
                                                    control-channel])]
 
-      (log/info :game.games (format "game-loop %s:%s / %s"
-                                    (:remaining-in-minutes remaining)
-                                    (:remaining-in-seconds remaining)
-                                    (if controlv controlv :running)))
+      (log/debug :game.games (format "game-loop %s:%s / %s"
+                                     (:remaining-in-minutes remaining)
+                                     (:remaining-in-seconds remaining)
+                                     (if controlv controlv :running)))
 
       (let [x        (ffirst iters)
             paused?  (game-paused? game-id)
