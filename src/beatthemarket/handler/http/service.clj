@@ -198,7 +198,7 @@
       schema/compile))
 
 
-(defmethod ig/init-key :service/service [_ {:keys [env join? hostname port]}]
+(defmethod ig/init-key :service/service [_ {:keys [env join? hostname port keep-alive-ms]}]
 
   (let [options {:env           env
                  :keep-alive-ms keep-alive-ms
