@@ -451,7 +451,7 @@
                                                        ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
                                                (->> updated-profit-loss-calculations
-                                                    (game.persistence/track-profit-loss-wholesale! game-id)
+                                                    (game.persistence/update-profit-loss-state! game-id)
                                                     (#(get % game-id))
                                                     :profit-loss
                                                     (hash-map :stock-ticks stock-ticks :profit-loss))))
@@ -463,7 +463,7 @@
 
           ;; >> TODO
           ;; Push P/L to DB
-          :transact-profit-loss-mappingfn    identity ;; (map transact-mappingfn)
+          :transact-profit-loss-mappingfn    identity ;; util/pprint+identity ;; (map transact-mappingfn)
           :stream-portfolio-update-mappingfn (or stream-portfolio-update-mappingfn
                                                  (fn [{:keys [profit-loss] :as result}]
 

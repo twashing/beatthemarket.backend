@@ -5,13 +5,7 @@
   (:import [java.util UUID]))
 
 
-(defn track-profit-loss-wholesale! [game-id updated-profit-loss-calculations]
-
-  (swap! (:game/games repl.state/system)
-         (fn [gs]
-           (update-in gs [game-id :profit-loss] (constantly updated-profit-loss-calculations)))))
-
-#_(defn track-profit-loss-by-stock-id! [game-id updated-profit-loss-calculations]
+(defn update-profit-loss-state! [game-id updated-profit-loss-calculations]
 
   (swap! (:game/games repl.state/system)
          (fn [gs]
@@ -22,6 +16,7 @@
                                                stock-account-amount
                                                pershare-purchase-ratio] :as calculation}]
 
+  ;; NOTE Poor man's filter to just recalculate running P/L
   (if (and trade-price stock-account-amount pershare-purchase-ratio)
 
     (let [pershare-gain-or-loss (- latest-price trade-price)
@@ -138,7 +133,7 @@
                  (map #(apply hash-map %))
                  (apply merge))]
 
-        (track-profit-loss-wholesale! game-id updated-profit-loss-calculations)))))
+        (update-profit-loss-state! game-id updated-profit-loss-calculations)))))
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
 
@@ -205,7 +200,7 @@
                  (map #(apply hash-map %))
                  (apply merge))]
 
-        (track-profit-loss-wholesale! game-id updated-profit-loss-calculations)))))
+        (update-profit-loss-state! game-id updated-profit-loss-calculations)))))
 
 
 ;; > Profit Calculation Use Cases

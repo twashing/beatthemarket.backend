@@ -297,20 +297,40 @@
   ;; ? Save P/L to DB...
   ;; ? Maybe recalculate P/L on resume
   ;; ! Need the ability to replay stock-ticks + buys + sells
+
+  ;; NOTE
+  ;; Here P/L into local state
   (game.persistence/track-profit-loss! tentry)
 
-  (let [portfolio-update-stream (-> repl.state/system :game/games deref
+
+  (let [;; A
+        portfolio-update-stream (-> repl.state/system :game/games deref
                                     (get gameId) :portfolio-update-stream)
 
+        ;; B
         running-profit-loss (->> repl.state/system :game/games
                                  deref
                                  (#(get % gameId)) :profit-loss
                                  (game.calculation/collect-running-profit-loss gameId))
 
+        realized-profit-loss (->> repl.state/system :game/games
+                                  deref
+                                  (#(get % gameId)) :profit-loss
+                                  (game.calculation/collect-realized-profit-loss gameId))
+
         account-balances (game.calculation/collect-account-balances conn game-db-id user-id)]
 
+    ;; TODO
+    ;; ?? Push P/Ls to DB on purchases?
+    ;; ?? Push P/Ls to DB on win/lose?
+    ;; !! win/lose/pause, we have to know P/L (running + realized)
+    ;; !! save all P/Ls, on tick and transaction
+
+    ;; NOTE
+    ;; Stream P/L and Balances
     (core.async/go
       (core.async/>! portfolio-update-stream running-profit-loss)
+      (core.async/>! portfolio-update-stream realized-profit-loss)
       (core.async/>! portfolio-update-stream account-balances)))
 
   tentry)

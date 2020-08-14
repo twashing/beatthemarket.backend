@@ -226,6 +226,13 @@
 
 (defn resolve-pause-game [context {gameId :gameId} _]
 
+  ;; TODO
+  ;; [ok] save ticks
+  ;; save P/Ls
+  ;; save game-status
+  ;; ? save tick index (check if we can count the number of ticks that have been saved)
+  ;; ? Can we replay stock-ticks + buys + sells
+
   (let [game-id (UUID/fromString gameId)
         event {:type :ControlEvent
                :event :pause
@@ -235,6 +242,12 @@
         (assoc :gameId gameId))))
 
 (defn resolve-resume-game [context {gameId :gameId} _]
+
+  ;; TODO
+  ;; load ticks
+  ;; load P/Ls
+  ;; load game-status
+  ;; seek to tick index
 
   (let [game-id (UUID/fromString gameId)
         event {:type :ControlEvent
