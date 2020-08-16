@@ -67,6 +67,7 @@
 
 (defn calculate-profit-loss [game-id stock-ticks]
 
+  (println (format ">> calculate-profit-loss / %s" (count stock-ticks)))
   (let [updated-profit-loss-calculations
         (-> repl.state/system :game/games
             deref

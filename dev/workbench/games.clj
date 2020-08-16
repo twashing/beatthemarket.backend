@@ -17,6 +17,7 @@
 
 (comment
 
+  ;; 1
   (do
 
     (halt)
@@ -27,7 +28,26 @@
 
   ;; (util/pprint+identity integrant.repl.state/config)
   ;; (util/pprint+identity integrant.repl.state/system)
-  )
+
+  ;; 2
+  (do
+
+    ;; A
+    (def conn (-> repl.state/system :persistence/datomic :opts :conn))
+    (def user (test-util/generate-user! conn))
+    (def result-user-id (:db/id user))
+    (def userId         (:user/external-uid user))
+
+    ;; B
+    ;; (def data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0]))
+    (def data-sequence-fn game.games/->data-sequence)
+    (def tick-length      7)
+
+
+    ;; C create-game!
+    (def sink-fn                identity)
+    (def test-stock-ticks       (atom []))
+    (def test-portfolio-updates (atom []))))
 
 #_(comment
 
@@ -106,41 +126,17 @@
 
     ))
 
+;; LIVE
 (comment
 
   (do
 
-    ;; A
-    (def conn (-> repl.state/system :persistence/datomic :opts :conn))
-    (def user (test-util/generate-user! conn))
-    (def result-user-id (:db/id user))
-    (def userId         (:user/external-uid user))
-
-    ;; B
-    ;; (def data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0]))
-    (def data-sequence-fn game.games/->data-sequence)
-    (def tick-length      7)
-
-
-    ;; C create-game!
-    (def sink-fn                identity)
-    (def test-stock-ticks       (atom []))
-    (def test-portfolio-updates (atom []))
-
-    (def opts       {:level-timer-sec          5
-                     :accounts                 (game.core/->game-user-accounts)
-                     :stream-stock-tick        (fn [a]
-                                                 (let [stock-ticks (game.games.processing/group-stock-tick-pairs a)]
-                                                   (swap! test-stock-ticks
-                                                          (fn [b]
-                                                            (conj b stock-ticks)))
-                                                   stock-ticks))
-                     :stream-portfolio-update! (fn [a]
-                                                 (swap! test-portfolio-updates (fn [b] (conj b a)))
-                                                 a)})
+    (def opts       {:level-timer-sec 5
+                     :accounts        (game.core/->game-user-accounts)})
     (def game-level :game-level/one)
 
     (def game-control (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)))
+
 
   (do
     (def game              (:game game-control))
@@ -161,17 +157,59 @@
 
   ;; >
   (def stock-tick-pipeline (game.games/stock-tick-pipeline game-control input-sequence))
-  ;; (def stock-tick-pipeline (game.games/stock-tick-and-stream-pipeline game-control input-sequence))
 
 
-  (->> stock-tick-pipeline
-       (take 3))
+  ;; >
+  (game.games/buy-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice])
 
-  (-> repl.state/system :game/games
-      deref
-      (get gameId)
-      :profit-loss
-      util/pprint+identity
-      )
+
+  ;; >
+  (game.games/sell-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice validate?]))
+
+
+;; REPLAY
+(comment
+
+  (do
+
+    ;; :noop stream + transact
+    (def opts       {:level-timer-sec          5
+                     :accounts                 (game.core/->game-user-accounts)
+                     :process-transact!        identity
+                     :stream-stock-tick        identity
+                     :stream-portfolio-update! identity
+                     :stream-level-update!     identity})
+    (def game-level :game-level/one)
+
+    (def game-control (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)))
+
+
+  (do
+    (def game              (:game game-control))
+    (def gameId            (:game/id game))
+    (def game-db-id        (:db/id game))
+    (def stocks            (:game/stocks game))
+    (def control-channel   (:control-channel game-control))
+    (def game-event-stream (:game-event-stream game-control))
+
+
+    ;; i.
+    ;; (def start-results (game.games/start-workbench! conn result-user-id game-control))
+    ;; (def iterations (second start-results))
+
+    ;; ii.
+    (def input-sequence (:input-sequence game-control)))
+
+
+  ;; >
+  (def stock-tick-pipeline (game.games/stock-tick-pipeline game-control input-sequence))
+
+
+  ;; >
+  (game.games/buy-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice])
+
+
+  ;; >
+  (game.games/sell-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice validate?])
 
   )
