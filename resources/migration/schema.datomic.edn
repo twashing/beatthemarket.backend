@@ -33,11 +33,18 @@
 
 
  ;; GAME STATUSes
+ {:db/ident :game-status/created}
  {:db/ident :game-status/running}
  {:db/ident :game-status/paused}
  {:db/ident :game-status/won}
  {:db/ident :game-status/lost}
  {:db/ident :game-status/exited}
+
+
+ ;; PROFIT / LOSS TYPEs
+ {:db/ident :profit-loss/running}
+ {:db/ident :profit-loss/realized}
+
 
 
  ;; GAME PROPER
@@ -103,7 +110,7 @@
 
  {:db/ident       :game.user/profit-loss
   :db/valueType   :db.type/ref
-  :db/cardinality :db.cardinality/one
+  :db/cardinality :db.cardinality/many
   :db/isComponent true
   :db/doc         ""}
 
@@ -112,6 +119,39 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
+
+
+ ;; :profitLoss 0.0
+ ;; :tickId "asdf"
+ ;; :stockId "dbc0a5c1-db43-4467-a7c2-260288225d12"
+ ;; :gameId "3a6a48fe-c3a7-4172-82b8-6ad6ed6cc1a2"
+ ;; :profitLossType "running"
+
+ {:db/ident       :game.user.profit-loss/amount
+  :db/valueType   :db.type/float
+  :db/cardinality :db.cardinality/one
+  :db/isComponent false}
+
+ {:db/ident       :game.user.profit-loss/tick
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/isComponent false}
+
+ {:db/ident       :game.user.profit-loss/stock
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/isComponent false}
+
+ {:db/ident       :game.user.profit-loss/game
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/isComponent false}
+
+ {:db/ident       :game.user.profit-loss/type
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one
+  :db/isComponent false}
+
 
 
  ;; GAME STOCKS
@@ -257,6 +297,11 @@
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
+ {:db/ident       :bookkeeping.debit/tick
+  :db/valueType   :db.type/ref ;; :game.stock.tick/id
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
  {:db/ident       :bookkeeping.debit/value
   :db/valueType   :db.type/float
   :db/cardinality :db.cardinality/one
@@ -276,6 +321,11 @@
   :db/doc         ""}
  {:db/ident       :bookkeeping.credit/account
   :db/valueType   :db.type/ref ;; :bookkeeping.account
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
+ {:db/ident       :bookkeeping.credit/tick
+  :db/valueType   :db.type/ref ;; :game.stock.tick/id
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
