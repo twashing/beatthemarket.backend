@@ -138,7 +138,7 @@
                         game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
                         stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
-                    (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice))))))
+                    (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id tickId stockAmount tickPrice))))))
 
 (defn sell-stock!
 
@@ -166,7 +166,7 @@
                         game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
                         stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
-                    (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id stockAmount tickPrice))))))
+                    (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id tickId stockAmount tickPrice))))))
 
 ;; CREATE
 (defn register-game-control! [game game-control]

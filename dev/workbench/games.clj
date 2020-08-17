@@ -133,7 +133,7 @@
 
 
   ;; On BUY / SELL
-  ;; - bind tentry to the tick
+  ;; [ok] bind tentry to the tick
   ;; - track counterBalance amount; will fluctuate as long orginal purchase amount is sold off
   ;; - track if trading on margin
   ;; buying without sufficient money
