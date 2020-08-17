@@ -351,14 +351,16 @@
                                     portfolio-update-stream
                                     game-event-stream]}]
 
-  {:profit-loss              {}
-   :paused?                  false
-   :process-transact!        (partial games.processing/process-transact! conn)
-   :stream-stock-tick        (partial games.processing/stream-stock-tick game-id)
-   :calculate-profit-loss    (partial games.processing/calculate-profit-loss game-id)
-   :stream-portfolio-update! (partial games.processing/stream-portfolio-update! portfolio-update-stream)
-   :check-level-complete     (partial games.processing/check-level-complete game-id control-channel current-level)
-   :stream-level-update!     (partial games.processing/stream-level-update! game-event-stream)})
+  {:profit-loss                   {}
+   :paused?                       false
+   :process-transact!             (partial games.processing/process-transact! conn)
+   :stream-stock-tick             (partial games.processing/stream-stock-tick game-id)
+   :process-transact-profit-loss! (partial games.processing/process-transact-profit-loss! conn)
+   :stream-portfolio-update!      (partial games.processing/stream-portfolio-update! portfolio-update-stream)
+
+   :check-level-complete           (partial games.processing/check-level-complete game-id control-channel current-level)
+   :process-transact-level-update! (partial games.processing/process-transact-level-update! conn)
+   :stream-level-update!           (partial games.processing/stream-level-update! game-event-stream)})
 
 (defn initialize-game!
 
@@ -711,6 +713,65 @@
 
      historical-data)))
 
+
+(defn inputs->processing-pipeline [conn {:keys [game input-sequence
+
+                                                control-channel
+                                                stock-tick-stream
+                                                portfolio-update-stream
+                                                game-event-stream
+
+                                                process-transact!
+                                                stream-stock-tick calculate-profit-loss
+                                                collect-profit-loss stream-portfolio-update!
+                                                transact-profit-loss
+                                                check-level-complete
+                                                stream-level-update!]}]
+
+  ;; (comp (map process-transact!)) ;; input-sequence
+  ;; (comp (map (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice)))
+
+  (comp
+    (map calculate-profit-loss)
+    (map process-transact!)
+    ;; (map collect-profit-loss)
+    ;; (map transact-profit-loss)
+    (map stream-portfolio-update!)
+    (map check-level-complete)
+    (map stream-level-update!)))
+
+
+(defn- calculate-profitloss-and-checklevel-pipeline [op
+                                                     {{game-id :game/id} :game
+
+                                                      process-transact-profit-loss! :process-transact-profit-loss!
+                                                      stream-portfolio-update! :stream-portfolio-update!
+
+                                                      check-level-complete :check-level-complete
+                                                      process-transact-level-update! :process-transact-level-update!
+                                                      stream-level-update! :stream-level-update!}
+                                                     input]
+
+  (->> (map (partial games.processing/calculate-profit-loss op game-id) input)
+       (map process-transact-profit-loss!)
+       (map stream-portfolio-update!)
+
+       (map check-level-complete)
+       (map process-transact-level-update!)
+       (map stream-level-update!)))
+
+(defn- stock-tick-and-stream-pipeline [{:keys [stock-tick-stream
+                                               process-transact!
+                                               stream-stock-tick]}
+                                       input]
+
+  (->> (map process-transact! input)
+       (map stream-stock-tick)))
+
+(defn stock-tick-pipeline [{input-sequence :input-sequence :as game-control}]
+  (->> (stock-tick-and-stream-pipeline game-control input-sequence)
+       (calculate-profitloss-and-checklevel-pipeline :tick game-control)))
+
 (defn start-workbench!
 
   ([conn user-db-id game-control]
@@ -742,67 +803,10 @@
            (recur nowA endA))))
 
    ;; B
-   (let [[historical-data inputs-at-position] (->> (inputs->control-chain game-control)
+   (let [[historical-data inputs-at-position] (->> (stock-tick-pipeline game-control)
                                                    (seek-to-position start-position))]
 
      [historical-data (run-iteration inputs-at-position)])))
-
-
-(defn inputs->processing-pipeline [conn {:keys [game input-sequence
-
-                                                control-channel
-                                                stock-tick-stream
-                                                portfolio-update-stream
-                                                game-event-stream
-
-                                                process-transact!
-                                                stream-stock-tick calculate-profit-loss
-                                                collect-profit-loss stream-portfolio-update!
-                                                transact-profit-loss
-                                                check-level-complete
-                                                stream-level-update!]}]
-
-  ;; (comp (map process-transact!)) ;; input-sequence
-  ;; (comp (map (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice)))
-
-  (comp
-    (map calculate-profit-loss)
-    (map process-transact!)
-    ;; (map collect-profit-loss)
-    ;; (map transact-profit-loss)
-    (map stream-portfolio-update!)
-    (map check-level-complete)
-    (map stream-level-update!)))
-
-
-(defn- calculate-profitloss-and-checklevel-pipeline [{:keys [process-transact!
-
-                                                             calculate-profit-loss
-                                                             stream-portfolio-update!
-
-                                                             check-level-complete
-                                                             stream-level-update!]}
-                                                     input]
-
-  (->> (map calculate-profit-loss input)
-       (map process-transact!)
-       (map stream-portfolio-update!)
-
-       (map check-level-complete)
-       (map process-transact!)
-       (map stream-level-update!)))
-
-(defn- stock-tick-and-stream-pipeline [{:keys [stock-tick-stream
-                                               process-transact!
-                                               stream-stock-tick]}
-                                       input]
-
-  (->> (map process-transact! input)
-       (map stream-stock-tick)))
-
-(defn stock-tick-pipeline [game-control input]
-  (->> (stock-tick-and-stream-pipeline game-control input)
-       (calculate-profitloss-and-checklevel-pipeline game-control)))
 
 (defn buy-stock-pipeline
 
@@ -810,9 +814,12 @@
    (buy-stock-pipeline conn userId gameId stockId stockAmount tickId tickPrice true))
 
   ([game-control conn userId gameId stockId stockAmount tickId tickPrice validate?]
+
+   ;; (println [conn userId gameId stockId stockAmount tickId tickPrice validate?])
    (->> (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice validate?)
         list
-        (calculate-profitloss-and-checklevel-pipeline game-control))))
+        util/pprint+identity
+        (calculate-profitloss-and-checklevel-pipeline :buy game-control))))
 
 (defn sell-stock-pipeline
 
@@ -822,4 +829,4 @@
   ([game-control conn userId gameId stockId stockAmount tickId tickPrice validate?]
    (->> (sell-stock! conn userId gameId stockId stockAmount tickId tickPrice validate?)
         list
-        (calculate-profitloss-and-checklevel-pipeline game-control))))
+        (calculate-profitloss-and-checklevel-pipeline :sell game-control))))

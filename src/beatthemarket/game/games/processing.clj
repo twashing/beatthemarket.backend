@@ -52,34 +52,66 @@
 
 (defn process-transact! [conn data]
 
-  (println (format ">> TRANSACT / %s" (pr-str data)))
+  (println (format ">> TRANSACT / " (pr-str data)))
   (persistence.datomic/transact-entities! conn data)
   data)
+
+(defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
+
+  (println (format ">> TRANSACT :profit-loss / " (pr-str profit-loss)))
+  (when (not (empty? profit-loss))
+    (persistence.datomic/transact-entities! conn profit-loss))
+  data)
+
+(defn process-transact-level-update! [conn {level-update :level-update :as data}]
+
+  (println (format ">> TRANSACT :level-update / " (pr-str level-update)))
+  (when (not (empty? level-update))
+    (persistence.datomic/transact-entities! conn level-update))
+  data)
+
 
 (defn stream-stock-tick [stock-tick-stream stock-tick-pairs]
 
   (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
 
     ;; (log/debug :game.games (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
-    (println (format ">> STREAM stock-tick-pairs / %s" (pr-str stock-ticks)))
+    (println (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
     ;; (core.async/go (core.async/>! stock-tick-stream stock-ticks))
     stock-ticks))
 
-(defn calculate-profit-loss [game-id stock-ticks]
+#_(defn calculate-profit-loss [game-id stock-ticks]
 
-  (println (format ">> calculate-profit-loss / %s" (count stock-ticks)))
-  (let [updated-profit-loss-calculations
-        (-> repl.state/system :game/games
-            deref
-            (get game-id)
-            :profit-loss
-            ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
+    (println (format ">> calculate-profit-loss / %s" (count stock-ticks)))
+    (let [updated-profit-loss-calculations
+          (-> repl.state/system :game/games
+              deref
+              (get game-id)
+              :profit-loss
+              ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
-    (->> updated-profit-loss-calculations
-         (game.persistence/update-profit-loss-state! game-id)
-         (#(get % game-id))
-         :profit-loss
-         #_(hash-map :stock-ticks stock-ticks :profit-loss))))
+      (->> updated-profit-loss-calculations
+           (game.persistence/update-profit-loss-state! game-id)
+           (#(get % game-id))
+           :profit-loss
+           #_(hash-map :stock-ticks stock-ticks :profit-loss))))
+
+(defmulti calculate-profit-loss (fn [op _ _] op))
+
+(defmethod calculate-profit-loss :tick [_ game-id stock-ticks]
+
+  (println (format ">> calculate-profit-loss on TICK / " (count stock-ticks)))
+  {:stock-ticks stock-ticks :profit-loss {}})
+
+(defmethod calculate-profit-loss :buy [_ game-id stock-ticks]
+
+  (println (format ">> calculate-profit-loss on BUY / " (count stock-ticks)))
+  {:stock-ticks stock-ticks :profit-loss {}})
+
+(defmethod calculate-profit-loss :sell [_ game-id stock-ticks]
+
+  (println (format ">> calculate-profit-loss on SELL / " (count stock-ticks)))
+  {:stock-ticks stock-ticks :profit-loss {}})
 
 #_(defn collect-profit-loss [game-id {:keys [profit-loss] :as result}]
 
@@ -89,7 +121,7 @@
 
 (defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as result}]
 
-  (println (format ">> STREAM portfolio-update / %s" (pr-str result)))
+  (println (format ">> STREAM portfolio-update / " (pr-str result)))
 
   #_(when (not (empty? profit-loss))
 
@@ -99,7 +131,7 @@
 
 (defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as result}]
 
-  (println (format ">> CHECK level-complete / %s" (pr-str result)))
+  (println (format ">> CHECK level-complete / " (pr-str result)))
   #_(let [{profit-threshold :profit-threshold
          lose-threshold :lose-threshold
          level :level} (deref current-level)
@@ -126,10 +158,10 @@
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
-  result)
+  (assoc result :level-update {}))
 
 (defn stream-level-update! [game-event-stream data]
 
-  (println (format ">> STREAM level-update! / %s" (pr-str data)))
+  (println (format ">> STREAM level-update! / " (pr-str data)))
   ;; (log/debug :game.games (format ">> stream-level-update! /" data))
   data)

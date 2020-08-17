@@ -51,80 +51,50 @@
 
 #_(comment
 
-  (do
+    (do
+      (def game (:game game-control))
+      (def gameId     (:game/id game))
+      (def game-db-id (:db/id game))
 
-    ;; A
-    (def conn (-> repl.state/system :persistence/datomic :opts :conn))
-    (def user (test-util/generate-user! conn))
-    (def result-user-id (:db/id user))
-    (def userId         (:user/external-uid user))
-
-    ;; B
-    (def data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0]))
-    (def tick-length      (count (data-sequence-fn)))
+      (def stocks (:game/stocks game))
+      (def control-channel              (:control-channel game-control))
+      (def game-event-stream            (:game-event-stream game-control))
 
 
-    ;; C create-game!
-    (def sink-fn                identity)
-    (def test-stock-ticks       (atom []))
-    (def test-portfolio-updates (atom []))
-
-    (def opts       {:level-timer-sec          5
-                     :accounts                 (game.core/->game-user-accounts)
-                     :stream-stock-tick        (fn [a]
-                                                 (let [stock-ticks (game.games.processing/group-stock-tick-pairs a)]
-                                                   (swap! test-stock-ticks
-                                                          (fn [b]
-                                                            (conj b stock-ticks)))
-                                                   stock-ticks))
-                     :stream-portfolio-update! (fn [a]
-                                                 (swap! test-portfolio-updates (fn [b] (conj b a)))
-                                                 a)})
-    (def game-level :game-level/one)
-    (def game-control (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)))
-
-  (do
-    (def game (:game game-control))
-    (def gameId     (:game/id game))
-    (def game-db-id (:db/id game))
-
-    (def stocks (:game/stocks game))
-    (def control-channel              (:control-channel game-control))
-    (def game-event-stream            (:game-event-stream game-control))
+      ;; i.
+      (def start-results (game.games/start-workbench! conn result-user-id game-control))
+      (def iterations (second start-results))
 
 
-    ;; i.
-    (def start-results (game.games/start-workbench! conn result-user-id game-control))
-    (def iterations (second start-results))
+      ;; ii.
+      (def data-sequence-fn game.games/->data-sequence)
+      (def input-sequence
+        (-> (map #(game.games/bind-data-sequence (data-sequence-fn) %) stocks)
+            game.games/stocks->stock-sequences))
 
-    ;; ii.
-    (def data-sequence-fn game.games/->data-sequence)
-    (def input-sequence
-      (-> (map #(game.games/bind-data-sequence (data-sequence-fn) %) stocks)
-          game.games/stocks->stock-sequences))
-
-    ;; game.games/run-iteration
+      ;; game.games/run-iteration
 
 
-    ;; Replay processing to position x
-    ;; :noop stream + transact
-    ;; Just rebuild :running-profit-loss
-    #_(let [calculate-and-check-replay-xf (game.games/calculate-profitloss-and-checklevel-xf
-                                          game-control-without-transact)]
+      ;; start with history + iterations
+      ;; replay processing to position x
+      ;; :noop stream + transact
+      ;; Just rebuild :running-profit-loss
+      #_(let [calculate-and-check-replay-xf (game.games/calculate-profitloss-and-checklevel-xf
+                                              game-control-without-transact)]
 
-      (comp (map game.games/process-transact!) calculate-and-check-xf)
-      (comp (map game.games/buy-stock!) calculate-and-check-xf)
-      (comp (map game.games/sell-stock!) calculate-and-check-xf))
+          (comp (map game.games/process-transact!) calculate-and-check-xf)
+          (comp (map game.games/buy-stock!) calculate-and-check-xf)
+          (comp (map game.games/sell-stock!) calculate-and-check-xf))
 
-    ;; Process live from position x
-    (let [calculate-and-check-live-xf (game.games/calculate-profitloss-and-checklevel-xf
-                                        game-control)]
+      ;; Process live from position x
+      (let [calculate-and-check-live-xf (game.games/calculate-profitloss-and-checklevel-xf
+                                          game-control)]
 
-      (comp (map game.games/process-transact!) calculate-and-check-xf)
-      (comp (map game.games/buy-stock!) calculate-and-check-xf)
-      (comp (map game.games/sell-stock!) calculate-and-check-xf))
+        (comp (map game.games/process-transact!) calculate-and-check-xf)
+        (comp (map game.games/buy-stock!) calculate-and-check-xf)
+        (comp (map game.games/sell-stock!) calculate-and-check-xf))
 
-    ))
+      ))
 
 ;; LIVE
 (comment
@@ -150,18 +120,31 @@
     ;; i.
     ;; (def start-results (game.games/start-workbench! conn result-user-id game-control))
     ;; (def iterations (second start-results))
+    )
 
-    ;; ii.
-    (def input-sequence (:input-sequence game-control)))
+
+  ;; implement BUY
+  ;; calculator for :running-profit-loss
+
+  ;; implement SELL
+  ;; save :realized-profit-loss
+
+  ;; save :running-profit-loss on #{:win :lose :exit}
+
+
+  ;; On BUY / SELL
+  ;; - bind tentry to the tick
+  ;; - track counterBalance amount; will fluctuate as long orginal purchase amount is sold off
+  ;; - track if trading on margin
+  ;; buying without sufficient money
+  ;; selling without sufficient stock
 
 
   ;; >
-  (def stock-tick-pipeline (game.games/stock-tick-pipeline game-control input-sequence))
-
+  (def stock-tick-pipeline (game.games/stock-tick-pipeline game-control))
 
   ;; >
   (game.games/buy-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice])
-
 
   ;; >
   (game.games/sell-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice validate?]))
@@ -196,13 +179,11 @@
     ;; i.
     ;; (def start-results (game.games/start-workbench! conn result-user-id game-control))
     ;; (def iterations (second start-results))
-
-    ;; ii.
-    (def input-sequence (:input-sequence game-control)))
+    )
 
 
   ;; >
-  (def stock-tick-pipeline (game.games/stock-tick-pipeline game-control input-sequence))
+  (def stock-tick-pipeline (game.games/stock-tick-pipeline game-control))
 
 
   ;; >
