@@ -107,7 +107,7 @@
 
 
   (println (format ">> calculate-profit-loss on BUY / " (keys tentry)))
-  (game.calculation/calculate-running-profit-loss! op tentry)
+  (game.calculation/calculate-profit-loss! op tentry)
 
   {:tentry tentry :profit-loss {}})
 
@@ -115,7 +115,7 @@
 
 
   (println (format ">> calculate-profit-loss on SELL / " (keys tentry)))
-  (game.calculation/calculate-running-profit-loss! op tentry)
+  (game.calculation/calculate-profit-loss! op tentry)
 
   {:tentry tentry :profit-loss {}})
 
