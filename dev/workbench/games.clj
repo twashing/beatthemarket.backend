@@ -96,6 +96,7 @@
 
       ))
 
+
 ;; LIVE
 (comment
 
@@ -123,7 +124,7 @@
     )
 
 
-  ;; implement BUY
+  ;; [ok] implement BUY
   ;; calculator for :running-profit-loss
 
   ;; implement SELL
@@ -134,8 +135,10 @@
 
   ;; On BUY / SELL
   ;; [ok] bind tentry to the tick
+
   ;; - track counterBalance amount; will fluctuate as long orginal purchase amount is sold off
   ;; - track if trading on margin
+
   ;; buying without sufficient money
   ;; selling without sufficient stock
 

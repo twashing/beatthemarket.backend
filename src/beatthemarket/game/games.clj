@@ -818,8 +818,11 @@
    ;; (println [conn userId gameId stockId stockAmount tickId tickPrice validate?])
    (->> (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice validate?)
         list
-        util/pprint+identity
-        (calculate-profitloss-and-checklevel-pipeline :buy game-control))))
+        ;; (map #(bookkeeping/track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id %))
+        (calculate-profitloss-and-checklevel-pipeline :buy game-control)
+        doall
+        ;; util/pprint+identity
+        )))
 
 (defn sell-stock-pipeline
 

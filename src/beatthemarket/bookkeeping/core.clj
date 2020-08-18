@@ -391,8 +391,7 @@
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                v
                (-> tentry :bookkeeping.tentry/id))
-          (ffirst v)
-          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id v))))))
+          (ffirst v))))))
 
 (defn sell-stock! [conn game-db-id user-db-id stock-db-id tick-id stock-amount stock-price]
 

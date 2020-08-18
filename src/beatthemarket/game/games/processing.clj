@@ -103,15 +103,20 @@
   (println (format ">> calculate-profit-loss on TICK / " (count stock-ticks)))
   {:stock-ticks stock-ticks :profit-loss {}})
 
-(defmethod calculate-profit-loss :buy [_ game-id stock-ticks]
+(defmethod calculate-profit-loss :buy [op game-id tentry]
 
-  (println (format ">> calculate-profit-loss on BUY / " (count stock-ticks)))
-  {:stock-ticks stock-ticks :profit-loss {}})
 
-(defmethod calculate-profit-loss :sell [_ game-id stock-ticks]
+  (println (format ">> calculate-profit-loss on BUY / " (keys tentry)))
 
-  (println (format ">> calculate-profit-loss on SELL / " (count stock-ticks)))
-  {:stock-ticks stock-ticks :profit-loss {}})
+  (game.calculation/calculate-running-profit-loss! op tentry)
+
+  {:tentry tentry :profit-loss {}})
+
+(defmethod calculate-profit-loss :sell [_ game-id tentry]
+
+
+  (println (format ">> calculate-profit-loss on SELL / " (keys tentry)))
+  {:tentry tentry :profit-loss {}})
 
 #_(defn collect-profit-loss [game-id {:keys [profit-loss] :as result}]
 
