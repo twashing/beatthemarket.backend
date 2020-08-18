@@ -284,8 +284,7 @@
         ops  [{:op :buy :stockAmount 100}
               ;; {:op :sell :stockAmount 100}
               {:op :buy :stockAmount 200}
-              ;; {:op :sell :stockAmount 200}
-              ]
+              {:op :sell :stockAmount 200}]
         ops-count (count ops)]
 
     (is true)

@@ -107,15 +107,16 @@
 
 
   (println (format ">> calculate-profit-loss on BUY / " (keys tentry)))
-
   (game.calculation/calculate-running-profit-loss! op tentry)
 
   {:tentry tentry :profit-loss {}})
 
-(defmethod calculate-profit-loss :sell [_ game-id tentry]
+(defmethod calculate-profit-loss :sell [op game-id tentry]
 
 
   (println (format ">> calculate-profit-loss on SELL / " (keys tentry)))
+  (game.calculation/calculate-running-profit-loss! op tentry)
+
   {:tentry tentry :profit-loss {}})
 
 #_(defn collect-profit-loss [game-id {:keys [profit-loss] :as result}]

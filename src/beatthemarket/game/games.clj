@@ -832,4 +832,5 @@
   ([game-control conn userId gameId stockId stockAmount tickId tickPrice validate?]
    (->> (sell-stock! conn userId gameId stockId stockAmount tickId tickPrice validate?)
         list
-        (calculate-profitloss-and-checklevel-pipeline :sell game-control))))
+        (calculate-profitloss-and-checklevel-pipeline :sell game-control)
+        doall)))

@@ -452,9 +452,7 @@
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                ent
                (-> tentry :bookkeeping.tentry/id))
-          (ffirst ent)
-          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent)
-          (identity ent))))))
+          (ffirst ent))))))
 
 (comment
 
