@@ -108,6 +108,7 @@
                               {{tickId      :game.stock.tick/id
                                 tickPrice   :game.stock.tick/close
                                 op          :op
+
                                 stockAmount :stockAmount} :local-transact-input :as v}]
 
   (case op
@@ -341,10 +342,16 @@
               :stockId stockId
               :game-control game-control}
 
+        ;; ops  [{:op :buy :stockAmount 100}
+        ;;       ;; {:op :sell :stockAmount 100}
+        ;;       {:op :buy :stockAmount 200}
+        ;;       {:op :sell :stockAmount 200}]
+
         ops  [{:op :buy :stockAmount 100}
-              ;; {:op :sell :stockAmount 100}
               {:op :buy :stockAmount 200}
-              {:op :sell :stockAmount 200}]
+              {:op :sell :stockAmount 200}
+              {:op :sell :stockAmount 100}
+              ]
         ops-count (count ops)]
 
     (is true)

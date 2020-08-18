@@ -113,8 +113,6 @@
         (rop/fail (ex-info message {:tick-history-sorted
                                     (take 5 tick-history-sorted)}))))))
 
-(def extract-id (comp :db/id ffirst))
-
 (defn buy-stock!
 
   ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice]
@@ -135,8 +133,8 @@
                                 latest-tick?)]
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
-            [_ _] (let [game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-                        stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
+            [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+                        stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
                     (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id tickId stockAmount tickPrice))))))
 
@@ -161,9 +159,10 @@
                                 latest-tick?)]
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
-            [_ _] (let [game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-                        stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
+            [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+                        stock-db-id (util/extract-id (util/pprint+identity (persistence.core/entity-by-domain-id conn :game.stock/id stockId)))]
 
+                    (println [game-db-id user-db-id :?stockId stock-db-id tickId stockAmount tickPrice])
                     (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id tickId stockAmount tickPrice))))))
 
 ;; CREATE
@@ -815,7 +814,7 @@
   ([game-control conn userId gameId stockId stockAmount tickId tickPrice validate?]
 
    ;; (println [conn userId gameId stockId stockAmount tickId tickPrice validate?])
-   (let [user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))]
+   (let [user-db-id  (util/extract-id (iam.persistence/user-by-external-uid conn userId))]
 
      (->> (buy-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?)
           list
@@ -832,7 +831,7 @@
 
   ([game-control conn userId gameId stockId stockAmount tickId tickPrice validate?]
 
-   (let [user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))]
+   (let [user-db-id  (util/extract-id (iam.persistence/user-by-external-uid conn userId))]
 
      (->> (sell-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?)
           list
