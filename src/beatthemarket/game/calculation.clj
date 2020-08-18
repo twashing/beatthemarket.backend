@@ -91,7 +91,7 @@
               :counter-balance-direction op)
        (update-trade-state-for-stock! game-id stock-id profit-loss))
 
-  profit-loss-calculation)
+  [profit-loss-calculation])
 
 
 ;; increase
@@ -167,16 +167,19 @@
          (map (partial recalculate-PL-on-increase-mappingfn updated-stock-account-amount latest-price))
          (replace-trade-state-for-stock! game-id stock-id))
 
-    profit-loss-calculation))
+    [profit-loss-calculation]))
 
-(defn ->proft-loss-event [game-id stock-id profit-loss-type profit-loss]
+(defn ->proft-loss-event [user-id tick-id game-id stock-id profit-loss-type profit-loss]
 
-  {:game-id          game-id
+  {:user-id user-id
+   :tick-id tick-id
+
+   :game-id          game-id
    :stock-id         stock-id
    :profit-loss-type profit-loss-type
    :profit-loss      profit-loss})
 
-(defn update-trade-history-on-realized-pl! [op game-id game-stock-id profit-loss profit-loss-calculation]
+(defn update-trade-history-on-realized-pl! [op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation]
 
   (let [{updated-stock-account-amount :stock-account-amount
          latest-price                 :price} profit-loss-calculation
@@ -187,7 +190,7 @@
                                   (reduce (fn [ac {a :realized-profit-loss}]
                                             (+ ac a))
                                           0.0)
-                                  (->proft-loss-event game-id game-stock-id :realized-profit-loss)
+                                  (->proft-loss-event user-id tick-id game-id game-stock-id :realized-profit-loss)
                                   util/pprint+identity)]
 
     (->> trade-history
@@ -204,15 +207,15 @@
       (not (= op direction))
       false)))
 
-(defn- counter-balance-amount-crossover? [profit-loss-calculation profit-loss]
+(defn- counter-balance-amount-match-or-crossover? [profit-loss-calculation profit-loss]
 
   (let [counter-balance-amount (-> profit-loss last (get :counter-balance-amount 0))
         at-beginning?          (= 0 counter-balance-amount)]
 
     (if at-beginning?
       false
-      (> (:amount profit-loss-calculation)
-         counter-balance-amount))))
+      (>= (:amount profit-loss-calculation)
+          counter-balance-amount))))
 
 (defn realizing-profit-loss?-fn [op profit-loss profit-loss-calculation]
 
@@ -224,71 +227,74 @@
     (and some-profit-loss?
          trading-in-opposite-direction-of-counter-balance-direction?)))
 
-(defn crossing-counter-balance-threshold?-fn [profit-loss profit-loss-calculation]
+(defn match-or-crossing-counter-balance-threshold?-fn [profit-loss profit-loss-calculation]
 
   (let [trading-in-opposite-direction-of-counter-balance-direction?
         (trade-opposite-of-counter-balance-direction? (:op profit-loss-calculation) profit-loss)
 
         trade-amount-crosses-over-counter-balance-amount?
-        (counter-balance-amount-crossover? profit-loss-calculation profit-loss)]
+        (counter-balance-amount-match-or-crossover? profit-loss-calculation profit-loss)]
 
     (and trading-in-opposite-direction-of-counter-balance-direction?
          trade-amount-crosses-over-counter-balance-amount?)))
 
-(defn calculate-profit-loss-common! [op game-id stock-id profit-loss-calculation]
+(defn calculate-profit-loss-common! [op user-id tick-id game-id stock-id profit-loss-calculation]
 
   (let [profit-loss (stock->profit-loss game-id stock-id)
 
         profit-loss-empty? (empty? profit-loss)
         realizing-profit-loss? (realizing-profit-loss?-fn op profit-loss profit-loss-calculation)
-        crossing-counter-balance-threshold? (crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
+        match-or-crossing-counter-balance-threshold?
+        (match-or-crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
 
 
     ;; (util/pprint+identity [profit-loss profit-loss-calculation])
-    (util/pprint+identity [profit-loss-empty? realizing-profit-loss? crossing-counter-balance-threshold?])
+    (util/pprint+identity [profit-loss-empty? realizing-profit-loss? match-or-crossing-counter-balance-threshold?])
 
 
-    (match [profit-loss-empty? realizing-profit-loss? crossing-counter-balance-threshold?]
+    (let [result (match [profit-loss-empty? realizing-profit-loss? match-or-crossing-counter-balance-threshold?]
 
-           ;; SET :counter-balance-amount :counter-balance-direction
-           ;; ADD TO in-memory trades
-           ;; RETURN :running-profit-loss
-           [true _ _] (create-trade-history! op game-id stock-id profit-loss profit-loss-calculation)
+                        ;; SET :counter-balance-amount :counter-balance-direction
+                        ;; ADD TO in-memory trades
+                        ;; RETURN :running-profit-loss
+                        [true _ _] (create-trade-history! op game-id stock-id profit-loss profit-loss-calculation)
 
-           ;; > should only happen on opposite :counter-balance-direction direction
-           ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
-           ;; RESET in-memory trades
-           ;; RETURN :realized-profit-loss
-           [_ true false] (update-trade-history-on-realized-pl! op game-id stock-id profit-loss profit-loss-calculation)
+                        ;; > should only happen on opposite :counter-balance-direction direction
+                        ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
+                        ;; RESET in-memory trades
+                        ;; RETURN :realized-profit-loss
+                        [_ true false] (update-trade-history-on-realized-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation)
 
-           [_ true true] (do
-                           ;; > can only happen on MARGIN
-                           ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
-                           ;; RESET in-memory trades
-                           ;; GOTO profit-loss-empty?=true
-                           ;; RETURN :running-profit-loss :realized-profit-loss
-                           )
+                        [_ true true] (do
+                                        ;; RESET in-memory trades
 
-           ;; > continuing to trade in :counter-balance-direction
-           ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
-           ;; ADD TO in-memory trades
-           ;; RETURN :running-profit-loss
-           [false false _] (update-trade-history-on-running-pl! op game-id stock-id profit-loss profit-loss-calculation))
+                                        ;; > if crossing over (can only happen on MARGIN)
+                                        ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
+                                        ;; GOTO profit-loss-empty?=true
+                                        ;; RETURN :running-profit-loss :realized-profit-loss
+                                        )
 
-    (util/pprint+identity (game->profit-losses game-id))
+                        ;; > continuing to trade in :counter-balance-direction
+                        ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
+                        ;; ADD TO in-memory trades
+                        ;; RETURN :running-profit-loss
+                        [false false _] (update-trade-history-on-running-pl! op game-id stock-id profit-loss profit-loss-calculation))]
 
-    ))
+      (util/pprint+identity (game->profit-losses game-id))
 
-(defmulti calculate-profit-loss! (fn [op _] op))
+      result)))
 
-(defmethod calculate-profit-loss! :buy [op data]
+(defmulti calculate-profit-loss! (fn [op _ _] op))
+
+(defmethod calculate-profit-loss! :buy [op user-id data]
 
   (let [{[{{{game-stock-id :game.stock/id} :bookkeeping.account/counter-party
             stock-account-id               :bookkeeping.account/id
             stock-account-amount           :bookkeeping.account/amount
             stock-account-name             :bookkeeping.account/name} :bookkeeping.credit/account
-           price                                                     :bookkeeping.credit/price
-           amount                                                    :bookkeeping.credit/amount}] :bookkeeping.tentry/credits} data
+           {tick-id :game.stock.tick/id}                              :bookkeeping.credit/tick
+           price                                                      :bookkeeping.credit/price
+           amount                                                     :bookkeeping.credit/amount}] :bookkeeping.tentry/credits} data
 
         conn                    (-> repl.state/system :persistence/datomic :opts :conn)
         game-id                 (game.persistence/game-id-by-account-id conn stock-account-id)
@@ -310,16 +316,17 @@
          :stock-account-amount stock-account-amount
          :stock-account-name   stock-account-name}]
 
-    (calculate-profit-loss-common! op game-id game-stock-id profit-loss-calculation)))
+    (calculate-profit-loss-common! op user-id tick-id game-id game-stock-id profit-loss-calculation)))
 
-(defmethod calculate-profit-loss! :sell [op data]
+(defmethod calculate-profit-loss! :sell [op user-id data]
 
   (let [{[{{{game-stock-id :game.stock/id} :bookkeeping.account/counter-party
             stock-account-id               :bookkeeping.account/id
             stock-account-amount           :bookkeeping.account/amount
             stock-account-name             :bookkeeping.account/name} :bookkeeping.debit/account
-           price                                                     :bookkeeping.debit/price
-           amount                                                    :bookkeeping.debit/amount}] :bookkeeping.tentry/debits} data
+           {tick-id :game.stock.tick/id}                              :bookkeeping.debit/tick
+           price                                                      :bookkeeping.debit/price
+           amount                                                     :bookkeeping.debit/amount}] :bookkeeping.tentry/debits} data
 
         conn                    (-> repl.state/system :persistence/datomic :opts :conn)
         game-id                 (game.persistence/game-id-by-account-id conn stock-account-id)
@@ -341,4 +348,4 @@
          :stock-account-amount stock-account-amount
          :stock-account-name   stock-account-name}]
 
-    (calculate-profit-loss-common! op game-id game-stock-id profit-loss-calculation)))
+    (calculate-profit-loss-common! op user-id tick-id game-id game-stock-id profit-loss-calculation)))

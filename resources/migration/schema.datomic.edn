@@ -135,17 +135,17 @@
  {:db/ident       :game.user.profit-loss/tick
   :db/valueType   :db.type/ref
   :db/cardinality :db.cardinality/one
-  :db/isComponent false}
+  :db/isComponent true}
 
  {:db/ident       :game.user.profit-loss/stock
   :db/valueType   :db.type/ref
   :db/cardinality :db.cardinality/one
-  :db/isComponent false}
+  :db/isComponent true}
 
  {:db/ident       :game.user.profit-loss/game
   :db/valueType   :db.type/ref
   :db/cardinality :db.cardinality/one
-  :db/isComponent false}
+  :db/isComponent true}
 
  {:db/ident       :game.user.profit-loss/type
   :db/valueType   :db.type/ref

@@ -125,20 +125,18 @@
 
 
   ;; [ok] implement BUY
-  ;; calculator for :running-profit-loss
+  ;; [ok] calculator for :running-profit-loss
 
-  ;; implement SELL
-  ;; save :realized-profit-loss
+  ;; [ok] implement SELL
+  ;; [ok] save :realized-profit-loss
 
-  ;; save :running-profit-loss on #{:win :lose :exit}
-
-
-  ;; On BUY / SELL
+  ;; [ok] On BUY / SELL
   ;; [ok] bind tentry to the tick
 
   ;; - track counterBalance amount; will fluctuate as long orginal purchase amount is sold off
   ;; - track if trading on margin
 
+  ;; save :running-profit-loss on #{:win :lose :exit}
   ;; buying without sufficient money
   ;; selling without sufficient stock
 

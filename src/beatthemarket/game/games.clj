@@ -113,12 +113,14 @@
         (rop/fail (ex-info message {:tick-history-sorted
                                     (take 5 tick-history-sorted)}))))))
 
+(def extract-id (comp :db/id ffirst))
+
 (defn buy-stock!
 
-  ([conn userId gameId stockId stockAmount tickId tickPrice]
+  ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice]
    (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice true))
 
-  ([conn userId gameId stockId stockAmount tickId tickPrice validate?]
+  ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?]
    (let [validation-inputs {:conn        conn
                             :userId      userId
                             :gameId      gameId
@@ -133,19 +135,17 @@
                                 latest-tick?)]
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
-            [_ _] (let [extract-id  (comp :db/id ffirst)
-                        user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))
-                        game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+            [_ _] (let [game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
                         stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
                     (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id tickId stockAmount tickPrice))))))
 
 (defn sell-stock!
 
-  ([conn userId gameId stockId stockAmount tickId tickPrice]
+  ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice]
    (sell-stock! conn userId gameId stockId stockAmount tickId tickPrice true))
 
-  ([conn userId gameId stockId stockAmount tickId tickPrice validate?]
+  ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?]
 
    (let [validation-inputs {:conn conn
                             :userId userId
@@ -161,9 +161,7 @@
                                 latest-tick?)]
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
-            [_ _] (let [extract-id  (comp :db/id ffirst)
-                        user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))
-                        game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
+            [_ _] (let [game-db-id  (extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
                         stock-db-id (extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))]
 
                     (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id tickId stockAmount tickPrice))))))
@@ -344,8 +342,7 @@
   (->> (stocks->partitioned-entities stocks-with-tick-data)
        (map partitioned-entities->transaction-entities)))
 
-(defn default-game-control [conn
-                            game-id
+(defn default-game-control [conn user-id game-id
                             {:keys [control-channel current-level
                                     stock-tick-stream
                                     portfolio-update-stream
@@ -400,10 +397,11 @@
                               :lose-threshold lose-threshold})
 
          game-control (merge-with #(if %2 %2 %1)
-                                  (default-game-control conn game-id {:control-channel control-channel
-                                                                      :current-level current-level
-                                                                      :stock-tick-stream stock-tick-stream
-                                                                      :portfolio-update-stream portfolio-update-stream})
+                                  (default-game-control conn (:db/id user-entity) game-id
+                                                        {:control-channel control-channel
+                                                         :current-level current-level
+                                                         :stock-tick-stream stock-tick-stream
+                                                         :portfolio-update-stream portfolio-update-stream})
                                   {:game                  game                  ;; TODO load
                                    :profit-loss           (or profit-loss {})   ;; TODO replay
                                    :stocks-with-tick-data stocks-with-tick-data ;; TODO load + seek to index
@@ -742,6 +740,7 @@
 
 
 (defn- calculate-profitloss-and-checklevel-pipeline [op
+                                                     user-db-id
                                                      {{game-id :game/id} :game
 
                                                       process-transact-profit-loss! :process-transact-profit-loss!
@@ -752,7 +751,7 @@
                                                       stream-level-update! :stream-level-update!}
                                                      input]
 
-  (->> (map (partial games.processing/calculate-profit-loss op game-id) input)
+  (->> (map (partial games.processing/calculate-profit-loss op user-db-id game-id) input)
        (map process-transact-profit-loss!)
        (map stream-portfolio-update!)
 
@@ -768,9 +767,9 @@
   (->> (map process-transact! input)
        (map stream-stock-tick)))
 
-(defn stock-tick-pipeline [{input-sequence :input-sequence :as game-control}]
+(defn stock-tick-pipeline [user-db-id {input-sequence :input-sequence :as game-control}]
   (->> (stock-tick-and-stream-pipeline game-control input-sequence)
-       (calculate-profitloss-and-checklevel-pipeline :tick game-control)))
+       (calculate-profitloss-and-checklevel-pipeline :tick user-db-id game-control)))
 
 (defn start-workbench!
 
@@ -803,7 +802,7 @@
            (recur nowA endA))))
 
    ;; B
-   (let [[historical-data inputs-at-position] (->> (stock-tick-pipeline game-control)
+   (let [[historical-data inputs-at-position] (->> (stock-tick-pipeline user-db-id game-control)
                                                    (seek-to-position start-position))]
 
      [historical-data (run-iteration inputs-at-position)])))
@@ -816,13 +815,15 @@
   ([game-control conn userId gameId stockId stockAmount tickId tickPrice validate?]
 
    ;; (println [conn userId gameId stockId stockAmount tickId tickPrice validate?])
-   (->> (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice validate?)
-        list
-        ;; (map #(bookkeeping/track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id %))
-        (calculate-profitloss-and-checklevel-pipeline :buy game-control)
-        doall
-        ;; util/pprint+identity
-        )))
+   (let [user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))]
+
+     (->> (buy-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?)
+          list
+          ;; (map #(bookkeeping/track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id %))
+          (calculate-profitloss-and-checklevel-pipeline :buy user-db-id game-control)
+          doall
+          ;; util/pprint+identity
+          ))))
 
 (defn sell-stock-pipeline
 
@@ -830,7 +831,10 @@
    (sell-stock-pipeline conn userId gameId stockId stockAmount tickId tickPrice true))
 
   ([game-control conn userId gameId stockId stockAmount tickId tickPrice validate?]
-   (->> (sell-stock! conn userId gameId stockId stockAmount tickId tickPrice validate?)
-        list
-        (calculate-profitloss-and-checklevel-pipeline :sell game-control)
-        doall)))
+
+   (let [user-db-id  (extract-id (iam.persistence/user-by-external-uid conn userId))]
+
+     (->> (sell-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?)
+          list
+          (calculate-profitloss-and-checklevel-pipeline :sell user-db-id game-control)
+          doall))))
