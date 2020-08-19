@@ -467,21 +467,79 @@
        (#(core.async/go (core.async/>!! % event))))
   event)
 
+
+(defn game-status [game-id]
+  (ffirst
+    (d/q '[:find ?game-status
+           :in $ ?game-id
+           :where
+           [?e :game/id ?game-id]
+           [?e :game/status ?game-status]]
+         (d/db conn)
+         game-id)))
+
 (defn game-paused? [game-id]
-  (->> repl.state/system :game/games deref (#(get % game-id)) :paused?))
+  (= (game-status game-id)
+     :game-status/paused))
+
+(defn update-inmemory-game-level! [game-id level]
+
+  (let [[[source-level-name _ :as source]
+         [dest-level-name dest-level-config :as dest]]
+
+        (->> repl.state/config :game/game :levels seq
+             (sort-by (comp :order second))
+             (partition 2 1)
+             (filter (fn [[[level-name _] r]] (= level level-name)))
+             first)]
+
+    (swap! (:game/games repl.state/system)
+           (fn [gs]
+             (update-in gs [game-id :current-level] (-> dest-level-config
+                                                        (assoc :level dest-level-name)
+                                                        (dissoc :order)
+                                                        constantly))))))
 
 (defn pause-game! [game-id]
-  (swap! (:game/games repl.state/system)
-         #(update-in % [game-id :paused?] (constantly true))))
 
-(defn resume-game! [game-id]
-  (swap! (:game/games repl.state/system)
-         #(update-in % [game-id :paused?] (constantly false))))
+  ;; TODO
+  ;; save level-timer
+  ;; :game/timer :db.type/tuple
+  (let [{game-db-id :db/id
+         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+        data [[:db/retract  game-db-id :game/status game-status]
+              [:db/add      game-db-id :game/status :game-status/paused]]]
 
-(defn conditionally-level-up! [conn game-id [[source-level-name _
-                                              :as source]
-                                             [dest-level-name dest-level-config
-                                              :as dest]]]
+    (persistence.datomic/transact-entities! conn data)))
+
+(defn exit-game! [game-id]
+
+  (let [{game-db-id :db/id
+         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+        data [[:db/retract  game-db-id :game/status game-status]
+              [:db/add      game-db-id :game/status :game-status/exited]]]
+
+    (persistence.datomic/transact-entities! conn data)))
+
+(defn win-game! [game-id]
+
+  (let [{game-db-id :db/id
+         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+        data [[:db/retract  game-db-id :game/status game-status]
+              [:db/add      game-db-id :game/status :game-status/won]]]
+
+    (persistence.datomic/transact-entities! conn data)))
+
+(defn lose-game! [game-id]
+
+  (let [{game-db-id :db/id
+         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+        data [[:db/retract  game-db-id :game/status game-status]
+              [:db/add      game-db-id :game/status :game-status/lost]]]
+
+    (persistence.datomic/transact-entities! conn data)))
+
+(defn conditionally-level-up! [conn game-id level]
 
   (when dest
 
@@ -492,12 +550,7 @@
           {db-after :db-after} (persistence.datomic/transact-entities! conn data)]
 
       (if db-after
-        (swap! (:game/games repl.state/system)
-               (fn [gs]
-                 (update-in gs [game-id :current-level] (-> dest-level-config
-                                                            (assoc :level dest-level-name)
-                                                            (dissoc :order)
-                                                            constantly))))
+        (update-inmemory-game-level! game-id level)
         (throw (Exception. (format "Couldn't level up from to [%s %s]" source dest)))))))
 
 (defn conditionally-reset-level-time! [conn game-id [[source-level-name _
@@ -515,14 +568,8 @@
 
 (defn transition-level! [conn game-id level]
 
-  (let [a (->> repl.state/config :game/game :levels seq
-               (sort-by (comp :order second))
-               (partition 2 1)
-               (filter (fn [[[level-name _] r]] (= level level-name)))
-               first)]
-
-    (conditionally-level-up! conn game-id a)
-    (conditionally-reset-level-time! conn game-id a)))
+  (conditionally-level-up! conn game-id level)
+  (conditionally-reset-level-time! conn game-id a))
 
 
 (defmulti handle-control-event (fn [_ _ {m :event} _ _] m))
@@ -531,15 +578,15 @@
                                         {game-id :game-id :as control}
                                         now end]
 
-  (pause-game! game-id)
+  ;; (pause-game! game-id)
 
   (let [remaining (calculate-remaining-time now end)]
     (log/info :game.games (format "< Paused > %s" (format-remaining-time remaining)))
     (core.async/>!! game-event-stream control))
 
-  [now end])
+  [])
 
-(defmethod handle-control-event :paused [_ game-event-stream
+#_(defmethod handle-control-event :paused [_ game-event-stream
                                          {game-id :game-id :as control}
                                          now end]
 
@@ -548,7 +595,7 @@
 
   [now end])
 
-(defmethod handle-control-event :resume [_ game-event-stream
+#_(defmethod handle-control-event :resume [_ game-event-stream
                                          {game-id :game-id :as control}
                                          now end]
   (resume-game! game-id)
@@ -631,6 +678,15 @@
                   game-event-stream :game-event-stream}
                  tick-sleep-atom level-timer-atom]
 
+  ;; A
+  (let [{game-db-id :db/id
+         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+        data [[:db/retract  game-db-id :game/status game-status]
+              [:db/add      game-db-id :game/status :game-status/running]]]
+
+    (persistence.datomic/transact-entities! conn data))
+
+  ;; B
   (core.async/go-loop [now (t/now)
                        end (t/plus now (t/seconds @level-timer-atom))
                        iters iterations]
@@ -646,41 +702,27 @@
                                      (if controlv controlv :running)))
 
       (let [x        (ffirst iters)
-            paused?  (game-paused? game-id)
             expired? (time-expired? remaining)
 
-            [nowA endA] (match [paused? event expired?]
+            [nowA endA] (match [event expired?]
 
-                               [true (_ :guard #{:resume :exit}) _] (handle-control-event conn game-event-stream controlv now end)
-
-                               [true _ _] (let [new-end   (t/plus end (t/seconds 1))
-                                                remaining (calculate-remaining-time now new-end)
-                                                controlv  {:event   :paused
-                                                           :game-id game-id
-                                                           :level   (:level @current-level)
-                                                           :type :ControlEvent}]
+                               [:pause _] (let [new-end   (t/plus end (t/seconds 1))
+                                                remaining (calculate-remaining-time now new-end)]
 
                                             (handle-control-event conn game-event-stream
                                                                   (assoc controlv :message "< Paused >")
                                                                   (t/now) new-end))
 
-                               [_ :pause _] (let [new-end   (t/plus end (t/seconds 1))
-                                                  remaining (calculate-remaining-time now new-end)]
+                               [(_ :guard #{:exit :win :lose}) _] (handle-control-event conn game-event-stream controlv now end)
 
-                                              (handle-control-event conn game-event-stream
-                                                                    (assoc controlv :message "< Paused >")
-                                                                    (t/now) new-end))
+                               [_ false] (let [controlv {:event   :continue
+                                                         :game-id game-id
+                                                         :level   (:level @current-level)
+                                                         :type :LevelTimer}]
 
-                               [_ (_ :guard #{:resume :exit :win :lose}) _] (handle-control-event conn game-event-stream controlv now end)
+                                           (handle-control-event conn game-event-stream controlv now end))
 
-                               [_ _ false] (let [controlv {:event   :continue
-                                                           :game-id game-id
-                                                           :level   (:level @current-level)
-                                                           :type :LevelTimer}]
-
-                                             (handle-control-event conn game-event-stream controlv now end))
-
-                               [_ _ true] (handle-control-event conn game-event-stream {:event :timeout} now end))]
+                               [_ true] (handle-control-event conn game-event-stream {:event :timeout} now end))]
 
         (when (and nowA endA)
           (recur nowA endA (next iters)))))))
@@ -710,6 +752,31 @@
 
      historical-data)))
 
+(defn resume-game! [game-id]
+
+  (let [{game-db-id :db/id
+         game-status :game/status
+         game-level :game/level
+         game-timer :game/timer} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+        data [[:db/retract  game-db-id :game/status game-status]
+              [:db/add      game-db-id :game/status :game-status/running]]]
+
+    ;; Update :game/status
+    (persistence.datomic/transact-entities! conn data)
+
+    ;; Update :game/level
+    (update-inmemory-game-level! game-id game-level)
+
+    ;; TODO
+    ;; Restore level-timer
+    ;; :game/timer
+
+    ;; TODO
+    ;; Replay to current position >> check :running-profit-loss restored <<
+
+    ;; TODO
+    ;; run-game!
+    ))
 
 (defn inputs->processing-pipeline [conn {:keys [game input-sequence
 

@@ -300,7 +300,7 @@
          (map #(local-transact-stock! opts %))
          doall)))
 
-(deftest A-test
+(deftest multiple-buy-sell-track-realized-closeout-running-test
 
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
@@ -365,6 +365,70 @@
          (map #(local-transact-stock! opts %))
          doall)))
 
+(deftest A-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; ops  [{:op :buy :stockAmount 100}
+        ;;       ;; {:op :sell :stockAmount 100}
+        ;;       {:op :buy :stockAmount 200}
+        ;;       {:op :sell :stockAmount 200}]
+
+        ops  [{:op :buy :stockAmount 100}
+              {:op :buy :stockAmount 200}
+              {:op :sell :stockAmount 200}
+              {:op :sell :stockAmount 100}
+              ]
+        ops-count (count ops)]
+
+    (is true)
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-count iterations)
+              (take ops-count ops))
+         (map #(local-transact-stock! opts %))
+         doall)))
 
 #_(deftest start-game!-test
 
@@ -1819,8 +1883,66 @@
               expected-game-level    current-game-level
               expected-db-game-level current-db-game-level)))))))
 
+(deftest B-test
 
-;; win
-;; lose
-;; :timer
-;; :timeout
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; ops  [{:op :buy :stockAmount 100}
+        ;;       ;; {:op :sell :stockAmount 100}
+        ;;       {:op :buy :stockAmount 200}
+        ;;       {:op :sell :stockAmount 200}]
+
+        ops  [{:op :buy :stockAmount 100}
+              {:op :buy :stockAmount 200}
+              {:op :sell :stockAmount 200}
+              {:op :sell :stockAmount 100}]
+        ops-count (count ops)]
+
+    (is true)
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-count iterations)
+              (take ops-count ops))
+         (map #(local-transact-stock! opts %))
+         doall)))

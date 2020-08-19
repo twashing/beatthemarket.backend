@@ -25,9 +25,11 @@
 (defn ->game
 
   ([game-level stocks user accounts]
-   (->game game-level stocks user accounts {:game-id (UUID/randomUUID)}))
+   (->game game-level stocks user accounts {:game-id (UUID/randomUUID)
+                                            :game-status :game-status/created}))
 
-  ([game-level stocks user accounts {game-id :game-id}]
+  ([game-level stocks user accounts {game-id :game-id
+                                     game-status :game-status}]
 
    (let [portfolio-with-journal (bookkeeping/->portfolio
                                   (bookkeeping/->journal))
@@ -44,7 +46,8 @@
        :game/start-time (c/to-date (t/now))
        :game/level game-level
        :game/stocks stocks
-       :game/users game-users))))
+       :game/users game-users
+       :game/status game-status))))
 
 (defn ->stock
 

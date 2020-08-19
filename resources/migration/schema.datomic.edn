@@ -76,6 +76,12 @@
   :db/isComponent true
   :db/doc         ""}
 
+ {:db/ident       :game/timer
+  :db/valueType   :db.type/tuple
+  :db/cardinality :db.cardinality/one
+  :db/isComponent true
+  :db/doc         ""}
+
  {:db/ident       :game/level
   :db/valueType   :db.type/ref ;; :game-level
   :db/cardinality :db.cardinality/one
