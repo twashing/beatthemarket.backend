@@ -5,6 +5,7 @@
             [integrant.core :as ig]
             [integrant.repl.state :as repl.state]
             [beatthemarket.bookkeeping.core :as bookkeeping]
+            [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.name-generator :as name-generator]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
@@ -26,10 +27,14 @@
 
   ([game-level stocks user accounts]
    (->game game-level stocks user accounts {:game-id (UUID/randomUUID)
-                                            :game-status :game-status/created}))
+                                            :game-status :game-status/created
+                                            ;; :data-seed (datasource.core/random-seed)
+                                            }))
 
   ([game-level stocks user accounts {game-id :game-id
-                                     game-status :game-status}]
+                                     game-status :game-status
+                                     ;; data-seed :data-seed
+                                     }]
 
    (let [portfolio-with-journal (bookkeeping/->portfolio
                                   (bookkeeping/->journal))
@@ -56,6 +61,7 @@
    (cond-> (hash-map
              :game.stock/id (UUID/randomUUID)
              :game.stock/name name
+             :game.stock/data-seed (datasource.core/random-seed)
              :game.stock/symbol symbol)
      (util/exists? price-history) (assoc :game.stock/price-history price-history))))
 
@@ -94,7 +100,7 @@
    (initialize-game! conn user-entity accounts game-level stocks {}))
 
   ([conn user-entity accounts game-level stocks opts]
-   (let [game (->game game-level stocks user-entity accounts)]
+   (let [game (->game game-level stocks user-entity accounts opts)]
 
      (as-> game gm
        (persistence.datomic/transact-entities! conn gm)

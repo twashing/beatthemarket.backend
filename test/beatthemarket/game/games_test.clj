@@ -1953,12 +1953,14 @@
     ;; :pause
     (game.games/pause-game! conn gameId)
 
+    ;; Save / restore db send
+
     ;; :game/start-position
     ;; :game.user/profit-loss
     ;; :game/status #:db{:id 17592186045430 :ident :game-status/paused}
     ;; :game/level-timer "[]"
     ;; :game/level #:db{:id 17592186045417 :ident :game-level/one}
-
+    ;; :game.stock/data-seed
 
 
     ;; B AFTER :pause

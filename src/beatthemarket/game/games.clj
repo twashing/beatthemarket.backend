@@ -373,14 +373,22 @@
                                                                           check-level-complete stream-level-update!]}]
 
    (let [stocks               (game.core/generate-stocks! 4)
-         initialize-game-opts {:game-id game-id}
+         data-generators (-> integrant.repl.state/config :game/game :data-generators)
+         ;; data-seed (datasource.core/random-seed)
+         initialize-game-opts {:game-id     (or game-id (UUID/randomUUID))
+                               :game-status :game-status/created
+                               ;; :data-seed   data-seed
+                               }
 
-         {game-id :game/id
-          stocks  :game/stocks
+         {game-id                      :game/id
+          stocks                       :game/stocks
           {saved-game-level :db/ident} :game/level :as game}
          (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
 
-         stocks-with-tick-data   (map #(bind-data-sequence data-sequence-fn %) stocks)
+         stocks-with-tick-data   (map (fn [{seed :game.stock/data-seed :as stock}]
+                                        (bind-data-sequence (partial data-sequence-fn data-generators seed)
+                                                            stock))
+                                      stocks)
          input-sequence-local    (stocks->stock-sequences stocks-with-tick-data)
          stream-buffer           10
          control-channel         (core.async/chan (core.async/sliding-buffer stream-buffer))
@@ -391,15 +399,15 @@
          {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
                                                        (get saved-game-level))
 
-         current-level (atom {:level saved-game-level
+         current-level (atom {:level            saved-game-level
                               :profit-threshold profit-threshold
-                              :lose-threshold lose-threshold})
+                              :lose-threshold   lose-threshold})
 
          game-control (merge-with #(if %2 %2 %1)
                                   (default-game-control conn (:db/id user-entity) game-id
-                                                        {:control-channel control-channel
-                                                         :current-level current-level
-                                                         :stock-tick-stream stock-tick-stream
+                                                        {:control-channel         control-channel
+                                                         :current-level           current-level
+                                                         :stock-tick-stream       stock-tick-stream
                                                          :portfolio-update-stream portfolio-update-stream})
                                   {:game                  game                  ;; TODO load
                                    ;; :start-position        (atom 0)
@@ -417,12 +425,12 @@
                                    :portfolio-update-stream portfolio-update-stream
                                    :game-event-stream       game-event-stream
 
-                                   :process-transact! process-transact!
-                                   :stream-stock-tick stream-stock-tick
-                                   :calculate-profit-loss calculate-profit-loss
+                                   :process-transact!        process-transact!
+                                   :stream-stock-tick        stream-stock-tick
+                                   :calculate-profit-loss    calculate-profit-loss
                                    :stream-portfolio-update! stream-portfolio-update!
-                                   :check-level-complete check-level-complete
-                                   :stream-level-update! stream-level-update!
+                                   :check-level-complete     check-level-complete
+                                   :stream-level-update!     stream-level-update!
 
                                    :close-sink-fn (partial sink-fn nil)
                                    :sink-fn       #(sink-fn {:event %})})]

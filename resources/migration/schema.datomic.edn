@@ -192,6 +192,10 @@
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         ""}
+ {:db/ident       :game.stock/data-seed
+  :db/valueType   :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
  {:db/ident       :game.stock/symbol
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
