@@ -1,6 +1,7 @@
 (ns beatthemarket.game.games.processing
   (:require [io.pedestal.log :as log]
             [integrant.repl.state :as repl.state]
+            [datomic.client.api :as d]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.game.calculation :as game.calculation]
@@ -54,9 +55,24 @@
   {:running-profit-loss :profit-loss/running
    :realized-profit-loss :profit-loss/realized})
 
+(defn game-user-by-user [conn user-id]
+
+  #_[{:game/_users []}]
+  (ffirst
+    (d/q '[:find (pull ?u [{:game.user/_user [*]}])
+           :in $ ?u
+           :where
+           [?u]]
+         (d/db conn)
+         user-id)))
+
 (defn profit-loss->entity [conn {:keys [user-id tick-id game-id stock-id profit-loss-type profit-loss]}]
 
-  (let [tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tick-id))
+  (let [;; {{game-user-db-id :db/id} :game.user/_user} (util/pprint+identity (game-user-by-user conn user-id))
+        {{game-user-db-id :db/id} :game.user/_user} (game-user-by-user conn user-id)
+
+        ;; game-user-db-id (util/pprint+identity (game-user-by-user conn user-id))
+        tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tick-id))
         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stock-id))
         game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id))
 
@@ -64,11 +80,15 @@
                              {:game.user.profit-loss/amount profit-loss
                               :game.user.profit-loss/tick tick-db-id
                               :game.user.profit-loss/stock stock-db-id
-                              :game.user.profit-loss/game game-db-id
+                              ;; :game.user.profit-loss/game game-db-id
                               :game.user.profit-loss/type (get profit-loss-type-entity-map profit-loss-type)})]
 
-      {:game.user/user user-id
-       :game.user/profit-loss profit-loss-entity}))
+    {;; :game.user/user user-id ;;game-user-db-id
+     :db/id game-user-db-id
+     :game.user/profit-loss
+     ;; {:game.user.profit-loss/amount profit-loss}
+     profit-loss-entity
+     }))
 
 
 (defn process-transact! [conn data]
@@ -83,10 +103,11 @@
   (util/pprint+identity profit-loss)
 
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
-                                  (map (partial profit-loss->entity conn)))]
+                                  (map (partial profit-loss->entity conn))
+                                  util/pprint+identity)]
 
     (when (not (empty? realized-profit-loss))
-      (persistence.datomic/transact-entities! conn realized-profit-loss)))
+      (persistence.datomic/transact-entities! conn (util/pprint+identity realized-profit-loss))))
   data)
 
 (defn process-transact-level-update! [conn {level-update :level-update :as data}]

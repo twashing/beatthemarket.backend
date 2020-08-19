@@ -70,17 +70,39 @@
   :db/isComponent true
   :db/doc         ""}
 
+ {:db/ident       :game/start-position
+  :db/valueType   :db.type/long
+  :db/cardinality :db.cardinality/one
+  :db/doc         ""}
+
  {:db/ident       :game/status
   :db/valueType   :db.type/ref ;; :game-status
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
 
- {:db/ident       :game/timer
-  :db/valueType   :db.type/tuple
+ {:db/ident       :game/level-timer
+  :db/valueType   :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/isComponent false
+  :db/doc         ""}
+
+ #_{:db/ident       :game/level-timer
+
+  ;; :db/valueType   :db.type/tuple
+  ;; :db/tupleType   :db.type/long
+  :db/valueType :db.type/tuple
+  :db/tupleTypes [:db.type/long :db.type/long]
+
   :db/cardinality :db.cardinality/one
   :db/isComponent true
   :db/doc         ""}
+
+
+ #_{:db/ident :player/location
+  :db/valueType :db.type/tuple
+  :db/tupleTypes [:db.type/long :db.type/long]
+  :db/cardinality :db.cardinality/one}
 
  {:db/ident       :game/level
   :db/valueType   :db.type/ref ;; :game-level
