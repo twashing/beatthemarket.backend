@@ -42,7 +42,7 @@
                                        :current-level
 
                                        :paused?
-                                       :level-timer-atom
+                                       :level-timer
                                        :tick-sleep-atom
 
                                        :process-transact!
@@ -1953,8 +1953,6 @@
     ;; :pause
     (game.games/pause-game! conn gameId)
 
-    ;; Save / restore db send
-
     ;; :game/start-position
     ;; :game.user/profit-loss
     ;; :game/status #:db{:id 17592186045430 :ident :game-status/paused}
@@ -2041,4 +2039,6 @@
     ;; B AFTER :pause
     (util/pprint+identity
       (persistence.core/entity-by-domain-id conn :game/id gameId))
+
+
     ))
