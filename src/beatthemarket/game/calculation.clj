@@ -255,7 +255,8 @@
 
     (if at-beginning?
       false
-      (>= (:amount profit-loss-calculation)
+      (>= 0 counter-balance-amount)
+      #_(>= (:amount profit-loss-calculation)
           counter-balance-amount))))
 
 (defn- realizing-profit-loss?-fn [op profit-loss profit-loss-calculation]
@@ -289,7 +290,6 @@
         (match-or-crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
 
     (util/pprint+identity [profit-loss-empty? realizing-profit-loss? match-or-crossing-counter-balance-threshold?])
-
 
     (let [result (match [profit-loss-empty? realizing-profit-loss? match-or-crossing-counter-balance-threshold?]
 

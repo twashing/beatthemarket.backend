@@ -2037,8 +2037,10 @@
     (game.games/pause-game! conn gameId)
 
     ;; B AFTER :pause
-    (util/pprint+identity
+    #_(util/pprint+identity
       (persistence.core/entity-by-domain-id conn :game/id gameId))
 
+    ;; Resume game
+    (game.games/resume-game! conn gameId result-user-id game-control)
 
     ))

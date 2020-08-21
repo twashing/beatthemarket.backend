@@ -53,26 +53,26 @@
      (exists? debits)  (assoc :bookkeeping.tentry/debits debits)
      (exists? credits) (assoc :bookkeeping.tentry/credits credits))))
 
-(defn ->debit [account value tick-id price amount]
+(defn ->debit [account value tick-db-id price amount]
 
   (cond-> (hash-map
             :bookkeeping.debit/id (UUID/randomUUID)
             :bookkeeping.debit/account account
             :bookkeeping.debit/value value
-            :bookkeeping.debit/tick {:game.stock.tick/id tick-id}
+            :bookkeeping.debit/tick {:db/id tick-db-id}
             ;; :db/ensure :bookkeeping.debit/validate
             )
 
     (exists? price)  (assoc :bookkeeping.debit/price price)
     (exists? amount) (assoc :bookkeeping.debit/amount amount)))
 
-(defn ->credit [account value tick-id price amount]
+(defn ->credit [account value tick-db-id price amount]
 
   (cond-> (hash-map
             :bookkeeping.credit/id (UUID/randomUUID)
             :bookkeeping.credit/account account
             :bookkeeping.credit/value value
-            :bookkeeping.credit/tick {:game.stock.tick/id tick-id}
+            :bookkeeping.credit/tick {:db/id tick-db-id}
             ;; :db/ensure :bookkeeping.credit/validate
             )
 
@@ -340,7 +340,7 @@
 
   tentry)
 
-(defn buy-stock! [conn game-db-id user-db-id stock-db-id tick-id stock-amount stock-price]
+(defn buy-stock! [conn game-db-id user-db-id stock-db-id tick-db-id stock-amount stock-price]
 
   (let [validation-inputs {:conn         conn
                            :game-id      game-db-id
@@ -374,8 +374,8 @@
                                        (update-in [:bookkeeping.account/amount] + stock-amount))
 
             ;; T-ENTRY + JOURNAL ENTRIES
-            debits+credits                    [(->debit updated-debit-account debit-value tick-id nil nil)
-                                               (->credit updated-credit-account credit-value tick-id stock-price stock-amount)]
+            debits+credits                    [(->debit updated-debit-account debit-value tick-db-id nil nil)
+                                               (->credit updated-credit-account credit-value tick-db-id stock-price stock-amount)]
             tentry                            (apply ->tentry debits+credits)
             {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id)
             updated-journal-entries           (-> game-entity
@@ -396,7 +396,7 @@
                (-> tentry :bookkeeping.tentry/id))
           (ffirst v))))))
 
-(defn sell-stock! [conn game-db-id user-db-id stock-db-id tick-id stock-amount stock-price]
+(defn sell-stock! [conn game-db-id user-db-id stock-db-id tick-db-id stock-amount stock-price]
 
   (let [validation-inputs {:conn         conn
                            :game-id      game-db-id
@@ -435,8 +435,8 @@
                                               [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
-            debits+credits                  [(->debit updated-debit-account debit-value tick-id stock-price stock-amount)
-                                             (->credit updated-credit-account credit-value tick-id nil nil)]
+            debits+credits                  [(->debit updated-debit-account debit-value tick-db-id stock-price stock-amount)
+                                             (->credit updated-credit-account credit-value tick-db-id nil nil)]
             tentry                          (apply ->tentry debits+credits)
             {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id)
             updated-journal-entries         (-> game-entity

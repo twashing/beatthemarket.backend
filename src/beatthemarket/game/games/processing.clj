@@ -147,7 +147,8 @@
 
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
-  (println (format ">> calculate-profit-loss on TICK / " (count stock-ticks)))
+
+  ;; (println (format ">> calculate-profit-loss on TICK / " (count stock-ticks)))
   {:stock-ticks stock-ticks :profit-loss {}})
 
 (defmethod calculate-profit-loss :buy [op user-id game-id tentry]
@@ -174,7 +175,7 @@
 
 (defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as result}]
 
-  (println (format ">> STREAM portfolio-update /" (pr-str result)))
+  ;; (println (format ">> STREAM portfolio-update /" (pr-str result)))
   (util/pprint+identity profit-loss)
   #_(when (not (empty? profit-loss))
 
@@ -184,7 +185,7 @@
 
 (defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as result}]
 
-  (println (format ">> CHECK level-complete / " (pr-str result)))
+  ;; (println (format ">> CHECK level-complete / " (pr-str result)))
   #_(let [{profit-threshold :profit-threshold
            lose-threshold :lose-threshold
            level :level} (deref current-level)
@@ -215,6 +216,6 @@
 
 (defn stream-level-update! [game-event-stream data]
 
-  (println (format ">> STREAM level-update! / " (pr-str data)))
+  ;; (println (format ">> STREAM level-update! / " (pr-str data)))
   ;; (log/debug :game.games (format ">> stream-level-update! /" data))
   data)
