@@ -85,6 +85,7 @@
                :game/game                     #ref[:game]
                :nrepl/nrepl                   {:port 7000}
                :logging/logging               #ref [:logging]
+               :subscriptions/subscriptions   {}
                :name-generator/name-generator {}}
 
   :development {:service/service               {:join?         false
@@ -100,6 +101,7 @@
                 :game/game                     #ref[:game]
                 :nrepl/nrepl                   {:port 7000}
                 :logging/logging               #ref [:logging]
+                :subscriptions/subscriptions   {}
                 :name-generator/name-generator {}}
 
   :test {:service/service               {:join?         false
@@ -115,4 +117,5 @@
          :game/game                     #ref[:game]
          :nrepl/nrepl                   {:port 7001}
          :logging/logging               #ref [:logging]
+         :subscriptions/subscriptions   {}
          :name-generator/name-generator {}}}}

@@ -221,23 +221,34 @@
          latest-price                 :price} profit-loss-calculation
 
         trade-history (stock->profit-loss game-id game-stock-id)
-        realized-profit-loss (calculate-realized-PL op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation)
+        realized-profit-loss (calculate-realized-PL op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation)]
 
-        ;; TODO margin calculate for crossover
-        profit-loss []
-        profit-loss-calculation {}
-
-        ;; (create-trade-history! op game-id game-stock-id profit-loss profit-loss-calculation)
-
-        ;; (counter-balance-amount-match-or-crossover? profit-loss-calculation profit-loss)
-        ;; price => price
-        ;; amount => diff :amount :counter-balance-amount
-        ]
+    (util/pprint+identity "WTF / Realized !!")
+    (util/pprint+identity profit-loss)
+    (util/pprint+identity profit-loss-calculation)
 
 
     (replace-trade-state-for-stock! game-id game-stock-id [])
 
     [realized-profit-loss]))
+
+(defn reset-trade-history-on-crossover-pl! [op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation]
+
+  (let [{updated-stock-account-amount :stock-account-amount
+         latest-price                 :price} profit-loss-calculation
+
+        trade-history (stock->profit-loss game-id game-stock-id)
+        realized-profit-loss (calculate-realized-PL op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation)
+        running-profit-loss [(assoc profit-loss-calculation :pershare-purchase-ratio 1)]]
+
+    (util/pprint+identity "WTF / Crossover !!")
+    (util/pprint+identity profit-loss)
+    (util/pprint+identity profit-loss-calculation)
+
+
+    (replace-trade-state-for-stock! game-id game-stock-id running-profit-loss)
+
+    [running-profit-loss realized-profit-loss]))
 
 
 ;; dispatch predicates
@@ -255,8 +266,7 @@
 
     (if at-beginning?
       false
-      (>= 0 counter-balance-amount)
-      #_(>= (:amount profit-loss-calculation)
+      (>= (:amount profit-loss-calculation)
           counter-balance-amount))))
 
 (defn- realizing-profit-loss?-fn [op profit-loss profit-loss-calculation]
@@ -310,7 +320,9 @@
                         ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
                         ;; GOTO profit-loss-empty?=true
                         ;; RETURN :running-profit-loss :realized-profit-loss
-                        [_ true true] (reset-trade-history-on-realized-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation)
+                        [_ true true] (if (= (:amount profit-loss-calculation) (-> profit-loss last (get :counter-balance-amount 0)))
+                                        (reset-trade-history-on-realized-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation)
+                                        (reset-trade-history-on-crossover-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation))
 
                         ;; > continuing to trade in :counter-balance-direction
                         ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss

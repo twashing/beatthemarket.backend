@@ -9,6 +9,7 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.state.subscriptions :as state.subscriptions]
             [beatthemarket.util :as util :refer [exists?]]
             [clojure.core.async :as core.async])
   (:import [java.util UUID]))
@@ -249,17 +250,22 @@
       (rop/succeed (assoc inputs :stock-pulled stock-pulled))
       (rop/fail (ex-info "No stock bound to id" inputs)))))
 
-(defn- cash-account-has-sufficient-funds? [conn debit-value {user-pulled :user-pulled
-                                                             game-pulled :game-pulled :as inputs}]
-  (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
-        (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
+(defn- cash-account-has-sufficient-funds-OR-trades-on-margin? [conn debit-value {user-pulled :user-pulled
+                                                                                 game-pulled :game-pulled :as inputs}]
 
-    (if (> cash-account-starting-balance debit-value)
-      (rop/succeed inputs)
-      (rop/fail (ex-info (format "Insufficient funds [%s] for purchase value [%s]"
-                                 cash-account-starting-balance
-                                 debit-value)
-                         inputs)))))
+  (if (state.subscriptions/margin-trading?)
+
+    (rop/succeed inputs)
+
+    (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
+          (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
+
+      (if (> cash-account-starting-balance debit-value)
+        (rop/succeed inputs)
+        (rop/fail (ex-info (format "Insufficient funds [%s] for purchase value [%s]"
+                                   cash-account-starting-balance
+                                   debit-value)
+                           inputs))))))
 
 (defn- stock-account-exists? [conn {stock-id :stock-id
                                     game-db-id :game-id :as inputs}]
@@ -279,21 +285,26 @@
     (catch Throwable e (rop/fail (ex-info (format "No stock entity [%s]" stock-id)
                                           inputs)))))
 
-(defn- stock-account-has-sufficient-shares? [{:keys [conn stock-id stock-amount stock-account] :as inputs}]
-  (if-let [initial-account-amount
-           (-> stock-account
-               :bookkeeping.account/_counter-party
-               :bookkeeping.account/amount)]
+(defn- stock-account-has-sufficient-shares-OR-trades-on-margin? [{:keys [conn stock-id stock-amount stock-account] :as inputs}]
 
-    (if (>= initial-account-amount stock-amount)
-      (rop/succeed inputs)
+  (if (state.subscriptions/margin-trading?)
+
+    (rop/succeed inputs)
+
+    (if-let [initial-account-amount
+             (-> stock-account
+                 :bookkeeping.account/_counter-party
+                 :bookkeeping.account/amount)]
+
+      (if (>= initial-account-amount stock-amount)
+        (rop/succeed inputs)
+        (rop/fail
+          (ex-info (format "Insufficient amount of stock [%s] to sell" initial-account-amount)
+                   inputs)))
+
       (rop/fail
-        (ex-info (format "Insufficient amount of stock [%s] to sell" initial-account-amount)
-                 inputs)))
-
-    (rop/fail
-      (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
-               inputs))))
+        (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
+                 inputs)))))
 
 (defn track-profit-loss+stream-portfolio-update! [conn gameId game-db-id user-id tentry]
 
@@ -354,7 +365,7 @@
                              game-exists?
                              user-exists?
                              stock-exists?
-                             (partial cash-account-has-sufficient-funds? conn debit-value))]
+                             (partial cash-account-has-sufficient-funds-OR-trades-on-margin? conn debit-value))]
 
     (if (= clojure.lang.ExceptionInfo (type result))
 
@@ -410,7 +421,7 @@
                         game-exists?
                         user-exists?
                         stock-exists?
-                        stock-account-has-sufficient-shares?)]
+                        stock-account-has-sufficient-shares-OR-trades-on-margin?)]
 
     (if (= clojure.lang.ExceptionInfo (type result))
 

@@ -34,6 +34,7 @@
                        :beatthemarket.persistence/datomic       :persistence/datomic
                        :beatthemarket.state/nrepl               :nrepl/nrepl
                        :beatthemarket.state/logging             :logging/logging
+                       :beatthemarket.state/subscriptions       :subscriptions/subscriptions
                        :beatthemarket.datasource/name-generator :name-generator/name-generator
                        :beatthemarket.game/core                 :game/games}))
 

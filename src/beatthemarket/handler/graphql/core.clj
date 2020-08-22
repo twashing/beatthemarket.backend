@@ -10,9 +10,12 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.datasource.core :as datasource.core]
+
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.calculation :as game.calculation]
+            [beatthemarket.game.games.trades :as games.trades]
             [beatthemarket.game.games :as game.games]
+            [beatthemarket.game.games.control :as games.control]
             [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
             [clojure.data.json :as json])
@@ -78,7 +81,7 @@
 
         data-generators (-> repl.state/config :game/game :data-generators)
         seed (beatthemarket.datasource.core/random-seed) ;; TODO ->> pull seed from DB (if resuming game)
-        combined-data-sequence-fn (fn [] (game.games/->data-sequence data-generators seed))
+        combined-data-sequence-fn (fn [] (games.control/->data-sequence data-generators seed))
 
         ;; NOTE sink-fn updates once we start to stream a game
         sink-fn                identity
@@ -120,7 +123,7 @@
         tickPrice (Float. tickPrice)]
 
     (try
-      (if (:bookkeeping.tentry/id (game.games/buy-stock! conn userId gameId stockId stockAmount tickId tickPrice))
+      (if (:bookkeeping.tentry/id (games.trades/buy-stock! conn userId gameId stockId stockAmount tickId tickPrice))
         {:message "Ack"}
         {:message (ex-info "Error / resolve-buy-stock / INCOMPLETE /" {})})
       (catch Throwable e
@@ -138,7 +141,7 @@
         tickPrice (Float. tickPrice)]
 
     (try
-      (if (:bookkeeping.tentry/id (game.games/sell-stock! conn userId gameId stockId stockAmount tickId tickPrice))
+      (if (:bookkeeping.tentry/id (games.trades/sell-stock! conn userId gameId stockId stockAmount tickId tickPrice))
         {:message "Ack"}
         {:message (ex-info "Error / resolve-sell-stock / INCOMPLETE /" {})})
       (catch Throwable e
