@@ -1,7 +1,6 @@
 (ns beatthemarket.game.games
   (:require [clojure.core.async :as core.async :refer [go go-loop chan close! timeout alts! >! <! >!!]]
             [clojure.core.async.impl.protocols]
-            [clojure.core.match :refer [match]]
             [clj-time.core :as t]
             [clojure.data.json :as json]
             [datomic.client.api :as d]
@@ -37,7 +36,7 @@
   (atom {}))
 
 (defmethod ig/halt-key! :game/games [_ games]
-  (run! (fn [{:keys [stock-tick-stream
+  #_(run! (fn [{:keys [stock-tick-stream
                     portfolio-update-stream
                     game-event-stream
                     control-channel
@@ -96,6 +95,8 @@
                               :profit-threshold profit-threshold
                               :lose-threshold   lose-threshold})
 
+         ;; _ (util/pprint+identity "AAAaarrrggghhh!!")
+         ;; _ (util/pprint+identity (or input-sequence input-sequence-local))
          game-control (merge-with #(if %2 %2 %1)
                                   (games.core/default-game-control conn (:db/id user-entity) game-id
                                                                    {:current-level           current-level})
@@ -151,9 +152,6 @@
       (transform [MAP-VALS ALL :game.stock/id] str v)
       (assoc v :id (str (:game/id game))))))
 
-(defn- time-expired? [{:keys [remaining-in-minutes remaining-in-seconds]}]
-  (and (= 0 remaining-in-minutes) (< remaining-in-seconds 1)))
-
 (defn send-control-event! [game-id event]
   (->> repl.state/system :game/games deref (#(get % game-id))
        :control-channel
@@ -183,7 +181,7 @@
 #_(defn inputs->historical-data [input-sequence start-position]
     (take start-position input-sequence))
 
-(defn inputs->control-chain [{:keys [game input-sequence
+#_(defn inputs->control-chain [{:keys [game input-sequence
                                      stream-stock-tick calculate-profit-loss
                                      collect-profit-loss stream-portfolio-update!
                                      process-transact! transact-profit-loss
@@ -198,79 +196,12 @@
        (map stream-portfolio-update!)
        (map check-level-complete)))
 
-(defn run-iteration [control-chain]
-
-  (let [first+rest (juxt first rest)
-        f          (fn [[x xs]] (first+rest xs))]
-    (iterate f (first+rest control-chain))))
-
-(defn run-game! [conn
-                 {{game-id :game/id} :game
-                  current-level :current-level
-                  iterations :iterations
-                  control-channel :control-channel
-                  game-event-stream :game-event-stream}
-                 tick-sleep-atom level-timer-atom]
-
-  ;; A
-  (let [{game-db-id :db/id
-         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
-        data [[:db/retract  game-db-id :game/status game-status]
-              [:db/add      game-db-id :game/status :game-status/running]]]
-
-    (persistence.datomic/transact-entities! conn data))
-
-  ;; B
-  (core.async/go-loop [now (t/now)
-                       end (t/plus now (t/seconds @level-timer-atom))
-                       iters iterations]
-
-    (let [remaining                            (games.control/calculate-remaining-time now end)
-          [{event :event
-            :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
-                                                   control-channel])]
-
-      (log/debug :game.games (format "game-loop %s:%s / %s"
-                                     (:remaining-in-minutes remaining)
-                                     (:remaining-in-seconds remaining)
-                                     (if controlv controlv :running)))
-
-      (let [x        (ffirst iters)
-            expired? (time-expired? remaining)
-
-            [nowA endA] (match [event expired?]
-
-                               [:pause _] (games.control/handle-control-event conn game-event-stream
-                                                                              (assoc controlv :message "< Paused >")
-                                                                              (t/now) end)
-
-                               [(_ :guard #{:exit :win :lose}) _] (games.control/handle-control-event conn game-event-stream controlv now end)
-
-                               [_ false] (let [controlv {:event   :continue
-                                                         :game-id game-id
-                                                         :level   (:level @current-level)
-                                                         :type :LevelTimer}]
-
-                                           (games.control/handle-control-event conn game-event-stream controlv now end))
-
-                               [_ true] (games.control/handle-control-event conn game-event-stream {:event :timeout} now end))]
-
-        (when (and nowA endA)
-          (recur nowA endA (next iters)))))))
-
-(defn seek-to-position [start xs]
-  (let [seekfn (juxt (partial take start) (partial drop start))]
-    (seekfn xs)))
-
 (defn update-start-position! [conn game-id start-position]
 
-  (util/pprint+identity [game-id start-position])
+  ;; (util/pprint+identity [game-id start-position])
 
   (let [{game-db-id :db/id
          old-start-position :game/start-position} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
-
-        ;; data [[:db/retract  game-db-id :game/start-position old-start-position]
-        ;;       [:db/add      game-db-id :game/start-position start-position]]
 
         data (cond-> []
                old-start-position (conj [:db/retract game-db-id :game/start-position old-start-position])
@@ -291,15 +222,15 @@
    ;; B
    (let [{:keys [control-channel
                  tick-sleep-atom
-                 level-timer-atom]} game-control
+                 level-timer]} game-control
 
-         [historical-data inputs-at-position] (->> (inputs->control-chain game-control)
-                                                   (seek-to-position start-position))]
+         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control) ;; (inputs->control-chain game-control)
+                                                   (games.control/seek-to-position start-position))]
 
      (as-> inputs-at-position v
-       (run-iteration v)
+       (games.control/run-iteration v)
        (assoc game-control :iterations v)
-       (run-game! conn v tick-sleep-atom level-timer-atom))
+       (games.control/run-game! conn v tick-sleep-atom level-timer))
 
      historical-data)))
 
@@ -368,6 +299,6 @@
 
    ;; B
    (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control)
-                                                   (seek-to-position start-position))]
+                                                   (games.control/seek-to-position start-position))]
 
-     [historical-data (run-iteration inputs-at-position)])))
+     [historical-data (games.control/run-iteration inputs-at-position)])))

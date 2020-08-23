@@ -34,19 +34,26 @@
                                                         constantly))))))
 
 (defn default-game-control [conn user-id game-id
-                            {:keys [control-channel current-level
+                            {:keys [current-level
+                                    control-channel
+
                                     stock-tick-stream
                                     portfolio-update-stream
                                     game-event-stream]}]
 
-  (let [stream-buffer 10]
+  (let [stream-buffer 10
+
+        control-channel         (or control-channel (core.async/chan (core.async/sliding-buffer stream-buffer)))
+        stock-tick-stream       (or stock-tick-stream (core.async/chan (core.async/sliding-buffer stream-buffer)))
+        portfolio-update-stream (or portfolio-update-stream (core.async/chan (core.async/sliding-buffer stream-buffer)))
+        game-event-stream       (or game-event-stream (core.async/chan (core.async/sliding-buffer stream-buffer)))]
 
     {:profit-loss {}
 
-     :control-channel         (core.async/chan (core.async/sliding-buffer stream-buffer))
-     :stock-tick-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
-     :portfolio-update-stream (core.async/chan (core.async/sliding-buffer stream-buffer))
-     :game-event-stream       (core.async/chan (core.async/sliding-buffer stream-buffer))
+     :control-channel         control-channel
+     :stock-tick-stream       stock-tick-stream
+     :portfolio-update-stream portfolio-update-stream
+     :game-event-stream       game-event-stream
 
      :process-transact!             (partial games.processing/process-transact! conn)
      :stream-stock-tick             (partial games.processing/stream-stock-tick game-id)
