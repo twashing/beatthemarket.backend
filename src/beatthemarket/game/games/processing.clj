@@ -10,7 +10,6 @@
             [beatthemarket.util :as util]))
 
 
-
 (defn group-stock-tick-pairs [stock-tick-pairs]
   (->> (partition 2 stock-tick-pairs)
        (map (fn [[tick stock]]
@@ -100,7 +99,7 @@
 
 (defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
 
-  ;; (println (format ">> TRANSACT :profit-loss / " (pr-str profit-loss)))
+  (println (format ">> TRANSACT :profit-loss / " (pr-str data)))
   ;; (util/pprint+identity profit-loss)
 
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
@@ -149,7 +148,6 @@
 
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
-
   (println (format ">> calculate-profit-loss on TICK / %s" (count stock-ticks)))
   #_{:stock-ticks stock-ticks :profit-loss {}}
 
@@ -161,11 +159,10 @@
             ((partial recalculate-profitloss-perstock-fn stock-ticks))
             util/pprint+identity)]
 
-    (->> updated-profit-loss-calculations
-         (game.persistence/update-profit-loss-state! game-id)
-         (#(get % game-id))
-         :profit-loss
-         (hash-map :stock-ticks stock-ticks :profit-loss))))
+    (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
+
+    (hash-map :stock-ticks stock-ticks
+              :profit-loss (game.calculation/collect-running-profit-loss game-id updated-profit-loss-calculations))))
 
 (defmethod calculate-profit-loss :buy [op user-id game-id tentry]
 
@@ -191,7 +188,7 @@
 
 (defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as result}]
 
-  #_(println (format ">> STREAM portfolio-update /" (pr-str result)))
+  (println (format ">> STREAM portfolio-update / " (pr-str result)))
   (when (not (empty? profit-loss))
 
       (log/debug :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
@@ -201,32 +198,35 @@
 
 (defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as result}]
 
-  ;; #_(println (format ">> CHECK level-complete / " (pr-str result)))
-  #_(let [{profit-threshold :profit-threshold
-           lose-threshold :lose-threshold
-           level :level} (deref current-level)
+  (println (format ">> CHECK level-complete / " (pr-str result)))
+  (util/pprint+identity profit-loss)
 
-          running-pl (->> profit-loss
-                          (filter #(= :running-profit-loss (:profit-loss-type %)))
-                          (reduce #(+ %1 (:profit-loss %2)) 0.0))
+  (let [{profit-threshold :profit-threshold
+         lose-threshold :lose-threshold
+         level :level} (deref current-level)
 
-          realized-pl (->> profit-loss
-                           (filter #(= :realized-profit-loss (:profit-loss-type %)))
-                           (reduce #(+ %1 (:profit-loss %2)) 0.0))
+        running-pl (->> profit-loss
+                        (filter #(= :running-profit-loss (:profit-loss-type %)))
+                        (reduce #(+ %1 (:profit-loss %2)) 0.0))
 
-          running+realized-pl (+ running-pl realized-pl)
+        realized-pl (->> profit-loss
+                         (filter #(= :realized-profit-loss (:profit-loss-type %)))
+                         (reduce #(+ %1 (:profit-loss %2)) 0.0))
 
-          profit-threshold-met? (> running+realized-pl profit-threshold)
-          lose-threshold-met? (< running+realized-pl (* -1 lose-threshold))
+        running+realized-pl (+ running-pl realized-pl)
 
-          game-event-message (cond-> {:game-id game-id
+        profit-threshold-met? (> running+realized-pl profit-threshold)
+        lose-threshold-met? (< running+realized-pl (* -1 lose-threshold))
+
+        game-event-message (util/pprint+identity
+                             (cond-> {:game-id game-id
                                       :level level
                                       :profit-loss running+realized-pl}
                                profit-threshold-met? (assoc :event :win)
-                               lose-threshold-met? (assoc :event :lose))]
+                               lose-threshold-met? (assoc :event :lose)))]
 
-      (when (:event game-event-message)
-        (core.async/go (core.async/>! control-channel game-event-message))))
+    (when (:event game-event-message)
+      (core.async/go (core.async/>! control-channel game-event-message))))
 
   (assoc result :level-update {}))
 

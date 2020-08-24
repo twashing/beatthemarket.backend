@@ -60,6 +60,7 @@
 (defn initialize-game!
 
   ([conn user-entity accounts sink-fn]
+
    (initialize-game! conn user-entity accounts sink-fn :game-level/one games.control/->data-sequence {}))
 
   ([conn user-entity accounts sink-fn game-level data-sequence-fn {:keys [level-timer-sec tick-sleep-ms game-id

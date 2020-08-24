@@ -59,7 +59,6 @@
        (map first)))
 
 
-
 (defn game->profit-losses [game-id]
 
   (as-> (deref (:game/games repl.state/system)) gs
