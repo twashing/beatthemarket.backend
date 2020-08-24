@@ -381,9 +381,9 @@
                                                    control-channel])]
 
       (log/debug :game.games (format "game-loop %s:%s / %s"
-                                     (:remaining-in-minutes remaining)
-                                     (:remaining-in-seconds remaining)
-                                     (if controlv controlv :running)))
+                                       (:remaining-in-minutes remaining)
+                                       (:remaining-in-seconds remaining)
+                                       (if controlv controlv :running)))
 
       (let [x        (ffirst iters)
             expired? (time-expired? remaining)

@@ -7,7 +7,8 @@
             ;; [io.pedestal.log :as log]
             ;; [beatthemarket.persistence.datomic :as persistence.datomic]
             ;; [beatthemarket.persistence.core :as persistence.core]
-            ))
+
+            [beatthemarket.util :as util]))
 
 (defn register-game-control! [game game-control]
   (swap! (:game/games repl.state/system)
@@ -56,7 +57,7 @@
      :game-event-stream       game-event-stream
 
      :process-transact!             (partial games.processing/process-transact! conn)
-     :stream-stock-tick             (partial games.processing/stream-stock-tick game-id)
+     :stream-stock-tick             (partial games.processing/stream-stock-tick stock-tick-stream)
      :process-transact-profit-loss! (partial games.processing/process-transact-profit-loss! conn)
      :stream-portfolio-update!      (partial games.processing/stream-portfolio-update! portfolio-update-stream)
 

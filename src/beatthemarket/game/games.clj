@@ -109,9 +109,10 @@
                                    :tick-sleep-atom       (atom
                                                             (or tick-sleep-ms
                                                                 (-> integrant.repl.state/config :game/game :tick-sleep-ms)))
-                                   :level-timer      (atom
-                                                       (or level-timer-sec
-                                                           (-> integrant.repl.state/config :game/game :level-timer-sec)))
+                                   :level-timer           (atom
+                                                            (or level-timer-sec
+                                                                (-> integrant.repl.state/config :game/game :level-timer-sec)))
+                                   :current-level         current-level
 
                                    :control-channel         control-channel
                                    :stock-tick-stream       stock-tick-stream
@@ -128,6 +129,7 @@
                                    :close-sink-fn (partial sink-fn nil)
                                    :sink-fn       #(sink-fn {:event %})})]
 
+     ;; (util/pprint+identity (dissoc game-control :input-sequence :stocks-with-tick-data))
      (games.core/register-game-control! game game-control)
      game-control)))
 
@@ -225,7 +227,7 @@
                  tick-sleep-atom
                  level-timer]} game-control
 
-         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control) ;; (inputs->control-chain game-control)
+         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control)
                                                    (games.control/seek-to-position start-position))]
 
      (as-> inputs-at-position v

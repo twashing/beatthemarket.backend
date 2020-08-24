@@ -6,16 +6,21 @@
 
 
 (defn calculate-profitloss-and-checklevel-pipeline [op
-                                                     user-db-id
-                                                     {{game-id :game/id} :game
+                                                    user-db-id
+                                                    {{game-id :game/id} :game
 
-                                                      process-transact-profit-loss! :process-transact-profit-loss!
-                                                      stream-portfolio-update! :stream-portfolio-update!
+                                                     control-channel :control-channel
+                                                     current-level :current-level
+                                                     portfolio-update-stream :portfolio-update-stream
+                                                     game-event-stream :game-event-stream
 
-                                                      check-level-complete :check-level-complete
-                                                      process-transact-level-update! :process-transact-level-update!
-                                                      stream-level-update! :stream-level-update!}
-                                                     input]
+                                                     process-transact-profit-loss! :process-transact-profit-loss!
+                                                     stream-portfolio-update! :stream-portfolio-update!
+
+                                                     check-level-complete :check-level-complete
+                                                     process-transact-level-update! :process-transact-level-update!
+                                                     stream-level-update! :stream-level-update!}
+                                                    input]
 
   (->> (map (partial games.processing/calculate-profit-loss op user-db-id game-id) input)
        (map process-transact-profit-loss!)
@@ -26,9 +31,9 @@
        (map stream-level-update!)))
 
 (defn stock-tick-and-stream-pipeline [{:keys [stock-tick-stream
-                                               process-transact!
-                                               stream-stock-tick]}
-                                       input]
+                                              process-transact!
+                                              stream-stock-tick]}
+                                      input]
 
   (->> (map process-transact! input)
        (map stream-stock-tick)))
@@ -44,7 +49,6 @@
 
   ([game-control conn userId gameId stockId stockAmount tickId tickPrice validate?]
 
-   ;; (println [conn userId gameId stockId stockAmount tickId tickPrice validate?])
    (let [user-db-id  (util/extract-id (iam.persistence/user-by-external-uid conn userId))]
 
      (->> (games.trades/buy-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?)

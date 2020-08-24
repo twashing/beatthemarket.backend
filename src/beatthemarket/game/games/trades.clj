@@ -69,7 +69,7 @@
 (defn buy-stock!
 
   ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice]
-   (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice true))
+   (buy-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice true))
 
   ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?]
    (let [validation-inputs {:conn        conn
@@ -95,7 +95,7 @@
 (defn sell-stock!
 
   ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice]
-   (sell-stock! conn userId gameId stockId stockAmount tickId tickPrice true))
+   (sell-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice true))
 
   ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?]
 
@@ -117,5 +117,5 @@
                         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))
                         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId))]
 
-                    (println [game-db-id user-db-id :?stockId stock-db-id tickId stockAmount tickPrice])
+                    ;; (println [game-db-id user-db-id :?stockId stock-db-id tickId stockAmount tickPrice])
                     (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id tick-db-id stockAmount tickPrice))))))

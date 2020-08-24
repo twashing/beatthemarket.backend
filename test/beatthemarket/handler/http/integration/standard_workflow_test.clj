@@ -115,30 +115,31 @@
           (let [game-id (UUID/fromString id)
                 expected-component-game-keys
                 #{:game
-                  :control-channel
+
+                  :input-sequence
                   :stocks-with-tick-data
                   :profit-loss
-                  :input-sequence
                   :current-level
+                  :tick-sleep-atom
+                  :level-timer
+                  :sink-fn
+                  :close-sink-fn
 
-                  :transact-profit-loss
-                  :stream-portfolio-update!
-                  :calculate-profit-loss
-                  :collect-profit-loss
+                  :control-channel
+                  :stock-tick-stream
+                  :portfolio-update-stream
+                  :game-event-stream
+
                   :process-transact!
-                  :stream-stock-tick
+                  :process-transact-level-update!
+                  :process-transact-profit-loss!
+
+                  :calculate-profit-loss
                   :check-level-complete
 
-                  :close-sink-fn
-                  :sink-fn
-
-                  :paused?
-                  :level-timer
-                  :tick-sleep-atom
-
-                  :portfolio-update-stream
-                  :stock-tick-stream
-                  :game-event-stream}]
+                  :stream-level-update!
+                  :stream-portfolio-update!
+                  :stream-stock-tick}]
 
             (->> state/system :game/games deref (#(get % game-id)) keys
                  (into #{})
@@ -457,6 +458,7 @@
 
 
         (let [latest-tick (->> (test-util/consume-subscriptions)
+                               ;; util/pprint+identity
                                (filter #(= 989 (:id %)))
                                last)
               [{stockTickId :stockTickId
@@ -550,6 +552,7 @@
 
 
       (let [latest-tick (->> (test-util/consume-subscriptions)
+                             ;; util/pprint+identity
                              (filter #(= 989 (:id %)))
                              last)
             [{stockTickId :stockTickId
@@ -573,8 +576,8 @@
                                                    :tickId      stockTickId
                                                    :tickPrice   stockTickClose}}}})
 
-        (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
-        (test-util/<message!! 1000) ;;{:type "complete", :id 990}
+        (util/pprint+identity (test-util/<message!! 1000)) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
+        (util/pprint+identity (test-util/<message!! 1000)) ;;{:type "complete", :id 990}
 
         (testing "Selling the stock"
           (test-util/send-data {:id   991
@@ -695,6 +698,11 @@
   (let [{gameId :id :as createGameAck} (test-util/stock-buy-happy-path)
         email                          "twashing@gmail.com"]
 
+    ;; (Thread/sleep 1500)
+
+    ;; (util/pprint+identity (test-util/<message!! 1000))
+    ;; (util/pprint+identity (test-util/<message!! 1000))
+
     (testing "Create a Game"
 
       (test-util/send-data {:id   991
@@ -713,7 +721,7 @@
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
-      (let [profit-loss (-> (test-util/<message!! 1000) :payload :data :userPersonalProfitLoss)
+      (let [profit-loss (-> (test-util/<message!! 1000) #_util/pprint+identity :payload :data :userPersonalProfitLoss)
 
             expected-profit-loss-keys #{:gameId :stockId :profitLoss :profitLossType}
             expected-profit-losses #{{:profitLoss (float 0.0)
