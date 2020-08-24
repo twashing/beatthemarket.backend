@@ -9,9 +9,14 @@
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.datasource.core :as datasource.core]
+
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.calculation :as game.calculation]
+            [beatthemarket.game.games.trades :as games.trades]
             [beatthemarket.game.games :as game.games]
+            [beatthemarket.game.games.control :as games.control]
+            [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
             [clojure.data.json :as json])
@@ -74,10 +79,18 @@
 
         mapped-game-level (get graphql.encoder/game-level-map gameLevel)
 
+
+        data-generators (-> repl.state/config :game/game :data-generators)
+        seed (beatthemarket.datasource.core/random-seed) ;; TODO ->> pull seed from DB (if resuming game)
+        ;; combined-data-sequence-fn (fn [] (games.control/->data-sequence data-generators seed))
+        combined-data-sequence-fn games.control/->data-sequence
+
         ;; NOTE sink-fn updates once we start to stream a game
         sink-fn                identity
         {{game-id :game/id
-          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level)]
+          :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level
+                                                        combined-data-sequence-fn
+                                                        {:accounts (game.core/->game-user-accounts)})]
 
     (->> (game.games/game->new-game-message game user-db-id)
          (transform [:stocks ALL] #(dissoc % :db/id))
@@ -103,16 +116,26 @@
 (defn resolve-buy-stock [context args _]
 
   ;; (println "resolve-buy-stock CALLED /" args)
-  (let [{{{userId :uid} :checked-authentication} :request} context
-        conn                                               (-> repl.state/system :persistence/datomic :opts :conn)
+  (let [{{{userId :uid
+           email :email} :checked-authentication} :request} context
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
+        conn                                               (-> repl.state/system :persistence/datomic :opts :conn)
+        game-control                                       (->> repl.state/system :game/games deref (#(get % (UUID/fromString gameId))))
+        user-db-id                                         (ffirst
+                                                             (d/q '[:find ?e
+                                                                    :in $ ?email
+                                                                    :where [?e :user/email ?email]]
+                                                                  (d/db conn)
+                                                                  email))
         gameId (UUID/fromString gameId)
         stockId (UUID/fromString stockId)
         tickId (UUID/fromString tickId)
         tickPrice (Float. tickPrice)]
 
     (try
-      (if (:bookkeeping.tentry/id (game.games/buy-stock! conn userId gameId stockId stockAmount tickId tickPrice))
+      (if ((comp :bookkeeping.tentry/id :tentry first)
+           (games.pipeline/buy-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false))
+
         {:message "Ack"}
         {:message (ex-info "Error / resolve-buy-stock / INCOMPLETE /" {})})
       (catch Throwable e
@@ -121,16 +144,26 @@
 (defn resolve-sell-stock [context args _]
 
   ;; (println "resolve-sell-stock CALLED /" args)
-  (let [{{{userId :uid} :checked-authentication} :request} context
-        conn                                               (-> repl.state/system :persistence/datomic :opts :conn)
+  (let [{{{userId :uid
+           email :email} :checked-authentication} :request} context
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
+        conn                                               (-> repl.state/system :persistence/datomic :opts :conn)
+        game-control                                       (->> repl.state/system :game/games deref (#(get % (UUID/fromString gameId))))
+        user-db-id                                          (ffirst
+                                                              (d/q '[:find ?e
+                                                                     :in $ ?email
+                                                                     :where [?e :user/email ?email]]
+                                                                   (d/db conn)
+                                                                   email))
         gameId (UUID/fromString gameId)
         stockId (UUID/fromString stockId)
           tickId (UUID/fromString tickId)
         tickPrice (Float. tickPrice)]
 
     (try
-      (if (:bookkeeping.tentry/id (game.games/sell-stock! conn userId gameId stockId stockAmount tickId tickPrice))
+      (if ((comp :bookkeeping.tentry/id :tentry first)
+           (games.pipeline/sell-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false))
+
         {:message "Ack"}
         {:message (ex-info "Error / resolve-sell-stock / INCOMPLETE /" {})})
       (catch Throwable e
@@ -218,6 +251,13 @@
 
 (defn resolve-pause-game [context {gameId :gameId} _]
 
+  ;; TODO
+  ;; [ok] save ticks
+  ;; save P/Ls
+  ;; save game-status
+  ;; ? save tick index (check if we can count the number of ticks that have been saved)
+  ;; ? Can we replay stock-ticks + buys + sells
+
   (let [game-id (UUID/fromString gameId)
         event {:type :ControlEvent
                :event :pause
@@ -227,6 +267,12 @@
         (assoc :gameId gameId))))
 
 (defn resolve-resume-game [context {gameId :gameId} _]
+
+  ;; TODO
+  ;; load ticks
+  ;; load P/Ls
+  ;; load game-status
+  ;; seek to tick index
 
   (let [game-id (UUID/fromString gameId)
         event {:type :ControlEvent
@@ -257,7 +303,7 @@
       :profitLoss 0.0}]))
 
 
-;; STREAMERS
+; STREAMERS
 
 ;; https://lacinia-pedestal.readthedocs.io/en/latest/subscriptions.html#overview
 ;; When a streamer passes nil to the callback, a clean shutdown of the subscription occurs; the client is sent a completion message. The completion message informs the client that the stream of events has completed, and that it should not attempt to reconnect.
@@ -277,7 +323,9 @@
                                                                 :game/games
                                                                 deref
                                                                 (get (UUID/fromString id))
-                                                                :stock-tick-stream)
+                                                                :stock-tick-stream
+                                                                ;; util/pprint+identity
+                                                                )
         cleanup-fn                                          (constantly
                                                               (do
                                                                 (println "stream-stock-ticks CLEANUP")

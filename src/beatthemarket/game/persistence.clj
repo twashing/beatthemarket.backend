@@ -5,56 +5,51 @@
   (:import [java.util UUID]))
 
 
-(defn track-profit-loss-wholesale! [game-id updated-profit-loss-calculations]
-  (swap! (:game/games repl.state/system)
-         (fn [gs]
-           (update-in gs [game-id :profit-loss]
-                      (constantly updated-profit-loss-calculations)))))
-
-(defn track-profit-loss-by-stock-id! [game-id updated-profit-loss-calculations]
+(defn update-profit-loss-state! [game-id updated-profit-loss-calculations]
 
   (swap! (:game/games repl.state/system)
          (fn [gs]
            (update-in gs [game-id :profit-loss] (constantly updated-profit-loss-calculations)))))
 
 (defn recalculate-profit-loss-on-tick [latest-price
-                                       {:keys [trade-price
+                                       {:keys [price
                                                stock-account-amount
                                                pershare-purchase-ratio] :as calculation}]
 
-  (if (and trade-price stock-account-amount pershare-purchase-ratio)
+  ;; NOTE Poor man's filter to just recalculate running P/L
+  (if (and price stock-account-amount pershare-purchase-ratio)
 
-    (let [pershare-gain-or-loss (- latest-price trade-price)
+    (let [pershare-gain-or-loss (- latest-price price)
           A                     (* pershare-gain-or-loss pershare-purchase-ratio)
           running-profit-loss   (* A stock-account-amount)]
 
       (assoc calculation
-             :latest-price->trade-price [latest-price trade-price]
+             :latest-price->price [latest-price price]
              :pershare-gain-or-loss     pershare-gain-or-loss
              :running-profit-loss       running-profit-loss))
 
     calculation))
 
 (defn recalculate-profit-loss-on-buy [updated-stock-account-amount
-                                      latest-trade-price
-                                      {:keys [amount trade-price] :as calculation}]
+                                      latest-price
+                                      {:keys [amount price] :as calculation}]
 
   (let [pershare-purchase-ratio (/ amount updated-stock-account-amount)
-        pershare-gain-or-loss   (- latest-trade-price trade-price)]
+        pershare-gain-or-loss   (- latest-price price)]
 
     (assoc calculation
-           :latest-price->trade-price     [latest-trade-price trade-price]
+           :latest-price->price     [latest-price price]
            :pershare-gain-or-loss         pershare-gain-or-loss)))
 
-(defn recalculate-profit-loss-on-sell [old-account-amount updated-stock-account-amount latest-trade-price
-                                       {:keys [amount trade-price] :as calculation}]
+(defn recalculate-profit-loss-on-sell [old-account-amount updated-stock-account-amount latest-price
+                                       {:keys [amount price] :as calculation}]
 
-  (let [pershare-gain-or-loss (- latest-trade-price trade-price)]
+  (let [pershare-gain-or-loss (- latest-price price)]
 
     (if (= 0 updated-stock-account-amount)
 
       (assoc calculation
-             :latest-price->trade-price     [latest-trade-price trade-price]
+             :latest-price->price     [latest-price price]
              :pershare-gain-or-loss         pershare-gain-or-loss)
 
       (let [account-amount-new-old-ratio (/ updated-stock-account-amount old-account-amount)
@@ -63,7 +58,7 @@
 
         (assoc calculation
                :pershare-purchase-ratio   pershare-purchase-ratio
-               :latest-price->trade-price [latest-trade-price trade-price]
+               :latest-price->price [latest-price price]
                :pershare-gain-or-loss     pershare-gain-or-loss)))))
 
 (defn game-id-by-account-id [conn account-id]
@@ -108,8 +103,8 @@
              :stock-account-amount stock-account-amount
              :credit-account-name  credit-account-name
 
-             :latest-price->trade-price [price price]
-             :trade-price               price
+             :latest-price->price [price price]
+             :price               price
              :amount                    amount
 
              :pershare-gain-or-loss   pershare-gain-or-loss
@@ -138,7 +133,7 @@
                  (map #(apply hash-map %))
                  (apply merge))]
 
-        (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
+        (update-profit-loss-state! game-id updated-profit-loss-calculations)))))
 
 (defn calculate-running-aggregate-profit-loss-on-SELL! [data]
 
@@ -165,8 +160,8 @@
              :stock-account-amount stock-account-amount
              :debit-account-name   debit-account-name
 
-             :latest-price->trade-price [price price]
-             :trade-price  price
+             :latest-price->price [price price]
+             :price  price
              :amount       amount}
 
             profit-loss
@@ -205,7 +200,7 @@
                  (map #(apply hash-map %))
                  (apply merge))]
 
-        (track-profit-loss-by-stock-id! game-id updated-profit-loss-calculations)))))
+        (update-profit-loss-state! game-id updated-profit-loss-calculations)))))
 
 
 ;; > Profit Calculation Use Cases

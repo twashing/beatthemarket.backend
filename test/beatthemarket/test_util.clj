@@ -344,7 +344,9 @@
 
     (<message!! 1000)
 
+    ;; (util/pprint+identity "consume-subscriptions...")
     (let [latest-tick (->> (consume-subscriptions)
+                           ;; util/pprint+identity
                            (filter #(= 989 (:id %)))
                            last)
           [{stockTickId :stockTickId

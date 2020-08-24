@@ -29,6 +29,8 @@
          (filter f)
          first)))
 
+(def extract-id (comp :db/id ffirst))
+
 #_(defn split-namespaced-keyword [kw]
   ((juxt namespace name) kw))
 

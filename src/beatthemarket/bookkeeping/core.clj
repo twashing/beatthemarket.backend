@@ -9,6 +9,7 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.state.subscriptions :as state.subscriptions]
             [beatthemarket.util :as util :refer [exists?]]
             [clojure.core.async :as core.async])
   (:import [java.util UUID]))
@@ -53,24 +54,26 @@
      (exists? debits)  (assoc :bookkeeping.tentry/debits debits)
      (exists? credits) (assoc :bookkeeping.tentry/credits credits))))
 
-(defn ->debit [account value price amount]
+(defn ->debit [account value tick-db-id price amount]
 
   (cond-> (hash-map
             :bookkeeping.debit/id (UUID/randomUUID)
             :bookkeeping.debit/account account
             :bookkeeping.debit/value value
+            :bookkeeping.debit/tick {:db/id tick-db-id}
             ;; :db/ensure :bookkeeping.debit/validate
             )
 
     (exists? price)  (assoc :bookkeeping.debit/price price)
     (exists? amount) (assoc :bookkeeping.debit/amount amount)))
 
-(defn ->credit [account value price amount]
+(defn ->credit [account value tick-db-id price amount]
 
   (cond-> (hash-map
             :bookkeeping.credit/id (UUID/randomUUID)
             :bookkeeping.credit/account account
             :bookkeeping.credit/value value
+            :bookkeeping.credit/tick {:db/id tick-db-id}
             ;; :db/ensure :bookkeeping.credit/validate
             )
 
@@ -247,19 +250,26 @@
       (rop/succeed (assoc inputs :stock-pulled stock-pulled))
       (rop/fail (ex-info "No stock bound to id" inputs)))))
 
-(defn- cash-account-has-sufficient-funds? [conn debit-value {user-pulled :user-pulled
-                                                             game-pulled :game-pulled :as inputs}]
-  (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
-        (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
+(defn- cash-account-has-sufficient-funds-OR-trades-on-margin? [conn debit-value {user-pulled :user-pulled
+                                                                                 game-pulled :game-pulled :as inputs}]
 
-    (if (> cash-account-starting-balance debit-value)
-      (rop/succeed inputs)
-      (rop/fail (ex-info (format "Insufficient funds [%s] for purchase value [%s]"
-                                 cash-account-starting-balance
-                                 debit-value)
-                         inputs)))))
+  (if (state.subscriptions/margin-trading?)
 
-(defn- stock-account-exists? [conn {stock-id :stock-id :as inputs}]
+    (rop/succeed inputs)
+
+    (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
+          (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
+
+      (if (> cash-account-starting-balance debit-value)
+        (rop/succeed inputs)
+        (rop/fail (ex-info (format "Insufficient funds [%s] for purchase value [%s]"
+                                   cash-account-starting-balance
+                                   debit-value)
+                           inputs))))))
+
+(defn- stock-account-exists? [conn {stock-id :stock-id
+                                    game-db-id :game-id :as inputs}]
+
   (try
     (if-let [stock-account
              (ffirst (d/q '[:find (pull ?stock-id
@@ -270,47 +280,78 @@
                             [?stock-id]]
                           (d/db conn)
                           stock-id))]
+
       (rop/succeed (assoc inputs :stock-account stock-account)))
     (catch Throwable e (rop/fail (ex-info (format "No stock entity [%s]" stock-id)
                                           inputs)))))
 
-(defn- stock-account-has-sufficient-shares? [{:keys [conn stock-id stock-amount stock-account] :as inputs}]
-  (if-let [initial-account-amount
-           (-> stock-account
-               :bookkeeping.account/_counter-party
-               :bookkeeping.account/amount)]
+(defn- stock-account-has-sufficient-shares-OR-trades-on-margin? [{:keys [conn stock-id stock-amount stock-account] :as inputs}]
 
-    (if (>= initial-account-amount stock-amount)
-      (rop/succeed inputs)
+  (if (state.subscriptions/margin-trading?)
+
+    (rop/succeed inputs)
+
+    (if-let [initial-account-amount
+             (-> stock-account
+                 :bookkeeping.account/_counter-party
+                 :bookkeeping.account/amount)]
+
+      (if (>= initial-account-amount stock-amount)
+        (rop/succeed inputs)
+        (rop/fail
+          (ex-info (format "Insufficient amount of stock [%s] to sell" initial-account-amount)
+                   inputs)))
+
       (rop/fail
-        (ex-info (format "Insufficient amount of stock [%s] to sell" initial-account-amount)
-                 inputs)))
-
-    (rop/fail
-      (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
-               inputs))))
+        (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
+                 inputs)))))
 
 (defn track-profit-loss+stream-portfolio-update! [conn gameId game-db-id user-id tentry]
 
+  ;; >> TODO
+
+  ;; ? Save P/L to DB...
+  ;; ? Maybe recalculate P/L on resume
+  ;; ! Need the ability to replay stock-ticks + buys + sells
+
+  ;; NOTE
+  ;; Here P/L into local state
   (game.persistence/track-profit-loss! tentry)
 
-  (let [portfolio-update-stream (-> repl.state/system :game/games deref
+
+  (let [;; A
+        portfolio-update-stream (-> repl.state/system :game/games deref
                                     (get gameId) :portfolio-update-stream)
 
+        ;; B
         running-profit-loss (->> repl.state/system :game/games
                                  deref
                                  (#(get % gameId)) :profit-loss
                                  (game.calculation/collect-running-profit-loss gameId))
 
+        realized-profit-loss (->> repl.state/system :game/games
+                                  deref
+                                  (#(get % gameId)) :profit-loss
+                                  (game.calculation/collect-realized-profit-loss gameId))
+
         account-balances (game.calculation/collect-account-balances conn game-db-id user-id)]
 
+    ;; TODO
+    ;; ?? Push P/Ls to DB on purchases?
+    ;; ?? Push P/Ls to DB on win/lose?
+    ;; !! win/lose/pause, we have to know P/L (running + realized)
+    ;; !! save all P/Ls, on tick and transaction
+
+    ;; NOTE
+    ;; Stream P/L and Balances
     (core.async/go
       (core.async/>! portfolio-update-stream running-profit-loss)
+      (core.async/>! portfolio-update-stream realized-profit-loss)
       (core.async/>! portfolio-update-stream account-balances)))
 
   tentry)
 
-(defn buy-stock! [conn game-db-id user-db-id stock-db-id stock-amount stock-price]
+(defn buy-stock! [conn game-db-id user-db-id stock-db-id tick-db-id stock-amount stock-price]
 
   (let [validation-inputs {:conn         conn
                            :game-id      game-db-id
@@ -324,7 +365,7 @@
                              game-exists?
                              user-exists?
                              stock-exists?
-                             (partial cash-account-has-sufficient-funds? conn debit-value))]
+                             (partial cash-account-has-sufficient-funds-OR-trades-on-margin? conn debit-value))]
 
     (if (= clojure.lang.ExceptionInfo (type result))
 
@@ -344,8 +385,8 @@
                                        (update-in [:bookkeeping.account/amount] + stock-amount))
 
             ;; T-ENTRY + JOURNAL ENTRIES
-            debits+credits                    [(->debit updated-debit-account debit-value nil nil)
-                                               (->credit updated-credit-account credit-value stock-price stock-amount)]
+            debits+credits                    [(->debit updated-debit-account debit-value tick-db-id nil nil)
+                                               (->credit updated-credit-account credit-value tick-db-id stock-price stock-amount)]
             tentry                            (apply ->tentry debits+credits)
             {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id)
             updated-journal-entries           (-> game-entity
@@ -364,10 +405,9 @@
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                v
                (-> tentry :bookkeeping.tentry/id))
-          (ffirst v)
-          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id v))))))
+          (ffirst v))))))
 
-(defn sell-stock! [conn game-db-id user-db-id stock-db-id stock-amount stock-price]
+(defn sell-stock! [conn game-db-id user-db-id stock-db-id tick-db-id stock-amount stock-price]
 
   (let [validation-inputs {:conn         conn
                            :game-id      game-db-id
@@ -381,7 +421,7 @@
                         game-exists?
                         user-exists?
                         stock-exists?
-                        stock-account-has-sufficient-shares?)]
+                        stock-account-has-sufficient-shares-OR-trades-on-margin?)]
 
     (if (= clojure.lang.ExceptionInfo (type result))
 
@@ -406,8 +446,8 @@
                                               [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
-            debits+credits                  [(->debit updated-debit-account debit-value stock-price stock-amount)
-                                             (->credit updated-credit-account credit-value nil nil)]
+            debits+credits                  [(->debit updated-debit-account debit-value tick-db-id stock-price stock-amount)
+                                             (->credit updated-credit-account credit-value tick-db-id nil nil)]
             tentry                          (apply ->tentry debits+credits)
             {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id)
             updated-journal-entries         (-> game-entity
@@ -426,53 +466,4 @@
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                ent
                (-> tentry :bookkeeping.tentry/id))
-          (ffirst ent)
-          (track-profit-loss+stream-portfolio-update! conn gameId game-db-id user-db-id ent)
-          (identity ent))))))
-
-(comment
-
-  (def tentry
-
-    {:db/id                 17592186045444
-     :bookkeeping.tentry/id #uuid "c0d5052c-84f6-4d2c-921c-d0c41140f2b2"
-
-     :bookkeeping.tentry/debits
-     [{:db/id                   17592186045445
-       :bookkeeping.debit/id    #uuid "ccd8e77d-7f61-4477-a653-91f19460f404"
-       :bookkeeping.debit/account
-       {:db/id                    17592186045437
-        :bookkeeping.account/id   #uuid "69ffdf42-5220-409b-8f3e-1aa1f5d02c6e"
-        :bookkeeping.account/name "Cash"
-        :bookkeeping.account/type
-        {:db/id    17592186045428
-         :db/ident :bookkeeping.account.type/asset}
-        :bookkeeping.account/orientation
-        {:db/id    17592186045433
-         :db/ident :bookkeeping.account.orientation/debit}}
-       :bookkeeping.debit/value 5047.0}]
-
-     :bookkeeping.tentry/credits
-     [{:db/id                     17592186045446
-       :bookkeeping.credit/id     #uuid "12aa40e7-2b88-4468-bca3-90755057d366"
-       :bookkeeping.credit/account
-       {:db/id                    17592186045442
-        :bookkeeping.account/id   #uuid "1f9ade32-fd02-4322-9a7f-05bed58a4c84"
-        :bookkeeping.account/name "STOCK.Dangerous Quota"
-        :bookkeeping.account/type
-        {:db/id    17592186045428
-         :db/ident :bookkeeping.account.type/asset}
-        :bookkeeping.account/orientation
-        {:db/id    17592186045433
-         :db/ident :bookkeeping.account.orientation/debit}
-        :bookkeeping.account/counter-party
-        {:db/id             17592186045440
-         :game.stock/id     #uuid "f8c4c6ca-7d12-4d57-af63-5c3049b42fe0"
-         :game.stock/name   "Dangerous Quota"
-         :game.stock/symbol "DANG"}}
-       :bookkeeping.credit/value  5047.0
-       :bookkeeping.credit/price  50.47
-       :bookkeeping.credit/amount 100}]})
-
-  (pprint tentry)
-  (pprint (tentry-balanced? tentry)))
+          (ffirst ent))))))

@@ -3,7 +3,8 @@
             [clj-time.coerce :as c]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.sine :as datasource.sine]
-            [beatthemarket.datasource.oscillating :as datasource.oscillating]))
+            [beatthemarket.datasource.oscillating :as datasource.oscillating]
+            [beatthemarket.util :as util]))
 
 
 ;; granularity
@@ -16,12 +17,14 @@
 ;;   (beta curve) Sine + Polynomial + Stochastic Oscillating, distributed under a Beta Curve
 ;; => beta distribution of a=2 b=4.1 x=0 (see: http://keisan.casio.com/exec/system/1180573226)
 
-(defn ->data-sequences [beta-configurations]
-  (let [yintercept (datasource.core/random-double-in-range 50 120)]
+(defn ->data-sequences [seed beta-configurations]
+
+  (let [yintercept (datasource.core/random-double-in-range seed 50 120)]
+
     {:datasource.sine/generate-sine-sequence   (datasource.sine/generate-sine-sequence 1.5 2.7 yintercept)
      :datasource.sine/generate-cosine-sequence (datasource.sine/generate-cosine-sequence)
      :datasource.oscillating/generate-oscillating-sequence
-     (datasource.oscillating/generate-oscillating-sequence beta-configurations)}))
+     (datasource.oscillating/generate-oscillating-sequence seed beta-configurations)}))
 
 (defn combine-data-sequences [& data-sequences]
   (apply (partial map +) data-sequences))
@@ -29,13 +32,17 @@
 (defn ->combined-data-sequence
 
   ([beta-configurations]
+   (->combined-data-sequence (datasource.core/random-seed) beta-configurations))
+
+  ([seed beta-configurations]
    (->> integrant.repl.state/config
         :game/game
         :data-generators
-        (apply (partial ->combined-data-sequence beta-configurations))))
+        (apply (partial ->combined-data-sequence seed beta-configurations))))
 
-  ([beta-configurations & named-sequences]
-   (->> (->data-sequences beta-configurations)
+  ([seed beta-configurations & named-sequences]
+
+   (->> (->data-sequences seed beta-configurations)
         ((apply juxt named-sequences))
         (apply combine-data-sequences))))
 
@@ -50,14 +57,6 @@
           time-seq
           combined-data-sequence))))
 
-
-(comment
-
-  (def data-sequences (->data-sequences datasource.core/beta-configurations))
-
-  ;; ALL alias
-  (->combined-data-sequence datasource.core/beta-configurations)
-  (->combined-data-sequence datasource.core/beta-configurations :datasource.sine/generate-sine-sequence))
 
 (comment ;; LATEST
 

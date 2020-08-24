@@ -8,12 +8,18 @@
             [com.rpl.specter :refer [select transform ALL]]
             [datomic.client.api :as d]
             [integrant.repl.state :as repl.state]
+
             [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
+
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
+            [beatthemarket.game.games.pipeline :as games.pipeline]
+            [beatthemarket.game.games.control :as games.control]
+
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
+
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util])
   (:import [java.util UUID]
@@ -42,16 +48,16 @@
                                        :current-level
 
                                        :paused?
-                                       :level-timer-atom
+                                       :level-timer
                                        :tick-sleep-atom
 
-                                       :transact-tick-mappingfn
-                                       :stream-stock-tick-mappingfn
-                                       :calculate-profit-loss-mappingfn
-                                       :transact-profit-loss-mappingfn
-                                       :stream-portfolio-update-mappingfn
-                                       :collect-profit-loss-mappingfn
-                                       :check-level-complete-mappingfn
+                                       :process-transact!
+                                       :stream-stock-tick
+                                       :calculate-profit-loss
+                                       :transact-profit-loss
+                                       :stream-portfolio-update!
+                                       :collect-profit-loss
+                                       :check-level-complete
 
                                        :portfolio-update-stream
                                        :stock-tick-stream
@@ -65,7 +71,425 @@
            (= expected-game-control-keys )
            is))))
 
-(deftest start-game!-test
+(deftest transact-stock-tick-and-stream-pipeline-test
+
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)]
+
+
+    (doall (take 2 iterations))
+    (is true)))
+
+(defn- local-transact-stock! [{conn :conn
+                               userId :userId
+                               gameId :gameId
+                               stockId :stockId
+                               game-control :game-control}
+                              {{tickId      :game.stock.tick/id
+                                tickPrice   :game.stock.tick/close
+                                op          :op
+
+                                stockAmount :stockAmount} :local-transact-input :as v}]
+
+  (case op
+    :buy (games.pipeline/buy-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
+    :sell (games.pipeline/sell-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
+    :noop)
+  v)
+
+(deftest single-buy-and-track-running-proft-loss-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ops  [{:op :buy :stockAmount 100}
+              ;; {:op :sell :stockAmount 100}
+              ;; {:op :buy :stockAmount 200}
+              ;; {:op :sell :stockAmount 200}
+              ]
+
+        ops-count (count ops)]
+
+
+    ;; (doall (take 2 iterations))
+    (is true)
+    ;; (-> iterations first pprint)
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-count iterations)
+              (take ops-count ops))
+         (map #(local-transact-stock! opts %))
+         doall
+         ;; (take 2)
+         ;; util/pprint+identity
+         )
+
+    ))
+
+(deftest multiple-buy-track-running-proft-loss-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 , 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ops  [{:op :buy :stockAmount 100}
+              {:op :buy :stockAmount 200}]
+        ops-count (count ops)]
+
+    (is true)
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-count iterations)
+              (take ops-count ops))
+         (map #(local-transact-stock! opts %))
+         doall)))
+
+(deftest multiple-buy-sell-track-realized-proft-loss-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ops  [{:op :buy :stockAmount 100}
+              ;; {:op :sell :stockAmount 100}
+              {:op :buy :stockAmount 200}
+              {:op :sell :stockAmount 200}]
+        ops-count (count ops)]
+
+    (is true)
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-count iterations)
+              (take ops-count ops))
+         (map #(local-transact-stock! opts %))
+         doall)))
+
+(deftest multiple-buy-sell-track-realized-closeout-running-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; ops  [{:op :buy :stockAmount 100}
+        ;;       ;; {:op :sell :stockAmount 100}
+        ;;       {:op :buy :stockAmount 200}
+        ;;       {:op :sell :stockAmount 200}]
+
+        ops  [{:op :buy :stockAmount 100}
+              {:op :buy :stockAmount 200}
+              {:op :sell :stockAmount 200}
+              {:op :sell :stockAmount 100}
+              ]
+        ops-count (count ops)]
+
+    (is true)
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-count iterations)
+              (take ops-count ops))
+         (map #(local-transact-stock! opts %))
+         doall)))
+
+(deftest track-running-profit-loss-on-margin-trade-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ops  [{:op :buy :stockAmount 100}
+              {:op :buy :stockAmount 200}
+              {:op :sell :stockAmount 200}
+              {:op :sell :stockAmount 200}]
+        ops-count (count ops)]
+
+    (is true)
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-count iterations)
+              (take ops-count ops))
+         (map #(local-transact-stock! opts %))
+         doall)))
+
+(deftest A-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ops  [{:op :buy :stockAmount 100}
+              {:op :buy :stockAmount 200}
+              {:op :sell :stockAmount 200}
+              {:op :sell :stockAmount 200}]
+        ops-count (count ops)]
+
+    (is true)
+
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-count iterations)
+              (take ops-count ops))
+         (map #(local-transact-stock! opts %))
+         doall)))
+
+#_(deftest start-game!-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -84,13 +508,13 @@
 
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
-                    :stream-stock-tick-mappingfn       (fn [a]
+                    :stream-stock-tick       (fn [a]
                                                          (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
                                                            stock-ticks))
-                    :stream-portfolio-update-mappingfn (fn [a]
+                    :stream-portfolio-update! (fn [a]
                                                          (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                          a)}
         game-level :game-level/one
@@ -123,7 +547,7 @@
            (every? true?)
            is))))
 
-(deftest start-game!-with-start-position-test
+#_(deftest start-game!-with-start-position-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -142,13 +566,13 @@
 
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
-                    :stream-stock-tick-mappingfn       (fn [a]
+                    :stream-stock-tick       (fn [a]
                                                          (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
                                                            stock-ticks))
-                    :stream-portfolio-update-mappingfn (fn [a]
+                    :stream-portfolio-update! (fn [a]
                                                          (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                          a)}
         game-level :game-level/one
@@ -188,7 +612,7 @@
              (every? true?)
              is)))))
 
-(deftest buy-stock!-test
+#_(deftest buy-stock!-test
 
   ;; A
   (let [;; A
@@ -208,13 +632,13 @@
 
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
-                    :stream-stock-tick-mappingfn       (fn [a]
+                    :stream-stock-tick       (fn [a]
                                                          (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
                                                            stock-ticks))
-                    :stream-portfolio-update-mappingfn (fn [a]
+                    :stream-portfolio-update! (fn [a]
                                                          (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                          a)}
         game-level :game-level/one
@@ -288,7 +712,7 @@
             expected-debit-value         debit-value
             expected-debit-account-name  debit-account-name))))))
 
-(deftest sell-stock!-test
+#_(deftest sell-stock!-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -307,13 +731,13 @@
 
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
-                    :stream-stock-tick-mappingfn       (fn [a]
+                    :stream-stock-tick       (fn [a]
                                                          (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
                                                            stock-ticks))
-                    :stream-portfolio-update-mappingfn (fn [a]
+                    :stream-portfolio-update! (fn [a]
                                                          (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                          a)}
         game-level :game-level/one
@@ -396,22 +820,7 @@
                 expected-credit-value        credit-value
                 expected-credit-account-name credit-account-name))))))))
 
-(defn- local-transact-stock! [{conn :conn
-                               userId :userId
-                               gameId :gameId
-                               stockId :stockId}
-                              {{tickId      :game.stock.tick/id
-                                tickPrice   :game.stock.tick/close
-                                op          :op
-                                stockAmount :stockAmount} :local-transact-input :as v}]
-
-  (case op
-    :buy (game.games/buy-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
-    :sell (game.games/sell-stock! conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
-    :noop)
-  v)
-
-(deftest buy-stock!-multiple-test
+#_(deftest buy-stock!-multiple-test
 
   ;; A
   (let [;; A
@@ -431,13 +840,13 @@
 
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
-                    :stream-stock-tick-mappingfn       (fn [a]
+                    :stream-stock-tick       (fn [a]
                                                          (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
                                                            stock-ticks))
-                    :stream-portfolio-update-mappingfn (fn [a]
+                    :stream-portfolio-update! (fn [a]
                                                          (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                          a)}
         game-level :game-level/one
@@ -503,7 +912,7 @@
              (every? #(= expected-pl-calculation-keys %))
              is)))))
 
-(deftest calculate-profit-loss-single-buy-sell-test
+#_(deftest calculate-profit-loss-single-buy-sell-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -530,13 +939,13 @@
 
           opts       {:level-timer-sec                   5
                       :accounts                          (game.core/->game-user-accounts)
-                      :stream-stock-tick-mappingfn       (fn [a]
+                      :stream-stock-tick       (fn [a]
                                                            (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                              (swap! test-stock-ticks
                                                                     (fn [b]
                                                                       (conj b stock-ticks)))
                                                              stock-ticks))
-                      :stream-portfolio-update-mappingfn (fn [a]
+                      :stream-portfolio-update! (fn [a]
                                                            (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                            a)}
           game-level :game-level/one
@@ -620,7 +1029,7 @@
             (= 3000.0)
             is)))))
 
-(deftest calculate-profit-loss-multiple-buy-single-sell-test
+#_(deftest calculate-profit-loss-multiple-buy-single-sell-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -650,13 +1059,13 @@
 
           opts       {:level-timer-sec                   5
                       :accounts                          (game.core/->game-user-accounts)
-                      :stream-stock-tick-mappingfn       (fn [a]
+                      :stream-stock-tick       (fn [a]
                                                            (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                              (swap! test-stock-ticks
                                                                     (fn [b]
                                                                       (conj b stock-ticks)))
                                                              stock-ticks))
-                      :stream-portfolio-update-mappingfn (fn [a]
+                      :stream-portfolio-update! (fn [a]
                                                            (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                            a)}
           game-level :game-level/one
@@ -730,7 +1139,7 @@
             (= (.floatValue 9675.21))
             is)))))
 
-(deftest calculate-profit-loss-multiple-buy-multiple-sell-test
+#_(deftest calculate-profit-loss-multiple-buy-multiple-sell-test
 
   (testing "Testing buy / sells with this pattern
 
@@ -766,13 +1175,13 @@
 
           opts       {:level-timer-sec                   5
                       :accounts                          (game.core/->game-user-accounts)
-                      :stream-stock-tick-mappingfn       (fn [a]
+                      :stream-stock-tick       (fn [a]
                                                            (let [stock-ticks (game.games/group-stock-tick-pairs a)]
                                                              (swap! test-stock-ticks
                                                                     (fn [b]
                                                                       (conj b stock-ticks)))
                                                              stock-ticks))
-                      :stream-portfolio-update-mappingfn (fn [a]
+                      :stream-portfolio-update! (fn [a]
                                                            (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                            a)}
           game-level :game-level/one
@@ -1000,7 +1409,7 @@
      :trade-price 210.0
      :pershare-gain-or-loss 0.0}))
 
-(deftest calculate-profit-loss-on-tick-test
+#_(deftest calculate-profit-loss-on-tick-test
 
   (testing "Calculate and update P/L on streaming ticks. These are previous purchase patterns.
 
@@ -1040,7 +1449,7 @@
           opts          {:level-timer-sec               10
                          :game-id                       game-id
                          :accounts                      (game.core/->game-user-accounts)
-                         :collect-profit-loss-mappingfn (fn [{:keys [profit-loss] :as result}]
+                         :collect-profit-loss (fn [{:keys [profit-loss] :as result}]
                                                           (swap! profit-loss-history #(conj % profit-loss))
                                                           (->> (game.calculation/collect-running-profit-loss game-id profit-loss)
                                                                (assoc result :profit-loss)))}
@@ -1160,7 +1569,7 @@
                (every? true?)
                is))))))
 
-(deftest stream-portfolio-update-on-transact-test
+#_(deftest stream-portfolio-update!-on-transact-test
 
   ;; A
   (let [;; A
@@ -1283,7 +1692,7 @@
              (= expected-profit-loss-values)
              is)))))
 
-(deftest check-game-status-test
+#_(deftest check-game-status-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -1361,7 +1770,7 @@
 
         (is expected-game-events game-events)))))
 
-(deftest check-level-win-test
+#_(deftest check-level-win-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -1446,7 +1855,7 @@
               expected-game-level    current-game-level
               expected-db-game-level current-db-game-level)))))))
 
-(deftest check-level-lose-test
+#_(deftest check-level-lose-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -1533,8 +1942,314 @@
               expected-game-level    current-game-level
               expected-db-game-level current-db-game-level)))))))
 
+(deftest pausing-game-stores-expected-data-test
 
-;; win
-;; lose
-;; :timer
-;; :timeout
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ops-before-pause  [{:op :buy :stockAmount 100}
+                           {:op :buy :stockAmount 200}
+                           {:op :sell :stockAmount 200}]
+        ops-before-pause-count (count ops-before-pause)]
+
+    (is true)
+
+    ;; BEFORE :pause
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-before-pause-count iterations)
+              (take ops-before-pause-count ops-before-pause))
+         (map #(local-transact-stock! opts %))
+         doall)
+
+    ;; :pause
+    (games.control/pause-game! conn gameId)
+
+    ;; :game/start-position
+    ;; :game.user/profit-loss
+    ;; :game/status #:db{:id 17592186045430 :ident :game-status/paused}
+    ;; :game/level-timer "[]"
+    ;; :game/level #:db{:id 17592186045417 :ident :game-level/one}
+    ;; :game.stock/data-seed
+
+
+    ;; B AFTER :pause
+    (util/pprint+identity
+      (persistence.core/entity-by-domain-id conn :game/id gameId))
+    ))
+
+(deftest replay-reconstructs-running-profit-loss-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ops-before-pause  [{:op :buy :stockAmount 100}
+                           {:op :buy :stockAmount 200}
+                           {:op :sell :stockAmount 200}]
+        ops-before-pause-count (count ops-before-pause)]
+
+    (is true)
+
+    ;; BEFORE :pause
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-before-pause-count iterations)
+              (take ops-before-pause-count ops-before-pause))
+         (map #(local-transact-stock! opts %))
+         doall)
+
+    ;; :pause
+    (games.control/pause-game! conn gameId)
+
+    ;; B AFTER :pause
+    #_(util/pprint+identity
+      (persistence.core/entity-by-domain-id conn :game/id gameId))
+
+    ;; Resume game
+    (games.control/resume-game! conn gameId result-user-id game-control)
+
+    ))
+
+(deftest resume-game-correctly-replays-ticks-AND-pipelines-from-the-correct-position-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 112.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; ops  [{:op :buy :stockAmount 100}
+        ;;       ;; {:op :sell :stockAmount 100}
+        ;;       {:op :buy :stockAmount 200}
+        ;;       {:op :sell :stockAmount 200}]
+
+        ops-before-pause  [{:op :buy :stockAmount 100}
+                           {:op :buy :stockAmount 200}
+                           {:op :sell :stockAmount 200}]
+        ops-before-pause-count (count ops-before-pause)
+
+        ops-after-pause  [{:op :sell :stockAmount 100}]
+        ops-after-pause-count (count ops-after-pause)]
+
+    (is true)
+
+    ;; BEFORE :pause
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-before-pause-count iterations)
+              (take ops-before-pause-count ops-before-pause))
+         (map #(local-transact-stock! opts %))
+         doall)
+
+    ;; :pause
+    (games.control/pause-game! conn gameId)
+
+    ;; B AFTER :pause
+    #_(util/pprint+identity
+      (persistence.core/entity-by-domain-id conn :game/id gameId))
+
+    ;; Resume game
+    (let [{iterations :iterations} (games.control/resume-workbench! conn gameId result-user-id game-control data-sequence-fn)]
+
+      (->> (map first iterations)
+           (take 5)
+           util/pprint+identity)
+
+      )))
+
+(deftest B-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 112.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; ops  [{:op :buy :stockAmount 100}
+        ;;       ;; {:op :sell :stockAmount 100}
+        ;;       {:op :buy :stockAmount 200}
+        ;;       {:op :sell :stockAmount 200}]
+
+        ops-before-pause  [{:op :buy :stockAmount 100}
+                           {:op :buy :stockAmount 200}
+                           {:op :sell :stockAmount 200}]
+        ops-before-pause-count (count ops-before-pause)
+
+        ops-after-pause  [{:op :sell :stockAmount 100}]
+        ops-after-pause-count (count ops-after-pause)]
+
+    (is true)
+
+    ;; BEFORE :pause
+    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (assoc v :local-transact-input (merge stock-tick op))))
+              (take ops-before-pause-count iterations)
+              (take ops-before-pause-count ops-before-pause))
+         (map #(local-transact-stock! opts %))
+         doall)
+
+    ;; :pause
+    (games.control/pause-game! conn gameId)
+
+    ;; B AFTER :pause
+    #_(util/pprint+identity
+      (persistence.core/entity-by-domain-id conn :game/id gameId))
+
+    ;; Resume game
+    (let [{iterations :iterations} (games.control/resume-workbench! conn gameId result-user-id game-control data-sequence-fn)]
+
+      (->> (map first iterations)
+           (take 5)
+           util/pprint+identity)
+
+      )))
