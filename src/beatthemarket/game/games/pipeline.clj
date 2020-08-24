@@ -73,7 +73,7 @@
 
   (map (fn [{op :op :as maybe-tentry}]
 
-         (util/pprint+identity "B /")
+         ;; (util/pprint+identity "B /")
          ;; (util/pprint+identity op)
          ;; (util/pprint+identity maybe-tentry)
 

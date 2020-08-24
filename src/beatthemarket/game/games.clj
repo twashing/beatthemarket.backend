@@ -207,7 +207,7 @@
                old-start-position (conj [:db/retract game-db-id :game/start-position old-start-position])
                true (conj [:db/add game-db-id :game/start-position start-position]))]
 
-    (persistence.datomic/transact-entities! conn (util/pprint+identity data))))
+    (persistence.datomic/transact-entities! conn data)))
 
 (defn start-game!
 

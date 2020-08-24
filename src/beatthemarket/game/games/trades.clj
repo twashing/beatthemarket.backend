@@ -114,7 +114,7 @@
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
             [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-                        stock-db-id (util/extract-id (util/pprint+identity (persistence.core/entity-by-domain-id conn :game.stock/id stockId)))
+                        stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))
                         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId))]
 
                     (println [game-db-id user-db-id :?stockId stock-db-id tickId stockAmount tickPrice])

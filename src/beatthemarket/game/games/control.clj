@@ -574,8 +574,8 @@
                                                 (map (partial extract-tick-and-trade conn)))
          replay-result-per-stock           (fn [ticks-and-trade]
 
-                                             (util/pprint+identity "A /")
-                                             (util/pprint+identity (map second ticks-and-trade))
+                                             ;; (util/pprint+identity "A /")
+                                             ;; (util/pprint+identity (map second ticks-and-trade))
 
                                              ;; (doall (replay-stock-pipeline game-control-replay user-db-id (map second ticks-and-trade)))
 
@@ -589,12 +589,12 @@
                                                     (games.pipeline/replay-stock-pipeline game-control-replay user-db-id (map second ticks-and-trade)))))]
 
 
-     (util/pprint+identity "HERE /")
+     ;; (util/pprint+identity "HERE /")
      (doall
        (map replay-result-per-stock ticks-and-trade-all))
 
-     (util/pprint+identity "C /")
-     (util/pprint+identity (get-inmemory-profit-loss game-id))
+     ;; (util/pprint+identity "C /")
+     ;; (util/pprint+identity (get-inmemory-profit-loss game-id))
      ;; (util/pprint+identity tick-index)
      ;; (util/pprint+identity ticks-and-trade-all)
 
@@ -620,7 +620,7 @@
            inputs-at-position (games.pipeline/stock-tick-pipeline user-db-id game-control-live)]
 
 
-       (util/pprint+identity "D /")
+       ;; (util/pprint+identity "D /")
        ;; (util/pprint+identity tick-index)
        ;; (util/pprint+identity inputs-at-position)
        ;; (-> inputs-at-position util/pprint+identity)

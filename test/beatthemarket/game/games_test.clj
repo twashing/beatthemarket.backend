@@ -200,7 +200,7 @@
         userId         (:user/external-uid user)
 
         ;; B
-        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        data-sequence-fn (constantly [100.0 110.0 , 105.0 120.0 110.0 125.0 130.0])
         tick-length      (count (data-sequence-fn))
 
         ;; C
@@ -256,7 +256,7 @@
         userId         (:user/external-uid user)
 
         ;; B
-        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 110.0 125.0 130.0])
         tick-length      (count (data-sequence-fn))
 
         ;; C
@@ -2088,7 +2088,7 @@
 
     ))
 
-(deftest resume-game-correctly-replays-ticks-AND-runs-from-correct-position-test
+(deftest resume-game-correctly-replays-ticks-AND-pipelines-from-the-correct-position-test
 
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)

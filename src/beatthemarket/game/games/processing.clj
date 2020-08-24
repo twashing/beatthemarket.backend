@@ -26,22 +26,23 @@
 
 (defn recalculate-profit-loss-on-tick-perstock [price profit-loss-perstock]
 
-  (let [[butlast-chunks latest-chunk] (->> (game.persistence/profit-loss->chunks profit-loss-perstock)
-                                           ((juxt butlast last)))]
+  #_(let [[butlast-chunks latest-chunk] (->> (game.persistence/profit-loss->chunks profit-loss-perstock)
+                                             ((juxt butlast last)))]
 
-    (if (latest-chunk-closed? latest-chunk)
+      (if (latest-chunk-closed? latest-chunk)
 
-      profit-loss-perstock
+        profit-loss-perstock
 
-      (->> latest-chunk
-           (map (partial game.persistence/recalculate-profit-loss-on-tick price))
-           (concat butlast-chunks)
-           flatten))))
+        (->> latest-chunk
+             (map (partial game.persistence/recalculate-profit-loss-on-tick price))
+             (concat butlast-chunks)
+             flatten)))
+
+  (map (partial game.persistence/recalculate-profit-loss-on-tick price) profit-loss-perstock))
 
 (defn recalculate-profitloss-perstock-fn [stock-ticks profit-loss]
   (reduce-kv (fn [m k v]
-               (if-let [{price :game.stock.tick/close}
-                        (stock-tick-by-id k stock-ticks)]
+               (if-let [{price :game.stock.tick/close} (stock-tick-by-id k stock-ticks)]
                  (assoc
                    m k
                    (recalculate-profit-loss-on-tick-perstock price v))
@@ -93,26 +94,27 @@
 
 (defn process-transact! [conn data]
 
-  (println (format ">> TRANSACT / " (pr-str data)))
+  #_(println (format ">> TRANSACT / " (pr-str data)))
   (persistence.datomic/transact-entities! conn data)
   data)
 
 (defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
 
-  (println (format ">> TRANSACT :profit-loss / " (pr-str profit-loss)))
-  (util/pprint+identity profit-loss)
+  ;; (println (format ">> TRANSACT :profit-loss / " (pr-str profit-loss)))
+  ;; (util/pprint+identity profit-loss)
 
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn))
-                                  util/pprint+identity)]
+                                  ;; util/pprint+identity
+                                  )]
 
     (when (not (empty? realized-profit-loss))
-      (persistence.datomic/transact-entities! conn (util/pprint+identity realized-profit-loss))))
+      (persistence.datomic/transact-entities! conn realized-profit-loss)))
   data)
 
 (defn process-transact-level-update! [conn {level-update :level-update :as data}]
 
-  (println (format ">> TRANSACT :level-update / " (pr-str level-update)))
+  #_(println (format ">> TRANSACT :level-update / " (pr-str level-update)))
   (when (not (empty? level-update))
     (persistence.datomic/transact-entities! conn level-update))
   data)
@@ -123,13 +125,13 @@
   (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
 
     ;; (log/debug :game.games (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
-    (println (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
+    #_(println (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
     ;; (core.async/go (core.async/>! stock-tick-stream stock-ticks))
     stock-ticks))
 
 #_(defn calculate-profit-loss [game-id stock-ticks]
 
-    (println (format ">> calculate-profit-loss / %s" (count stock-ticks)))
+    #_(println (format ">> calculate-profit-loss / %s" (count stock-ticks)))
     (let [updated-profit-loss-calculations
           (-> repl.state/system :game/games
               deref
@@ -148,14 +150,28 @@
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
 
-  ;; (println (format ">> calculate-profit-loss on TICK / " (count stock-ticks)))
-  {:stock-ticks stock-ticks :profit-loss {}})
+  (println (format ">> calculate-profit-loss on TICK / %s" (count stock-ticks)))
+  #_{:stock-ticks stock-ticks :profit-loss {}}
+
+  (let [updated-profit-loss-calculations
+        (-> repl.state/system :game/games
+            deref
+            (get game-id)
+            :profit-loss
+            ((partial recalculate-profitloss-perstock-fn stock-ticks))
+            util/pprint+identity)]
+
+    (->> updated-profit-loss-calculations
+         (game.persistence/update-profit-loss-state! game-id)
+         (#(get % game-id))
+         :profit-loss
+         (hash-map :stock-ticks stock-ticks :profit-loss))))
 
 (defmethod calculate-profit-loss :buy [op user-id game-id tentry]
 
 
   (println (format ">> calculate-profit-loss on BUY / " (keys tentry)))
-  (let [profit-loss (game.calculation/calculate-profit-loss! op user-id tentry)]
+  (let [profit-loss (util/pprint+identity (game.calculation/calculate-profit-loss! op user-id tentry))]
 
     {:tentry tentry :profit-loss profit-loss}))
 
@@ -163,7 +179,7 @@
 
 
   (println (format ">> calculate-profit-loss on SELL / " (keys tentry)))
-  (let [profit-loss (game.calculation/calculate-profit-loss! op user-id tentry)]
+  (let [profit-loss (util/pprint+identity (game.calculation/calculate-profit-loss! op user-id tentry))]
 
     {:tentry tentry :profit-loss profit-loss}))
 
@@ -175,17 +191,17 @@
 
 (defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as result}]
 
-  ;; (println (format ">> STREAM portfolio-update /" (pr-str result)))
-  (util/pprint+identity profit-loss)
-  #_(when (not (empty? profit-loss))
+  #_(println (format ">> STREAM portfolio-update /" (pr-str result)))
+  (when (not (empty? profit-loss))
 
       (log/debug :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
+      ;; (util/pprint+identity profit-loss)
       (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
   result)
 
 (defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as result}]
 
-  ;; (println (format ">> CHECK level-complete / " (pr-str result)))
+  ;; #_(println (format ">> CHECK level-complete / " (pr-str result)))
   #_(let [{profit-threshold :profit-threshold
            lose-threshold :lose-threshold
            level :level} (deref current-level)
@@ -216,6 +232,6 @@
 
 (defn stream-level-update! [game-event-stream data]
 
-  ;; (println (format ">> STREAM level-update! / " (pr-str data)))
+  ;; #_(println (format ">> STREAM level-update! / " (pr-str data)))
   ;; (log/debug :game.games (format ">> stream-level-update! /" data))
   data)
