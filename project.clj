@@ -121,7 +121,8 @@
                  [rop "0.4.1"]
                  [orchestra "2018.12.06-2"]
                  [org.kohsuke/wordnet-random-name "1.3"]
-                 [random-seed "1.0.0"]]
+                 [random-seed "1.0.0"]
+                 [magnet/payments.stripe "0.3.4"]]
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]

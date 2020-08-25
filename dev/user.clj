@@ -10,7 +10,10 @@
             [clojure.core.match :refer [match]]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.migration.core :as migration.core]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :as util]
+
+            [magnet.payments.core :as core]
+            [magnet.payments.stripe :as stripe]))
 
 
 (comment ;; Convenience fns
@@ -40,7 +43,8 @@
 
   ;; Individual
   (prep)
-  (ig/init integrant.repl.state/config [:service/service])
+  ;; (ig/init integrant.repl.state/config [:service/service])
+  (ig/init integrant.repl.state/config [:magnet.payments/stripe])
   (def datomic-client (ig/init integrant.repl.state/config [:persistence/datomic]))
 
 
