@@ -328,7 +328,7 @@
         realized-profit-loss (->> repl.state/system :game/games
                                   deref
                                   (#(get % gameId)) :profit-loss
-                                  (game.calculation/collect-realized-profit-loss gameId))
+                                  (game.calculation/collect-realized-profit-loss conn gameId))
 
         account-balances (game.calculation/collect-account-balances conn game-db-id user-id)]
 

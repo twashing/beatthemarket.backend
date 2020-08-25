@@ -204,11 +204,12 @@
 (defn resolve-user-personal-profit-loss [context {email :email gameId :gameId :as args} _]
 
   (let [game-id (UUID/fromString gameId)
+        conn    (-> repl.state/system :persistence/datomic :opts :conn)
 
         realized-profit-loss (map graphql.encoder/profit-loss->graphql
-                                  (game.calculation/collect-realized-profit-loss game-id))
-        running-profit-loss (map graphql.encoder/profit-loss->graphql
-                                 (game.calculation/collect-running-profit-loss game-id))]
+                                  (game.calculation/collect-realized-profit-loss conn game-id))
+        running-profit-loss  (map graphql.encoder/profit-loss->graphql
+                                  (game.calculation/collect-running-profit-loss game-id))]
 
     (concat realized-profit-loss running-profit-loss)))
 
