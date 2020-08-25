@@ -28,15 +28,16 @@
                      :integrant
                      (inject-environment profile))))
 
-  (ig/load-namespaces {:beatthemarket.handler.http/service      :service/service
-                       :beatthemarket.handler.http/server       :server/server
-                       :beatthemarket.iam/authentication        :firebase/firebase
-                       :beatthemarket.persistence/datomic       :persistence/datomic
-                       :beatthemarket.state/nrepl               :nrepl/nrepl
-                       :beatthemarket.state/logging             :logging/logging
-                       :beatthemarket.state/subscriptions       :subscriptions/subscriptions
-                       :beatthemarket.datasource/name-generator :name-generator/name-generator
-                       :beatthemarket.game/core                 :game/games}))
+  (ig/load-namespaces {:beatthemarket.handler.http/service        :service/service
+                       :beatthemarket.handler.http/server         :server/server
+                       :beatthemarket.iam/authentication          :firebase/firebase
+                       :beatthemarket.persistence/datomic         :persistence/datomic
+                       :beatthemarket.state/nrepl                 :nrepl/nrepl
+                       :beatthemarket.state/logging               :logging/logging
+                       :beatthemarket.state/subscriptions         :subscriptions/subscriptions
+                       :beatthemarket.integration.payments/stripe :magnet.payments/stripe
+                       :beatthemarket.datasource/name-generator   :name-generator/name-generator
+                       :beatthemarket.game/core                   :game/games}))
 
 (defn set-prep
 
