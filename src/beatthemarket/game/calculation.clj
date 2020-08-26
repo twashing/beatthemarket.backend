@@ -17,22 +17,86 @@
    :profit-loss-type profit-loss-type
    :profit-loss      profit-loss})
 
-(defn collect-realized-profit-loss [conn user-id game-id]
+(defn group-by-stock [[game-id profit-losses]]
 
-  (->> (->> (d/q '[:find (pull ?pls [*])
-                   :in $ ?gameId ?user-id
-                   :where
-                   [?g :game/id ?gameId]
-                   [?g :game/users ?gus]
-                   [?gus :game.user/user ?user-id]
-                   [?gus :game.user/profit-loss ?pls]]
-                 (d/db conn)
-                 game-id user-id))
-       (map first)
-       (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
-                 {stock-id :game.stock/id} :game.user.profit-loss/stock
-                 amount :game.user.profit-loss/amount}]
-              (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount)))))
+  (for [[stock-id vs] (group-by :stock-id profit-losses)
+        :let [profit-loss-amount (->> (reduce (fn [ac {pl :profit-loss}]
+                                                (+ ac pl))
+                                              0.0
+                                              vs)
+                                      (format "%.2f") (Float.))]]
+
+    (->profit-loss-event nil nil game-id stock-id :realized-profit-loss profit-loss-amount)))
+
+(defn collect-realized-profit-loss-allgames
+
+  ([conn user-id]
+
+   (collect-realized-profit-loss-allgames conn user-id  false))
+
+  ([conn user-id group-by-stock?]
+
+   (let [db-result (->> (d/q '[:find ?gameId (pull ?pls [*])
+                               :in $ ?user-id
+                               :where
+                               [?g :game/id ?gameId]
+                               [?g :game/users ?gus]
+                               [?gus :game.user/user ?user-id]
+                               [?gus :game.user/profit-loss ?pls]]
+                             (d/db conn)
+                             user-id)
+                        (map (fn [[game-id
+                                  {{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
+                                   {stock-id :game.stock/id} :game.user.profit-loss/stock
+                                   amount :game.user.profit-loss/amount}]]
+                               (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount))))
+
+         game-grouping (for [[game-id vs] (group-by :game-id db-result)]
+                         [game-id vs])]
+
+     (if (not group-by-stock?)
+
+       (->> (map #(apply hash-map %) game-grouping)
+            (apply merge))
+
+       (->> (map group-by-stock game-grouping)
+            (apply merge))))))
+
+(defn collect-realized-profit-loss-pergame
+
+  ([conn user-id game-id]
+
+   (collect-realized-profit-loss-pergame conn user-id game-id false))
+
+  ([conn user-id game-id group-by-stock?]
+
+   (let [result (->> (d/q '[:find (pull ?pls [*])
+                             :in $ ?gameId ?user-id
+                             :where
+                             [?g :game/id ?gameId]
+                             [?g :game/users ?gus]
+                             [?gus :game.user/user ?user-id]
+                             [?gus :game.user/profit-loss ?pls]]
+                           (d/db conn)
+                           game-id user-id)
+                      (map first)
+                      (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
+                                {stock-id :game.stock/id} :game.user.profit-loss/stock
+                                amount :game.user.profit-loss/amount}]
+                             (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount))))]
+
+     (if (not group-by-stock?)
+
+       result
+
+       (for [[stock-id vs] (group-by :stock-id result)
+             :let [profit-loss-amount (->> (reduce (fn [ac {pl :profit-loss}]
+                                                     (+ ac pl))
+                                                   0.0
+                                                   vs)
+                                           (format "%.2f") (Float.))]]
+
+         (->profit-loss-event nil nil game-id stock-id :realized-profit-loss profit-loss-amount))))))
 
 (defn collect-running-profit-loss
 
@@ -50,15 +114,7 @@
                                                  0.0)
                                          (format "%.2f") (Float.))]]
 
-       (->profit-loss-event nil nil game-id stock-id profit-loss-type profit-loss-amount)
-       #_{:game-id          game-id
-          :stock-id         k
-          :profit-loss-type profit-loss-type
-          :profit-loss      (->> (filter profit-loss-type vs)
-                                 (reduce (fn [ac {pl profit-loss-type}]
-                                           (+ ac pl))
-                                         0.0)
-                                 (format "%.2f") (Float.))}))))
+       (->profit-loss-event nil nil game-id stock-id profit-loss-type profit-loss-amount)))))
 
 
 (defn collect-account-balances [conn game-id user-id]

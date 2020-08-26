@@ -698,18 +698,45 @@
   (let [{gameId :id :as createGameAck} (test-util/stock-buy-happy-path)
         email                          "twashing@gmail.com"]
 
-    ;; (Thread/sleep 1500)
+    ;; (Thread/sleep 2000)
 
-    ;; (util/pprint+identity (test-util/<message!! 1000))
-    ;; (util/pprint+identity (test-util/<message!! 1000))
+    (testing "Selling the stock"
 
-    (testing "Create a Game"
+      (let [latest-tick (->> (test-util/consume-subscriptions)
+                             (filter #(= 989 (:id %)))
+                             last)
+
+            [{stockTickId :stockTickId
+              stockTickTime :stockTickTime
+              stockTickClose :stockTickClose
+              stockId :stockId
+              stockName :stockName}]
+            (-> latest-tick :payload :data :stockTicks)]
+
+        (test-util/send-data {:id   991
+                              :type :start
+                              :payload
+                              {:query "mutation SellStock($input: SellStock!) {
+                                           sellStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                               :variables {:input {:gameId      gameId
+                                                   :stockId     stockId
+                                                   :stockAmount 100
+                                                   :tickId      stockTickId
+                                                   :tickPrice   stockTickClose}}}})))
+
+    (test-util/<message!! 1000)
+    (test-util/<message!! 1000)
+
+    (testing "Query a User's P/L"
 
       (test-util/send-data {:id   991
                             :type :start
                             :payload
-                            {:query "query UserPersonalProfitLoss($email: String!, $gameId: String!) {
-                                       userPersonalProfitLoss(email: $email, gameId: $gameId) {
+                            {:query "query UserPersonalProfitLoss($email: String!, $gameId: String, $groupByStock: Boolean) {
+                                       userPersonalProfitLoss(email: $email, gameId: $gameId, groupByStock: $groupByStock) {
                                          profitLoss
                                          stockId
                                          gameId
@@ -717,9 +744,17 @@
                                        }
                                      }"
                              :variables {:email email
-                                         :gameId gameId}}}))
+                                         :gameId gameId
+                                         :groupByStock true}}}))
 
-    (testing "We are returned expected game information [stocks subscriptions id]"
+    (util/pprint+identity (test-util/<message!! 1000))
+    (util/pprint+identity (test-util/<message!! 1000))
+
+
+    #_(-> (test-util/<message!! 1000) util/pprint+identity ;; :payload :data :userPersonalProfitLoss
+        )
+
+    #_(testing "We are returned expected game information [stocks subscriptions id]"
 
       (let [profit-loss (-> (test-util/<message!! 1000) #_util/pprint+identity :payload :data :userPersonalProfitLoss)
 

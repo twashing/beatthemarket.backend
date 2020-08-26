@@ -163,10 +163,12 @@
 
   :userPersonalProfitLoss
   {:type (list :ProfitLoss)
-   :args {:gameId {:type (non-null String)}
-          :email {:type (non-null String)}}
+   :args {:email {:type (non-null String)}
+          :gameId {:type String} ;; per game
+          :groupByStock {:type Boolean} ;; per stock, per game
+          }
    :resolve :resolve-user-personal-profit-loss
-   :description "Lists out a User's personal Profit/Loss, per game, per stock"}
+   :description "Lists out a User's personal Profit/Loss, all, per game, per stock"}
 
   :userMarketProfitLoss
   {:type (list (non-null :ProfitLoss))
