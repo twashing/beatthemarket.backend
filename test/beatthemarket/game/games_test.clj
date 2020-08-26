@@ -17,6 +17,7 @@
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
 
+            [beatthemarket.state.subscriptions :as state.subscriptions]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
 
@@ -31,6 +32,7 @@
   test-util/component-fixture
   test-util/migration-fixture)
 
+
 (deftest create-game!-test
 
   (testing "Creating a game returns the expected game control keys"
@@ -40,31 +42,34 @@
           sink-fn        identity
           game-control   (game.games/create-game! conn result-user-id sink-fn)
 
-          expected-game-control-keys #{:game
-                                       :profit-loss
-                                       :input-sequence
-                                       :stocks-with-tick-data
-                                       :control-channel
-                                       :current-level
+          expected-game-control-keys
+          #{:game
+            :profit-loss
+            :input-sequence
+            :stocks-with-tick-data
+            :control-channel
+            :current-level
 
-                                       :paused?
-                                       :level-timer
-                                       :tick-sleep-atom
+            :level-timer
+            :tick-sleep-atom
 
-                                       :process-transact!
-                                       :stream-stock-tick
-                                       :calculate-profit-loss
-                                       :transact-profit-loss
-                                       :stream-portfolio-update!
-                                       :collect-profit-loss
-                                       :check-level-complete
+            :process-transact!
+            :process-transact-profit-loss!
+            :process-transact-level-update!
 
-                                       :portfolio-update-stream
-                                       :stock-tick-stream
-                                       :game-event-stream
+            :calculate-profit-loss
+            :stream-portfolio-update!
 
-                                       :close-sink-fn
-                                       :sink-fn}]
+            :sink-fn
+            :close-sink-fn
+
+            :stock-tick-stream
+            :portfolio-update-stream
+            :game-event-stream
+
+            :stream-stock-tick
+            :check-level-complete
+            :stream-level-update!}]
 
       (->> (keys game-control)
            (into #{})
@@ -421,14 +426,17 @@
 
     (is true)
 
-    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
 
-                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
-                  (assoc v :local-transact-input (merge stock-tick op))))
-              (take ops-count iterations)
-              (take ops-count ops))
-         (map #(local-transact-stock! opts %))
-         doall)))
+    (with-redefs [state.subscriptions/margin-trading? (constantly true)]
+
+      (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                  (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                    (assoc v :local-transact-input (merge stock-tick op))))
+                (take ops-count iterations)
+                (take ops-count ops))
+           (map #(local-transact-stock! opts %))
+           doall))))
 
 (deftest calculate-game-scores-test
 
@@ -535,62 +543,48 @@
 
       (testing "Collect realized profit-loss, all games"
 
-        (let [expected-realized-count 1
+        (let [group-by-stock? false
+              expected-realized-count 2
               expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
               expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
                                              :profit-loss (.floatValue 166.67)}
               realized-profit-losses-allgames
-              (util/pprint+identity
-                  (game.calculation/collect-realized-profit-loss-allgames conn result-user-id false))
-              #_(game.calculation/collect-realized-profit-loss-allgames conn result-user-id false)
-              ]
+              (game.calculation/collect-realized-profit-loss-allgames conn result-user-id group-by-stock?)
+
+              realized-profit-losses-allgames-forgame (get realized-profit-losses-allgames gameId)]
 
 
-          #_(is (= expected-realized-count (count realized-profit-losses-perstock)))
+          (is (= expected-realized-count (count realized-profit-losses-allgames-forgame)))
 
-          #_(->> realized-profit-losses-perstock
-                 (map keys)
-                 (map #(into #{} %))
-                 (every? #(= expected-realized-keys %))
-                 is)
-
-          #_(-> (first realized-profit-losses-perstock)
-                (select-keys [:profit-loss-type :profit-loss])
-                (= expected-realized-profit-loss)
-                is)
-
-          ))
+          (->> realized-profit-losses-allgames-forgame
+               (map keys)
+               (map #(into #{} %))
+               (every? #(= expected-realized-keys %))
+               is)))
 
       (testing "Collect realized profit-loss, all games, per stock"
 
-        (let [expected-realized-count 1
+        (let [group-by-stock? true
+              expected-realized-count 1
               expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
               expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
                                              :profit-loss (.floatValue 166.67)}
               realized-profit-losses-allgames
-              (util/pprint+identity
-                (game.calculation/collect-realized-profit-loss-allgames conn result-user-id true))
-              #_(game.calculation/collect-realized-profit-loss-allgames conn result-user-id true)]
+              (game.calculation/collect-realized-profit-loss-allgames conn result-user-id group-by-stock?) ]
 
 
-          #_(is (= expected-realized-count (count realized-profit-losses-perstock)))
+          (is (= expected-realized-count (count realized-profit-losses-allgames)))
 
-          #_(->> realized-profit-losses-perstock
+          (->> realized-profit-losses-allgames
                (map keys)
                (map #(into #{} %))
                (every? #(= expected-realized-keys %))
                is)
 
-          #_(-> (first realized-profit-losses-perstock)
+          (-> (first realized-profit-losses-allgames)
               (select-keys [:profit-loss-type :profit-loss])
               (= expected-realized-profit-loss)
-              is)
-
-          )))
-
-    ;; (testing "Collect realized profit-loss, per stock, per game")
-
-    ))
+              is))))))
 
 #_(deftest A-test
 

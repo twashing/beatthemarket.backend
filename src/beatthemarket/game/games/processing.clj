@@ -95,9 +95,7 @@
   ;; (util/pprint+identity profit-loss)
 
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
-                                  (map (partial profit-loss->entity conn))
-                                  ;; util/pprint+identity
-                                  )]
+                                  (map (partial profit-loss->entity conn)))]
 
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
@@ -192,7 +190,6 @@
 (defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as result}]
 
   (println (format ">> CHECK level-complete / " (pr-str result)))
-  ;; (util/pprint+identity profit-loss)
 
   (let [{profit-threshold :profit-threshold
          lose-threshold :lose-threshold
@@ -217,14 +214,7 @@
                  :level level
                  :profit-loss running+realized-pl}
           profit-threshold-met? (assoc :event :win)
-          lose-threshold-met? (assoc :event :lose))
-
-        #_(util/pprint+identity
-                             (cond-> {:game-id game-id
-                                      :level level
-                                      :profit-loss running+realized-pl}
-                               profit-threshold-met? (assoc :event :win)
-                               lose-threshold-met? (assoc :event :lose)))]
+          lose-threshold-met? (assoc :event :lose))]
 
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
