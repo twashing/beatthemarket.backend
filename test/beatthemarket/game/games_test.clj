@@ -14,6 +14,7 @@
             [beatthemarket.game.games :as game.games]
 
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
+            [beatthemarket.game.games.processing :as games.processing]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
 
@@ -128,6 +129,7 @@
     :noop)
   v)
 
+;; TODO
 (deftest single-buy-and-track-running-proft-loss-test
 
   (let [;; A
@@ -196,6 +198,7 @@
 
     ))
 
+;; TODO
 (deftest multiple-buy-track-running-proft-loss-test
 
   (let [;; A
@@ -252,6 +255,7 @@
          (map #(local-transact-stock! opts %))
          doall)))
 
+;; TODO
 (deftest multiple-buy-sell-track-realized-proft-loss-test
 
   (let [;; A
@@ -311,6 +315,7 @@
          (map #(local-transact-stock! opts %))
          doall)))
 
+;; TODO
 (deftest multiple-buy-sell-track-realized-closeout-running-test
 
   (let [;; A
@@ -376,6 +381,7 @@
          (map #(local-transact-stock! opts %))
          doall)))
 
+;; TODO
 (deftest track-running-profit-loss-on-margin-trade-test
 
   (let [;; A
@@ -438,6 +444,7 @@
            (map #(local-transact-stock! opts %))
            doall))))
 
+;; TODO
 (deftest calculate-game-scores-test
 
   (let [;; A
@@ -645,7 +652,7 @@
          (map #(local-transact-stock! opts %))
          doall)))
 
-#_(deftest start-game!-test
+(deftest start-game!-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -665,7 +672,7 @@
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
                     :stream-stock-tick       (fn [a]
-                                                         (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                         (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
@@ -703,7 +710,7 @@
            (every? true?)
            is))))
 
-#_(deftest start-game!-with-start-position-test
+(deftest end-game!-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -723,7 +730,61 @@
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
                     :stream-stock-tick       (fn [a]
-                                                         (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                         (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
+                                                           (swap! test-stock-ticks
+                                                                  (fn [b]
+                                                                    (conj b stock-ticks)))
+                                                           stock-ticks))
+                    :stream-portfolio-update! (fn [a]
+                                                         (swap! test-portfolio-updates (fn [b] (conj b a)))
+                                                         a)}
+        game-level :game-level/one
+        {{gameId     :game/id :as game} :game
+         :as                          game-control}
+        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)]
+
+    (testing "Running game has correct settings"
+
+      (let [{start-time :game/start-time
+             {status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))]
+
+        (is (util/exists? start-time))
+        (is (= :game-status/created status))))
+
+    (games.control/exit-game! conn gameId)
+
+    (testing "Exiting a game, correctly sets :game/end-time abd :game/status"
+
+      (let [{start-time :game/start-time
+             end-time :game/end-time
+             {status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))]
+
+        (is (t/after? (c/to-date-time end-time) (c/to-date-time start-time)))
+        (is (= :game-status/exited status))))))
+
+(deftest start-game!-with-start-position-test
+
+  (let [;; A
+        conn                                (-> repl.state/system :persistence/datomic :opts :conn)
+        {result-user-id :db/id
+         userId         :user/external-uid} (test-util/generate-user! conn)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length     (count (data-sequence-fn))
+
+
+        ;; C create-game!
+        sink-fn                identity
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec                   5
+                    :accounts                          (game.core/->game-user-accounts)
+                    :stream-stock-tick       (fn [a]
+                                                         (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
@@ -789,7 +850,7 @@
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
                     :stream-stock-tick       (fn [a]
-                                                         (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                         (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
@@ -888,7 +949,7 @@
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
                     :stream-stock-tick       (fn [a]
-                                                         (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                         (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
@@ -997,7 +1058,7 @@
         opts       {:level-timer-sec                   5
                     :accounts                          (game.core/->game-user-accounts)
                     :stream-stock-tick       (fn [a]
-                                                         (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                         (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                            (swap! test-stock-ticks
                                                                   (fn [b]
                                                                     (conj b stock-ticks)))
@@ -1096,7 +1157,7 @@
           opts       {:level-timer-sec                   5
                       :accounts                          (game.core/->game-user-accounts)
                       :stream-stock-tick       (fn [a]
-                                                           (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                           (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                              (swap! test-stock-ticks
                                                                     (fn [b]
                                                                       (conj b stock-ticks)))
@@ -1216,7 +1277,7 @@
           opts       {:level-timer-sec                   5
                       :accounts                          (game.core/->game-user-accounts)
                       :stream-stock-tick       (fn [a]
-                                                           (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                           (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                              (swap! test-stock-ticks
                                                                     (fn [b]
                                                                       (conj b stock-ticks)))
@@ -1332,7 +1393,7 @@
           opts       {:level-timer-sec                   5
                       :accounts                          (game.core/->game-user-accounts)
                       :stream-stock-tick       (fn [a]
-                                                           (let [stock-ticks (game.games/group-stock-tick-pairs a)]
+                                                           (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                              (swap! test-stock-ticks
                                                                     (fn [b]
                                                                       (conj b stock-ticks)))
