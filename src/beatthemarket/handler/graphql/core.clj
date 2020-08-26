@@ -201,16 +201,34 @@
                                                                 :user/name :userName
                                                                 :user/external-uid :userExternalUid})))))
 
-(defn resolve-user-personal-profit-loss [context {email :email gameId :gameId :as args} _]
+(defn resolve-user-personal-profit-loss [context {:keys [email gameId groupByStock] :as args} _]
 
-  (let [game-id (UUID/fromString gameId)
+  ;; (util/pprint+identity args)
 
-        realized-profit-loss (map graphql.encoder/profit-loss->graphql
-                                  (game.calculation/collect-realized-profit-loss game-id))
-        running-profit-loss (map graphql.encoder/profit-loss->graphql
-                                 (game.calculation/collect-running-profit-loss game-id))]
+  (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
+        user-db-id (ffirst
+                     (d/q '[:find ?e
+                            :in $ ?email
+                            :where [?e :user/email ?email]]
+                          (d/db conn)
+                          email))
+        group-by-stock? (if groupByStock groupByStock false)]
 
-    (concat realized-profit-loss running-profit-loss)))
+
+    ;; ? Snapshot (Running + Realized P/L)
+    ;; Realized P/L (all, per game)
+    ;; Realized P/L (per stock, per game)
+    ;; (highest score, most recent score)
+
+    (if gameId
+
+      (let [game-id (UUID/fromString gameId)]
+
+        (->> (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id group-by-stock?)
+             (map graphql.encoder/profit-loss->graphql)))
+
+      (->> (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?)
+           (map graphql.encoder/profit-loss->graphql)))))
 
 (defn resolve-user-market-profit-loss [context {email :email} _]
 

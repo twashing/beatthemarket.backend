@@ -97,7 +97,7 @@
                                                                (map persistence.core/bind-temporary-id))))
 
   ([conn user-entity accounts game-level stocks]
-   (initialize-game! conn user-entity accounts game-level stocks {}))
+   (initialize-game! conn user-entity accounts game-level stocks {:game-status :game-status/created}))
 
   ([conn user-entity accounts game-level stocks opts]
    (let [game (->game game-level stocks user-entity accounts opts)]

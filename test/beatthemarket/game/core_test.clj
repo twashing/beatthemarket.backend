@@ -12,6 +12,8 @@
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
+            [beatthemarket.game.games.control :as games.control]
+
             [beatthemarket.util :as util]
             [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.persistence.core :as persistence.core]
@@ -62,6 +64,8 @@
         pulled-game (d/pull (d/db conn) '[*] result-game-id)
         pulled-user (d/pull (d/db conn) '[*] result-user-id)]
 
+    ;; (is true)
+
     (let [game-users (:game/users pulled-game)]
 
       (testing "User has bound game"
@@ -98,22 +102,25 @@
 
         game-id  nil
         user-id  nil
-        stock-id nil]
+        stock-id nil
+        tick-db-id nil]
 
     (testing "Cannot buy stock without having created a game"
 
-      (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price)))
+      ;; [conn game-db-id user-db-id stock-db-id tick-db-id stock-amount stock-price]
+      (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id tick-db-id stock-amount stock-price)))
 
       (testing "Cannot buy stock without having a user"
 
         (let [user-id                  (:db/id (test-util/generate-user! conn))
               sink-fn                  identity
               {{game-id :db/id} :game} (game.games/create-game! conn user-id sink-fn)
-              {stock-id :db/id}        (ffirst (test-util/generate-stocks! conn 1))]
+              {stock-id :db/id}        (ffirst (test-util/generate-stocks! conn 1))
+              tick-db-id               nil]
 
           (testing "Buying a stock creates a tentry"
 
-            (let [{tentry-id :db/id} (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price)]
+            (let [{tentry-id :db/id} (bookkeeping/buy-stock! conn game-id user-id stock-id tick-db-id stock-amount stock-price)]
 
               (is (util/exists? tentry-id))
 
@@ -202,13 +209,13 @@
           sink-fn                  identity
           {{game-id :db/id} :game} (game.games/create-game! conn user-id sink-fn
                                                             :game-level/one
-                                                            game.games/->data-sequence
+                                                            games.control/->data-sequence
                                                             {:accounts (game.core/->game-user-accounts starting-cash-balance)})
 
+          {stock-id :db/id} (ffirst (test-util/generate-stocks! conn 1))
+          tick-db-id        nil]
 
-          {stock-id :db/id}        (ffirst (test-util/generate-stocks! conn 1))]
-
-      (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id stock-amount stock-price))))))
+      (is (thrown? ExceptionInfo (bookkeeping/buy-stock! conn game-id user-id stock-id tick-db-id stock-amount stock-price))))))
 
 (deftest sell-stock!-test
 
@@ -218,11 +225,12 @@
 
         game-id  nil
         user-id  nil
-        stock-id nil]
+        stock-id nil
+        tick-db-id nil]
 
     (testing "Cannot sell stock without having created a game"
 
-      (is (thrown? ExceptionInfo (bookkeeping/sell-stock! conn game-id user-id stock-id stock-amount stock-price)))
+      (is (thrown? ExceptionInfo (bookkeeping/sell-stock! conn game-id user-id stock-id tick-db-id stock-amount stock-price)))
 
       (testing "Cannot sell stock without having a user"
 
@@ -233,19 +241,19 @@
 
           (testing "Cannot sell stock if you have insufficient shares"
 
-            (is (thrown? ExceptionInfo (bookkeeping/sell-stock! conn game-id user-id stock-id stock-amount stock-price))))
+            (is (thrown? ExceptionInfo (bookkeeping/sell-stock! conn game-id user-id stock-id tick-db-id stock-amount stock-price))))
 
           (testing "Initial Stock BUY"
 
             (let [buy-stock-amount 100
                   sell-stock-amount 50]
 
-              (bookkeeping/buy-stock! conn game-id user-id stock-id buy-stock-amount stock-price)
+              (bookkeeping/buy-stock! conn game-id user-id stock-id tick-db-id buy-stock-amount stock-price)
 
 
               (testing "Selling a stock creates a tentry"
 
-                (let [{tentry-id :db/id} (bookkeeping/sell-stock! conn game-id user-id stock-id sell-stock-amount stock-price)]
+                (let [{tentry-id :db/id} (bookkeeping/sell-stock! conn game-id user-id stock-id tick-db-id sell-stock-amount stock-price)]
 
                   (is (util/exists? tentry-id))
 

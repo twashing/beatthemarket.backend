@@ -425,17 +425,19 @@
 
 (defn update-level!-then->game-control-replay
   [conn user-db-id game {:keys [control-channel
+                                current-level
                                 stock-tick-stream
                                 portfolio-update-stream
+                                game-event-stream
                                 sink-fn] :as game-control} data-sequence-fn]
 
-  (let [{game-db-id          :db/id
-         game-id             :game/id
-         game-status         :game/status
-         game-level          :game/level
-         game-timer          :game/level-timer
-         game-start-position :game/start-position
-         game-stocks         :game/stocks} game
+  (let [{game-db-id             :db/id
+         game-id                :game/id
+         game-status            :game/status
+         {game-level :db/ident} :game/level
+         game-timer             :game/level-timer
+         game-start-position    :game/start-position
+         game-stocks            :game/stocks} game
 
         ;; {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
         ;;                                               (get game-level))
@@ -458,13 +460,14 @@
     ;; X. Update :game/level
     (games.core/update-inmemory-game-level! game-id game-level)
 
-
     (merge-with #(if %2 %2 %1)
+                game-control
                 (games.core/default-game-control conn user-db-id game-id
                                                  {:control-channel         control-channel
-                                                  ;; :current-level           current-level
+                                                  :current-level           current-level
                                                   :stock-tick-stream       stock-tick-stream
-                                                  :portfolio-update-stream portfolio-update-stream})
+                                                  :portfolio-update-stream portfolio-update-stream
+                                                  :game-event-stream       game-event-stream})
                 {:game game
                  :profit-loss {}
 
@@ -531,9 +534,9 @@
    (resume-common! conn game-id user-db-id game-control ->data-sequence))
 
   ([conn game-id user-db-id {:keys [control-channel
-                                 stock-tick-stream
-                                 portfolio-update-stream
-                                 sink-fn] :as game-control} data-sequence-fn]
+                                    stock-tick-stream
+                                    portfolio-update-stream
+                                    sink-fn] :as game-control} data-sequence-fn]
 
    ;; :game/start-position
    ;; :game/status #:db{:id 17592186045430 :ident :game-status/paused}
@@ -602,7 +605,7 @@
      ;; Re-start game
      (let [data-generators (-> integrant.repl.state/config :game/game :data-generators)
            {:keys [tick-sleep-atom level-timer] :as game-control-live}
-           (as-> (games.core/default-game-control conn user-db-id game-id {}) v
+           (as-> (games.core/default-game-control conn user-db-id game-id game-control-replay) v
              (merge-with #(if %2 %2 %1)
                          game-control-replay
                          v
@@ -611,9 +614,7 @@
                                               (->> (stocks->stocks-with-tick-data game-stocks data-sequence-fn data-generators)
                                                    stocks->stock-sequences
                                                    (seek-to-position tick-index)
-                                                   second
-                                                   ;; util/pprint+identity
-                                                   ))))
+                                                   second))))
 
            ;; _ (util/pprint+identity (:input-sequence game-control-live))
            ;; [historical-data inputs-at-position] (games.pipeline/stock-tick-pipeline user-db-id game-control-live)

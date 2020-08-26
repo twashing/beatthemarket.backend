@@ -458,7 +458,6 @@
 
 
         (let [latest-tick (->> (test-util/consume-subscriptions)
-                               ;; util/pprint+identity
                                (filter #(= 989 (:id %)))
                                last)
               [{stockTickId :stockTickId
@@ -552,7 +551,6 @@
 
 
       (let [latest-tick (->> (test-util/consume-subscriptions)
-                             ;; util/pprint+identity
                              (filter #(= 989 (:id %)))
                              last)
             [{stockTickId :stockTickId
@@ -576,8 +574,8 @@
                                                    :tickId      stockTickId
                                                    :tickPrice   stockTickClose}}}})
 
-        (util/pprint+identity (test-util/<message!! 1000)) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
-        (util/pprint+identity (test-util/<message!! 1000)) ;;{:type "complete", :id 990}
+        (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
+        (test-util/<message!! 1000) ;;{:type "complete", :id 990}
 
         (testing "Selling the stock"
           (test-util/send-data {:id   991
@@ -698,18 +696,72 @@
   (let [{gameId :id :as createGameAck} (test-util/stock-buy-happy-path)
         email                          "twashing@gmail.com"]
 
-    ;; (Thread/sleep 1500)
+    ;; (Thread/sleep 2000)
 
-    ;; (util/pprint+identity (test-util/<message!! 1000))
-    ;; (util/pprint+identity (test-util/<message!! 1000))
+    (testing "Selling the stock (in 2 blocks)"
 
-    (testing "Create a Game"
+      ;; Block 1
+      (let [latest-tick (->> (test-util/consume-subscriptions)
+                             (filter #(= 989 (:id %)))
+                             last)
+
+            [{stockTickId :stockTickId
+              stockTickTime :stockTickTime
+              stockTickClose :stockTickClose
+              stockId :stockId
+              stockName :stockName}]
+            (-> latest-tick :payload :data :stockTicks)]
+
+        (test-util/send-data {:id   991
+                              :type :start
+                              :payload
+                              {:query "mutation SellStock($input: SellStock!) {
+                                           sellStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                               :variables {:input {:gameId      gameId
+                                                   :stockId     stockId
+                                                   :stockAmount 50
+                                                   :tickId      stockTickId
+                                                   :tickPrice   stockTickClose}}}}))
+
+      ;; Bloack 2
+      (let [latest-tick (->> (test-util/consume-subscriptions)
+                             (filter #(= 989 (:id %)))
+                             last)
+
+            [{stockTickId :stockTickId
+              stockTickTime :stockTickTime
+              stockTickClose :stockTickClose
+              stockId :stockId
+              stockName :stockName}]
+            (-> latest-tick :payload :data :stockTicks)]
+
+        (test-util/send-data {:id   991
+                              :type :start
+                              :payload
+                              {:query "mutation SellStock($input: SellStock!) {
+                                           sellStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                               :variables {:input {:gameId      gameId
+                                                   :stockId     stockId
+                                                   :stockAmount 50
+                                                   :tickId      stockTickId
+                                                   :tickPrice   stockTickClose}}}})))
+
+    (test-util/<message!! 1000)
+    (test-util/<message!! 1000)
+
+    (testing "Query a User's P/L (all)"
 
       (test-util/send-data {:id   991
                             :type :start
                             :payload
-                            {:query "query UserPersonalProfitLoss($email: String!, $gameId: String!) {
-                                       userPersonalProfitLoss(email: $email, gameId: $gameId) {
+                            {:query "query UserPersonalProfitLoss($email: String!, $gameId: String, $groupByStock: Boolean) {
+                                       userPersonalProfitLoss(email: $email, gameId: $gameId, groupByStock: $groupByStock) {
                                          profitLoss
                                          stockId
                                          gameId
@@ -717,28 +769,74 @@
                                        }
                                      }"
                              :variables {:email email
-                                         :gameId gameId}}}))
+                                         :gameId gameId
+                                         :groupByStock false}}})
 
-    (testing "We are returned expected game information [stocks subscriptions id]"
+      (test-util/<message!! 1000)
 
-      (let [profit-loss (-> (test-util/<message!! 1000) #_util/pprint+identity :payload :data :userPersonalProfitLoss)
+      (testing "We are returned expected game information [stocks subscriptions id]"
 
-            expected-profit-loss-keys #{:gameId :stockId :profitLoss :profitLossType}
-            expected-profit-losses #{{:profitLoss (float 0.0)
-                                      :profitLossType "realized"}
-                                     {:profitLoss (float 0.0)
-                                      :profitLossType "running"}}]
+        (let [profit-loss (-> (test-util/<message!! 1000) :payload :data :userPersonalProfitLoss)
 
-        (->> (map #(into #{} (keys %)) profit-loss)
-             (map #(= expected-profit-loss-keys %))
-             (every? true?)
-             is)
+              expected-profit-loss-count 2
+              expected-profit-loss-keys #{:gameId :stockId :profitLoss :profitLossType}
+              expected-profit-loss {;; :profitLoss 61.0
+                                      ;; :stockId stockId
+                                      :gameId gameId
+                                      :profitLossType "realized"}]
 
-        (->> profit-loss
-             (map #(select-keys % [:profitLoss :profitLossType]))
-             (into #{})
-             (= expected-profit-losses)
-             is)))
+          (is (= expected-profit-loss-count (count profit-loss)))
+
+          (->> (map #(into #{} (keys %)) profit-loss)
+               (map #(= expected-profit-loss-keys %))
+               (every? true?)
+               is)
+
+          (->> profit-loss
+               (map #(select-keys % [:gameId :profitLossType]))
+               (every? #(= expected-profit-loss %))
+               is))))
+
+    (testing "Query a User's P/L (grouped by stock)"
+
+      (test-util/send-data {:id   991
+                            :type :start
+                            :payload
+                            {:query "query UserPersonalProfitLoss($email: String!, $gameId: String, $groupByStock: Boolean) {
+                                       userPersonalProfitLoss(email: $email, gameId: $gameId, groupByStock: $groupByStock) {
+                                         profitLoss
+                                         stockId
+                                         gameId
+                                         profitLossType
+                                       }
+                                     }"
+                             :variables {:email email
+                                         :gameId gameId
+                                         :groupByStock true}}})
+
+      (test-util/<message!! 1000)
+
+      (testing "We are returned expected game information [stocks subscriptions id]"
+
+        (let [profit-loss (-> (test-util/<message!! 1000) :payload :data :userPersonalProfitLoss)
+
+              expected-profit-loss-count 1
+              expected-profit-loss-keys #{:gameId :stockId :profitLoss :profitLossType}
+              expected-profit-losses #{{:gameId gameId
+                                        :profitLossType "realized"}}]
+
+          (is (= expected-profit-loss-count (count profit-loss)))
+
+          (->> (map #(into #{} (keys %)) profit-loss)
+               (map #(= expected-profit-loss-keys %))
+               (every? true?)
+               is)
+
+          (->> profit-loss
+               (map #(select-keys % [:gameId :profitLossType]))
+               (into #{})
+               (= expected-profit-losses)
+               is))))
 
     (as-> (:game/games state/system) gs
       (deref gs)

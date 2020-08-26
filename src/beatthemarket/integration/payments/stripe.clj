@@ -8,6 +8,11 @@
 ;; Customer
 ;; Subscription
 
+(defmethod ig/init-key :magnet.payments/stripe [_ stripe]
+  stripe)
+
+(defmethod ig/halt-key! :magnet.payments/stripe [_ stripe])
+
 
 (comment
 

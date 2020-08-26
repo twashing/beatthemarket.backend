@@ -14,9 +14,11 @@
 
 (defmethod ig/init-key :subscriptions/subscriptions [_ {}]
 
-  #{:margin-trading
+  #_#{:margin-trading
     ;; :additional-balance-100k
     ;; :additional-balance-200k
     ;; :additional-balance-300k
     :additional-balance-400k
-    :refill-balance})
+    :refill-balance}
+  #{}
+  )

@@ -17,6 +17,7 @@
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
 
+            [beatthemarket.state.subscriptions :as state.subscriptions]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
 
@@ -31,6 +32,7 @@
   test-util/component-fixture
   test-util/migration-fixture)
 
+
 (deftest create-game!-test
 
   (testing "Creating a game returns the expected game control keys"
@@ -40,31 +42,34 @@
           sink-fn        identity
           game-control   (game.games/create-game! conn result-user-id sink-fn)
 
-          expected-game-control-keys #{:game
-                                       :profit-loss
-                                       :input-sequence
-                                       :stocks-with-tick-data
-                                       :control-channel
-                                       :current-level
+          expected-game-control-keys
+          #{:game
+            :profit-loss
+            :input-sequence
+            :stocks-with-tick-data
+            :control-channel
+            :current-level
 
-                                       :paused?
-                                       :level-timer
-                                       :tick-sleep-atom
+            :level-timer
+            :tick-sleep-atom
 
-                                       :process-transact!
-                                       :stream-stock-tick
-                                       :calculate-profit-loss
-                                       :transact-profit-loss
-                                       :stream-portfolio-update!
-                                       :collect-profit-loss
-                                       :check-level-complete
+            :process-transact!
+            :process-transact-profit-loss!
+            :process-transact-level-update!
 
-                                       :portfolio-update-stream
-                                       :stock-tick-stream
-                                       :game-event-stream
+            :calculate-profit-loss
+            :stream-portfolio-update!
 
-                                       :close-sink-fn
-                                       :sink-fn}]
+            :sink-fn
+            :close-sink-fn
+
+            :stock-tick-stream
+            :portfolio-update-stream
+            :game-event-stream
+
+            :stream-stock-tick
+            :check-level-complete
+            :stream-level-update!}]
 
       (->> (keys game-control)
            (into #{})
@@ -421,6 +426,69 @@
 
     (is true)
 
+
+    (with-redefs [state.subscriptions/margin-trading? (constantly true)]
+
+      (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                  (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                    (assoc v :local-transact-input (merge stock-tick op))))
+                (take ops-count iterations)
+                (take ops-count ops))
+           (map #(local-transact-stock! opts %))
+           doall))))
+
+(deftest calculate-game-scores-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+        email          (:user/email user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ops  [{:op :buy :stockAmount 100}
+              {:op :buy :stockAmount 200}
+              {:op :sell :stockAmount 200}
+              {:op :sell :stockAmount 100}]
+        ops-count (count ops)]
+
+
+    ;; Run Stock & Trade pipeline
     (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
 
                 (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
@@ -428,9 +496,97 @@
               (take ops-count iterations)
               (take ops-count ops))
          (map #(local-transact-stock! opts %))
-         doall)))
+         doall)
 
-(deftest A-test
+    (testing "Collect realized profit-losses (all)"
+
+      (let [expected-realized-count 2
+            expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
+            expected-realized-amount #{(.floatValue 666.6667) (.floatValue -500.0)}
+            realized-profit-losses (game.calculation/collect-realized-profit-loss-pergame conn result-user-id gameId)]
+
+        (is (= expected-realized-count (count realized-profit-losses)))
+
+        (->> realized-profit-losses
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= expected-realized-keys %))
+             is)
+
+        (->> realized-profit-losses
+             (map :profit-loss)
+             (into #{})
+             (= expected-realized-amount)
+             is))
+
+      (testing "Collect realized profit-loss, per stock"
+
+        (let [expected-realized-count 1
+              expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
+              expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
+                                             :profit-loss (.floatValue 166.67)}
+              realized-profit-losses-perstock (game.calculation/collect-realized-profit-loss-pergame conn result-user-id gameId true)]
+
+
+          (is (= expected-realized-count (count realized-profit-losses-perstock)))
+
+          (->> realized-profit-losses-perstock
+               (map keys)
+               (map #(into #{} %))
+               (every? #(= expected-realized-keys %))
+               is)
+
+          (-> (first realized-profit-losses-perstock)
+              (select-keys [:profit-loss-type :profit-loss])
+              (= expected-realized-profit-loss)
+              is)))
+
+      (testing "Collect realized profit-loss, all games"
+
+        (let [group-by-stock? false
+              expected-realized-count 2
+              expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
+              expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
+                                             :profit-loss (.floatValue 166.67)}
+              realized-profit-losses-allgames
+              (game.calculation/collect-realized-profit-loss-allgames conn result-user-id group-by-stock?)
+
+              realized-profit-losses-allgames-forgame (get realized-profit-losses-allgames gameId)]
+
+
+          (is (= expected-realized-count (count realized-profit-losses-allgames-forgame)))
+
+          (->> realized-profit-losses-allgames-forgame
+               (map keys)
+               (map #(into #{} %))
+               (every? #(= expected-realized-keys %))
+               is)))
+
+      (testing "Collect realized profit-loss, all games, per stock"
+
+        (let [group-by-stock? true
+              expected-realized-count 1
+              expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
+              expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
+                                             :profit-loss (.floatValue 166.67)}
+              realized-profit-losses-allgames
+              (game.calculation/collect-realized-profit-loss-allgames conn result-user-id group-by-stock?) ]
+
+
+          (is (= expected-realized-count (count realized-profit-losses-allgames)))
+
+          (->> realized-profit-losses-allgames
+               (map keys)
+               (map #(into #{} %))
+               (every? #(= expected-realized-keys %))
+               is)
+
+          (-> (first realized-profit-losses-allgames)
+              (select-keys [:profit-loss-type :profit-loss])
+              (= expected-realized-profit-loss)
+              is))))))
+
+#_(deftest A-test
 
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
@@ -1021,9 +1177,9 @@
             1000.0 pl1
             2000.0 pl2)))
 
-      (testing "We correct game.games/collect-realized-profit-loss"
+      (testing "We correct game.games/collect-realized-profit-loss-pergame"
 
-        (-> (game.calculation/collect-realized-profit-loss gameId)
+        (-> (game.calculation/collect-realized-profit-loss-pergame gameId)
             first
             :profit-loss
             (= 3000.0)
@@ -1131,9 +1287,9 @@
             2250.0                pl1
             (.floatValue 7425.21) pl2)))
 
-      (testing "game.calculation game.games/collect-realized-profit-loss"
+      (testing "game.calculation game.games/collect-realized-profit-loss-pergame"
 
-        (-> (game.calculation/collect-realized-profit-loss gameId)
+        (-> (game.calculation/collect-realized-profit-loss-pergame gameId)
             first
             :profit-loss
             (= (.floatValue 9675.21))
@@ -1281,9 +1437,9 @@
             (.floatValue 2049.47)  pl6
             (.floatValue 11139.32) pl7)))
 
-      (testing "game.calculation game.games/collect-realized-profit-loss"
+      (testing "game.calculation game.games/collect-realized-profit-loss-pergame"
 
-        (->> (game.calculation/collect-realized-profit-loss gameId)
+        (->> (game.calculation/collect-realized-profit-loss-pergame gameId)
              first
              :profit-loss
              (= (.floatValue 17729.78))

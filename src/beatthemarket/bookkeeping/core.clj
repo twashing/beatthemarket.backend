@@ -59,26 +59,22 @@
   (cond-> (hash-map
             :bookkeeping.debit/id (UUID/randomUUID)
             :bookkeeping.debit/account account
-            :bookkeeping.debit/value value
-            :bookkeeping.debit/tick {:db/id tick-db-id}
-            ;; :db/ensure :bookkeeping.debit/validate
-            )
+            :bookkeeping.debit/value value)
 
-    (exists? price)  (assoc :bookkeeping.debit/price price)
-    (exists? amount) (assoc :bookkeeping.debit/amount amount)))
+    (exists? tick-db-id) (assoc :bookkeeping.debit/tick {:db/id tick-db-id})
+    (exists? price)      (assoc :bookkeeping.debit/price price)
+    (exists? amount)     (assoc :bookkeeping.debit/amount amount)))
 
 (defn ->credit [account value tick-db-id price amount]
 
   (cond-> (hash-map
             :bookkeeping.credit/id (UUID/randomUUID)
             :bookkeeping.credit/account account
-            :bookkeeping.credit/value value
-            :bookkeeping.credit/tick {:db/id tick-db-id}
-            ;; :db/ensure :bookkeeping.credit/validate
-            )
+            :bookkeeping.credit/value value)
 
-    (exists? price)  (assoc :bookkeeping.credit/price price)
-    (exists? amount) (assoc :bookkeeping.credit/amount amount)))
+    (exists? tick-db-id) (assoc :bookkeeping.debit/tick {:db/id tick-db-id})
+    (exists? price)      (assoc :bookkeeping.credit/price price)
+    (exists? amount)     (assoc :bookkeeping.credit/amount amount)))
 
 (defn ->stock-account-name [n]
   (format "STOCK.%s" n))
@@ -332,7 +328,7 @@
         realized-profit-loss (->> repl.state/system :game/games
                                   deref
                                   (#(get % gameId)) :profit-loss
-                                  (game.calculation/collect-realized-profit-loss gameId))
+                                  (game.calculation/collect-realized-profit-loss-pergame conn gameId))
 
         account-balances (game.calculation/collect-account-balances conn game-db-id user-id)]
 

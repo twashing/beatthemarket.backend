@@ -7,30 +7,96 @@
             [beatthemarket.util :as util]))
 
 
-(defn collect-profit-loss
+(defn ->profit-loss-event [user-id tick-id game-id stock-id profit-loss-type profit-loss]
 
-  ([profit-loss-type game-id]
-   (collect-profit-loss profit-loss-type game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
+  {:user-id user-id
+   :tick-id tick-id
 
-  ([profit-loss-type game-id profit-loss]
+   :game-id          game-id
+   :stock-id         stock-id
+   :profit-loss-type profit-loss-type
+   :profit-loss      profit-loss})
 
-   (for [[k vs] profit-loss]
-     {:game-id          game-id
-      :stock-id         k
-      :profit-loss-type profit-loss-type
-      :profit-loss      (->> (filter profit-loss-type vs)
-                             (reduce (fn [ac {pl profit-loss-type}]
-                                       (+ ac pl))
-                                     0.0)
-                             (format "%.2f") (Float.))})))
+(defn group-by-stock [[game-id profit-losses]]
 
-(defn collect-realized-profit-loss
+  (for [[stock-id vs] (group-by :stock-id profit-losses)
+        :let [profit-loss-amount (->> (reduce (fn [ac {pl :profit-loss}]
+                                                (+ ac pl))
+                                              0.0
+                                              vs)
+                                      (format "%.2f") (Float.))]]
 
-  ([game-id]
-   (collect-realized-profit-loss game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
+    (->profit-loss-event nil nil game-id stock-id :realized-profit-loss profit-loss-amount)))
 
-  ([game-id profit-loss]
-   (collect-profit-loss :realized-profit-loss game-id profit-loss)))
+(defn collect-realized-profit-loss-allgames
+
+  ([conn user-id]
+
+   (collect-realized-profit-loss-allgames conn user-id  false))
+
+  ([conn user-id group-by-stock?]
+
+   (let [db-result (->> (d/q '[:find ?gameId (pull ?pls [*])
+                               :in $ ?user-id
+                               :where
+                               [?g :game/id ?gameId]
+                               [?g :game/users ?gus]
+                               [?gus :game.user/user ?user-id]
+                               [?gus :game.user/profit-loss ?pls]]
+                             (d/db conn)
+                             user-id)
+                        (map (fn [[game-id
+                                  {{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
+                                   {stock-id :game.stock/id} :game.user.profit-loss/stock
+                                   amount :game.user.profit-loss/amount}]]
+                               (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount))))
+
+         game-grouping (for [[game-id vs] (group-by :game-id db-result)]
+                         [game-id vs])]
+
+     (if (not group-by-stock?)
+
+       (->> (map #(apply hash-map %) game-grouping)
+            (apply merge))
+
+       (->> (map group-by-stock game-grouping)
+            (apply merge))))))
+
+(defn collect-realized-profit-loss-pergame
+
+  ([conn user-id game-id]
+
+   (collect-realized-profit-loss-pergame conn user-id game-id false))
+
+  ([conn user-id game-id group-by-stock?]
+
+   (let [result (->> (d/q '[:find (pull ?pls [*])
+                             :in $ ?gameId ?user-id
+                             :where
+                             [?g :game/id ?gameId]
+                             [?g :game/users ?gus]
+                             [?gus :game.user/user ?user-id]
+                             [?gus :game.user/profit-loss ?pls]]
+                           (d/db conn)
+                           game-id user-id)
+                      (map first)
+                      (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
+                                {stock-id :game.stock/id} :game.user.profit-loss/stock
+                                amount :game.user.profit-loss/amount}]
+                             (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount))))]
+
+     (if (not group-by-stock?)
+
+       result
+
+       (for [[stock-id vs] (group-by :stock-id result)
+             :let [profit-loss-amount (->> (reduce (fn [ac {pl :profit-loss}]
+                                                     (+ ac pl))
+                                                   0.0
+                                                   vs)
+                                           (format "%.2f") (Float.))]]
+
+         (->profit-loss-event nil nil game-id stock-id :realized-profit-loss profit-loss-amount))))))
 
 (defn collect-running-profit-loss
 
@@ -38,7 +104,18 @@
    (collect-running-profit-loss game-id (-> repl.state/system :game/games deref (get game-id) :profit-loss)))
 
   ([game-id profit-loss]
-   (collect-profit-loss :running-profit-loss game-id profit-loss)))
+
+   (let [profit-loss-type :running-profit-loss]
+
+     (for [[stock-id vs] profit-loss
+           :let [profit-loss-amount (->> (filter profit-loss-type vs)
+                                         (reduce (fn [ac {pl profit-loss-type}]
+                                                   (+ ac pl))
+                                                 0.0)
+                                         (format "%.2f") (Float.))]]
+
+       (->profit-loss-event nil nil game-id stock-id profit-loss-type profit-loss-amount)))))
+
 
 (defn collect-account-balances [conn game-id user-id]
 
@@ -122,26 +199,17 @@
 
 
 ;; trade batch  decrease
-(defn ->proft-loss-event [user-id tick-id game-id stock-id profit-loss-type profit-loss]
-
-  {:user-id user-id
-   :tick-id tick-id
-
-   :game-id          game-id
-   :stock-id         stock-id
-   :profit-loss-type profit-loss-type
-   :profit-loss      profit-loss})
-
 (defn calculate-realized-PL-mappingfn [latest-price
-                                       {:keys [price pershare-purchase-ratio] :as calculation}]
+                                       {:keys [amount price pershare-purchase-ratio] :as calculation}]
 
   (let [pershare-gain-or-loss (- latest-price price)
-        realized-profit-loss  (* pershare-gain-or-loss pershare-purchase-ratio)]
+        A                     (* pershare-gain-or-loss pershare-purchase-ratio)
+        realized-profit-loss  (* A amount)]
 
-    {:latest-price->price   [latest-price price]
+    {:latest-price->price     [latest-price price]
      :pershare-purchase-ratio pershare-purchase-ratio
-     :pershare-gain-or-loss pershare-gain-or-loss
-     :realized-profit-loss  realized-profit-loss}))
+     :pershare-gain-or-loss   pershare-gain-or-loss
+     :realized-profit-loss    realized-profit-loss}))
 
 (defn calculate-realized-PL [op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation]
 
@@ -150,13 +218,10 @@
         trade-history (stock->profit-loss game-id game-stock-id)]
 
     (->> (map (partial calculate-realized-PL-mappingfn latest-price) trade-history)
-         ;; util/pprint+identity
          (reduce (fn [ac {a :realized-profit-loss}]
                    (+ ac a))
                  0.0)
-         (->proft-loss-event user-id tick-id game-id game-stock-id :realized-profit-loss)
-         ;; util/pprint+identity
-         )))
+         (->profit-loss-event user-id tick-id game-id game-stock-id :realized-profit-loss))))
 
 (defn recalculate-PL-on-decrease-mappingfn [updated-stock-account-amount
                                             latest-price
@@ -213,14 +278,6 @@
     (replace-trade-state-for-stock! game-id game-stock-id updated-profit-loss)
 
     [running-profit-loss realized-profit-loss]))
-
-
-;; RESET in-memory trades
-
-;; > if crossing over (can only happen on MARGIN)
-;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
-;; GOTO profit-loss-empty?=true
-;; RETURN :running-profit-loss :realized-profit-loss
 
 (defn reset-trade-history-on-realized-pl! [op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation]
 
@@ -309,37 +366,34 @@
 
     ;; (util/pprint+identity [profit-loss-empty? realizing-profit-loss? match-or-crossing-counter-balance-threshold?])
 
-    (let [result (match [profit-loss-empty? realizing-profit-loss? match-or-crossing-counter-balance-threshold?]
+    (match [profit-loss-empty? realizing-profit-loss? match-or-crossing-counter-balance-threshold?]
 
-                        ;; SET :counter-balance-amount :counter-balance-direction
-                        ;; ADD TO in-memory trades
-                        ;; RETURN :running-profit-loss
-                        [true _ _] (create-trade-history! op game-id stock-id profit-loss profit-loss-calculation)
+           ;; SET :counter-balance-amount :counter-balance-direction
+           ;; ADD TO in-memory trades
+           ;; RETURN :running-profit-loss
+           [true _ _] (create-trade-history! op game-id stock-id profit-loss profit-loss-calculation)
 
-                        ;; > should only happen on opposite :counter-balance-direction direction
-                        ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
-                        ;; RESET in-memory trades
-                        ;; RETURN :realized-profit-loss
-                        [_ true false] (update-trade-history-on-realized-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation)
+           ;; > should only happen on opposite :counter-balance-direction direction
+           ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
+           ;; RESET in-memory trades
+           ;; RETURN :realized-profit-loss
+           [_ true false] (update-trade-history-on-realized-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation)
 
-                        ;; RESET in-memory trades
+           ;; RESET in-memory trades
 
-                        ;; > if crossing over (can only happen on MARGIN)
-                        ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
-                        ;; GOTO profit-loss-empty?=true
-                        ;; RETURN :running-profit-loss :realized-profit-loss
-                        [_ true true] (if (= (:amount profit-loss-calculation) (-> profit-loss last (get :counter-balance-amount 0)))
-                                        (reset-trade-history-on-realized-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation)
-                                        (reset-trade-history-on-crossover-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation))
+           ;; > if crossing over (can only happen on MARGIN)
+           ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
+           ;; GOTO profit-loss-empty?=true
+           ;; RETURN :running-profit-loss :realized-profit-loss
+           [_ true true] (if (= (:amount profit-loss-calculation) (-> profit-loss last (get :counter-balance-amount 0)))
+                           (reset-trade-history-on-realized-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation)
+                           (reset-trade-history-on-crossover-pl! op user-id tick-id game-id stock-id profit-loss profit-loss-calculation))
 
-                        ;; > continuing to trade in :counter-balance-direction
-                        ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
-                        ;; ADD TO in-memory trades
-                        ;; RETURN :running-profit-loss
-                        [false false _] (update-trade-history-on-running-pl! op game-id stock-id profit-loss profit-loss-calculation))]
-
-      #_(util/pprint+identity (game->profit-losses game-id))
-      result)))
+           ;; > continuing to trade in :counter-balance-direction
+           ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
+           ;; ADD TO in-memory trades
+           ;; RETURN :running-profit-loss
+           [false false _] (update-trade-history-on-running-pl! op game-id stock-id profit-loss profit-loss-calculation))))
 
 (defmulti calculate-profit-loss! (fn [op _ _] op))
 

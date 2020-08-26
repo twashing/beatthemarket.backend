@@ -57,7 +57,6 @@
 
 (defn game-user-by-user [conn user-id]
 
-  #_[{:game/_users []}]
   (ffirst
     (d/q '[:find (pull ?u [{:game.user/_user [*]}])
            :in $ ?u
@@ -68,10 +67,8 @@
 
 (defn profit-loss->entity [conn {:keys [user-id tick-id game-id stock-id profit-loss-type profit-loss]}]
 
-  (let [;; {{game-user-db-id :db/id} :game.user/_user} (util/pprint+identity (game-user-by-user conn user-id))
-        {{game-user-db-id :db/id} :game.user/_user} (game-user-by-user conn user-id)
+  (let [{{game-user-db-id :db/id} :game.user/_user} (game-user-by-user conn user-id)
 
-        ;; game-user-db-id (util/pprint+identity (game-user-by-user conn user-id))
         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tick-id))
         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stock-id))
         game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id))
@@ -80,20 +77,15 @@
                              {:game.user.profit-loss/amount profit-loss
                               :game.user.profit-loss/tick tick-db-id
                               :game.user.profit-loss/stock stock-db-id
-                              ;; :game.user.profit-loss/game game-db-id
                               :game.user.profit-loss/type (get profit-loss-type-entity-map profit-loss-type)})]
 
-    {;; :game.user/user user-id ;;game-user-db-id
-     :db/id game-user-db-id
-     :game.user/profit-loss
-     ;; {:game.user.profit-loss/amount profit-loss}
-     profit-loss-entity
-     }))
+    {:db/id game-user-db-id
+     :game.user/profit-loss profit-loss-entity}))
 
 
 (defn process-transact! [conn data]
 
-  #_(println (format ">> TRANSACT / " (pr-str data)))
+  (println (format ">> TRANSACT / " (pr-str data)))
   (persistence.datomic/transact-entities! conn data)
   data)
 
@@ -103,9 +95,7 @@
   ;; (util/pprint+identity profit-loss)
 
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
-                                  (map (partial profit-loss->entity conn))
-                                  ;; util/pprint+identity
-                                  )]
+                                  (map (partial profit-loss->entity conn)))]
 
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
@@ -158,39 +148,27 @@
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
   (println (format ">> calculate-profit-loss on TICK / %s" (count stock-ticks)))
-
   (let [updated-profit-loss-calculations
         (-> repl.state/system :game/games
             deref
             (get game-id)
             :profit-loss
-            ((partial recalculate-profitloss-perstock-fn stock-ticks))
-            ;; util/pprint+identity
-            )]
+            ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
     (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
-
     (hash-map :stock-ticks stock-ticks
               :profit-loss (game.calculation/collect-running-profit-loss game-id updated-profit-loss-calculations))))
 
 (defmethod calculate-profit-loss :buy [op user-id game-id tentry]
 
-
   (println (format ">> calculate-profit-loss on BUY / " (keys tentry)))
-  (let [profit-loss
-        ;; (util/pprint+identity (game.calculation/calculate-profit-loss! op user-id tentry))
-        (game.calculation/calculate-profit-loss! op user-id tentry)]
-
+  (let [profit-loss (game.calculation/calculate-profit-loss! op user-id tentry)]
     {:tentry tentry :profit-loss profit-loss}))
 
 (defmethod calculate-profit-loss :sell [op user-id game-id tentry]
 
-
   (println (format ">> calculate-profit-loss on SELL / " (keys tentry)))
-  (let [profit-loss
-        ;; (util/pprint+identity (game.calculation/calculate-profit-loss! op user-id tentry))
-        (game.calculation/calculate-profit-loss! op user-id tentry)]
-
+  (let [profit-loss (game.calculation/calculate-profit-loss! op user-id tentry)]
     {:tentry tentry :profit-loss profit-loss}))
 
 #_(defn collect-profit-loss [game-id {:keys [profit-loss] :as result}]
@@ -205,14 +183,13 @@
   (when (not (empty? profit-loss))
 
       (log/debug :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
-      (util/pprint+identity profit-loss)
+      ;; (util/pprint+identity profit-loss)
       (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
   result)
 
 (defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as result}]
 
   (println (format ">> CHECK level-complete / " (pr-str result)))
-  ;; (util/pprint+identity profit-loss)
 
   (let [{profit-threshold :profit-threshold
          lose-threshold :lose-threshold
@@ -237,14 +214,7 @@
                  :level level
                  :profit-loss running+realized-pl}
           profit-threshold-met? (assoc :event :win)
-          lose-threshold-met? (assoc :event :lose))
-
-        #_(util/pprint+identity
-                             (cond-> {:game-id game-id
-                                      :level level
-                                      :profit-loss running+realized-pl}
-                               profit-threshold-met? (assoc :event :win)
-                               lose-threshold-met? (assoc :event :lose)))]
+          lose-threshold-met? (assoc :event :lose))]
 
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
