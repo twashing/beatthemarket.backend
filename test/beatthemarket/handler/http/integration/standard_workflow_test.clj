@@ -188,34 +188,114 @@
             {[{client-id-persisted :game.user/user-client}] :game/users}
             (ffirst (persistence.core/entity-by-domain-id conn :game/id (UUID/fromString game-id)))]
 
-        (is (= client-id client-id-persisted))))
+        (is (= client-id client-id-persisted))
 
-    (testing "User / device pair can only have 1 running game"
+        (testing "User / device pair can only have 1 running game"
 
-      (testing "Creating another game should throw an error"
+          (testing "Creating another game should throw an error"
 
-        (test-util/send-data {:id   988
-                              :type :start
-                              :payload
-                              {:query "mutation CreateGame($gameLevel: Int!) {
+            (test-util/send-data {:id   988
+                                  :type :start
+                                  :payload
+                                  {:query "mutation CreateGame($gameLevel: Int!) {
+                                             createGame(gameLevel: $gameLevel) {
+                                               id
+                                               stocks { id name symbol }
+                                             }
+                                           }"
+                                   :variables {:gameLevel gameLevel}}})
+
+            (test-util/<message!! 1000)
+            (let [errors (-> (test-util/<message!! 1000) :payload :errors)
+                  expected-error-count 1]
+
+              (is (= expected-error-count (count errors)))
+              (is (clojure.string/starts-with? (-> errors first :message) "User device has a running game")))))))))
+
+(deftest check-empty-client-id-start-or-resume-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
+
+    (testing "REST Login (not WebSocket) ; creates a user"
+
+      (test-util/login-assertion service id-token))
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }"
-                               :variables {:gameLevel gameLevel}}})
+                             :variables {:gameLevel gameLevel}}})
 
-        (util/pprint+identity (test-util/<message!! 1000))
-        (util/pprint+identity (test-util/<message!! 1000)))
+      (test-util/<message!! 1000)
 
-      ;; TODO testing for these guys
-      (testing "Starting a game should pass the :client-id, otherwise throw an error")
-      (testing "Resuming a game should pass the :client-id, otherwise throw an error")
-      )
+      (let [{game-id :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
-    (testing "Errors should return the devices + game")
+        (testing "User / device pair can only have 1 running game"
 
-    ))
+          (testing "Starting a game should pass the :client-id, otherwise throw an error"
+
+            (test-util/send-init)
+            (test-util/<message!! 1000)
+
+            (test-util/send-data {:id   989
+                                  :type :start
+                                  :payload
+                                  {:query "mutation StartGame($id: String!) {
+                                             startGame(id: $id) {
+                                               stockTickId
+                                               stockTickTime
+                                               stockTickClose
+                                               stockId
+                                               stockName
+                                             }
+                                           }"
+                                   :variables {:id game-id}}})
+
+            (test-util/<message!! 1000)
+
+            (let [errors (-> (test-util/<message!! 1000) :payload :errors)
+                  expected-error-count 1
+                  expected-error-message "Missing :client-id in your connection_init"]
+
+              (are [x y] (= x y)
+                expected-error-count (count errors)
+                expected-error-message (-> errors first :message))))
+
+          (testing "Resuming a game should pass the :client-id, otherwise throw an error"
+
+            (test-util/send-data {:id   990
+                                  :type :start
+                                  :payload
+                                  {:query "mutation ResumeGame($gameId: String!) {
+                                             resumeGame(gameId: $gameId) {
+                                               event
+                                               gameId
+                                             }
+                                           }"
+                                   :variables {:gameId game-id}}})
+
+            (test-util/<message!! 1000)
+
+            (let [errors (-> (test-util/<message!! 1000) :payload :errors)
+                  expected-error-count 1
+                  expected-error-message "Missing :client-id in your connection_init"]
+
+              (are [x y] (= x y)
+                expected-error-count (count errors)
+                expected-error-message (-> errors first :message)))))))))
 
 (deftest start-game-resolver-test
 

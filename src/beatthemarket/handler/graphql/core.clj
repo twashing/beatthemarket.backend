@@ -2,9 +2,11 @@
   (:require [clojure.core.async :as core.async
              :refer [>!!]]
             [datomic.client.api :as d]
-            [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
+            [clojure.data.json :as json]
             [integrant.repl.state :as repl.state]
-            [beatthemarket.util :as util]
+            [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
+            [com.walmartlabs.lacinia.resolve :refer [resolve-as]]
+
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
@@ -19,39 +21,107 @@
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
-            [clojure.data.json :as json])
+            [beatthemarket.util :as util])
   (:import [java.util UUID]))
 
-
-(defn user-device-has-running-game? [conn email client-id]
-
-  ;; (util/pprint+identity [email client-id])
-
-  (ffirst
-    (util/pprint+identity
-      (d/q '[:find ?g
-             :in $ ?email ?client-id
-             :where
-             [?g :game/start-time]
-             [(missing? $ ?g :game/end-time)] ;; Is the game still running?
-             [?g :game/users ?us]
-             [?us :game.user/user-client ?client-id]  ;; For a Device
-             [?us :game.user/user ?u]
-             [?u :user/email ?email] ;; For a User
-             ]
-           (d/db conn)
-           email client-id))))
 
 (defn coerce-uuid->str [k v]
   (if (= :accountId k)
     (str v)
     v))
 
+(defn user-games [conn email]
+
+  (d/q '[:find (pull ?g [:game/id
+                         :game/start-time
+                         :game/end-time
+                         :game/status
+                         {:game/users [:game.user/user-client
+                                       :game.user/user]}])
+         :in $ ?email
+         :where
+         [?g :game/start-time]
+         [(missing? $ ?g :game/end-time)] ;; game still active?
+         (not (or [?g :game/status :game-status/won]
+                  [?g :game/status :game-status/lost]
+                  [?g :game/status :game-status/exited])) ;; game not exited?
+         [?g :game/users ?us]
+         [?us :game.user/user-client ?client-id]  ;; For a Device
+         [?us :game.user/user ?u]
+         [?u :user/email ?email] ;; For a User
+         ]
+       (d/db conn) email))
+
 (defn check-user-device-doesnt-have-running-game? [conn email client-id]
 
-  (when (user-device-has-running-game? conn email client-id)
-    (throw (ex-info "User device has a running game / email %s / client-id %" email client-id))))
+  ;; GAME STATUSes
+  {:db/ident :game-status/created}
+  {:db/ident :game-status/running}
+  {:db/ident :game-status/paused}
+  {:db/ident :game-status/won}
+  {:db/ident :game-status/lost}
+  {:db/ident :game-status/exited}
 
+  (when (ffirst
+          (d/q '[:find ?g
+                 :in $ ?email ?client-id
+                 :where
+                 [?g :game/start-time]
+                 [(missing? $ ?g :game/end-time)] ;; game still active?
+                 (not (or [?g :game/status :game-status/won]
+                          [?g :game/status :game-status/lost]
+                          [?g :game/status :game-status/exited])) ;; game not exited?
+                 [?g :game/users ?us]
+                 [?us :game.user/user-client ?client-id]  ;; For a Device
+                 [?us :game.user/user ?u]
+                 [?u :user/email ?email] ;; For a User
+                 ]
+               (d/db conn)
+               email client-id))
+    (throw (Exception. (format "User device has a running game / email %s / client-id %s" email client-id)))))
+
+(defn check-user-device-has-created-game? [conn email client-id]
+
+  (when-not (util/pprint+identity
+              (ffirst
+                (d/q '[:find ?g
+                       :in $ ?email ?client-id
+                       :where
+                       [?g :game/start-time]
+                       [(missing? $ ?g :game/end-time)] ;; game still active?
+                       [?g :game/status :game-status/created] ;; game created?
+                       [?g :game/users ?us]
+                       [?us :game.user/user-client ?client-id]  ;; For a Device
+                       [?us :game.user/user ?u]
+                       [?u :user/email ?email] ;; For a User
+                       ]
+                     (d/db conn)
+                     email client-id)))
+    (throw (Exception. (format "User device doesn't have a created game / email %s / client-id %s" email client-id)))))
+
+(defn check-user-device-has-paused-game? [conn email client-id]
+
+  (when-not (util/pprint+identity
+              (ffirst
+                (d/q '[:find ?g
+                       :in $ ?email ?client-id
+                       :where
+                       [?g :game/start-time]
+                       [(missing? $ ?g :game/end-time)] ;; game still active?
+                       [?g :game/status :game-status/paused] ;; game paused?
+                       [?g :game/users ?us]
+                       [?us :game.user/user-client ?client-id]  ;; For a Device
+                       [?us :game.user/user ?u]
+                       [?u :user/email ?email] ;; For a User
+                       ]
+                     (d/db conn)
+                     email client-id)))
+    (throw (Exception. (format "User device doesn't have a paused game / email %s / client-id %s" email client-id)))))
+
+(defn check-client-id-exists [context]
+
+  (when-not (-> context :com.walmartlabs.lacinia/connection-params :client-id)
+    (throw (Exception. "Missing :client-id in your connection_init"))))
 
 ;; RESOLVERS
 (defn resolve-login
@@ -90,57 +160,63 @@
       (assoc base-response :message :useradded)
       (assoc base-response :message :userexists))))
 
-(defn- client-id-exists? [context]
-
-  (if-not [(-> context :com.walmartlabs.lacinia/connection-params :client-id)]
-    (throw (ex-info "Missing :client-id in your connection_init"))
-    true))
-
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
 
-  ;; {:pre [(client-id-exists? context)]}
-  ;; TODO make a spec for this ^^
+  (try
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        {{{email :email} :checked-authentication} :request} context
-        client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
+    (check-client-id-exists context)
 
-    (check-user-device-doesnt-have-running-game? conn email client-id)
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context
+          client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
 
-    (let [user-db-id        (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
-          mapped-game-level (get graphql.encoder/game-level-map gameLevel)
+      (check-user-device-doesnt-have-running-game? conn email client-id)
+
+      (let [user-db-id        (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+            mapped-game-level (get graphql.encoder/game-level-map gameLevel)
 
 
-          data-generators (-> repl.state/config :game/game :data-generators)
-          combined-data-sequence-fn games.control/->data-sequence
+            data-generators (-> repl.state/config :game/game :data-generators)
+            combined-data-sequence-fn games.control/->data-sequence
 
-          ;; NOTE sink-fn updates once we start to stream a game
-          sink-fn                identity
-          {{game-id :game/id
-            :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level
-                                                          combined-data-sequence-fn
-                                                          {:accounts (game.core/->game-user-accounts)
-                                                           :client-id client-id})]
+            ;; NOTE sink-fn updates once we start to stream a game
+            sink-fn                identity
+            {{game-id :game/id
+              :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level
+                                                            combined-data-sequence-fn
+                                                            {:accounts (game.core/->game-user-accounts)
+                                                             :client-id client-id})]
 
-      (->> (game.games/game->new-game-message game user-db-id)
-           (transform [:stocks ALL] #(dissoc % :db/id))
-           (transform [:stocks ALL MAP-KEYS] (comp keyword name))))))
+        (->> (game.games/game->new-game-message game user-db-id)
+             (transform [:stocks ALL] #(dissoc % :db/id))
+             (transform [:stocks ALL MAP-KEYS] (comp keyword name)))))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 (defn resolve-start-game [context {game-id :id :as args} _]
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        {{{email :email} :checked-authentication} :request} context
-        client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
+  (try
 
-    (check-user-device-doesnt-have-running-game? conn email client-id)
+    (check-client-id-exists context)
 
-    (let [user-db-id                                          (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
-          gameId (UUID/fromString game-id)
-          game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context
+          client-id
+          (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
 
-      (->> (game.games/start-game! conn user-db-id game-control (get args :startPosition 0))
-           (map :stock-ticks)
-           (map #(map graphql.encoder/stock-tick->graphql %))))))
+      (check-user-device-has-created-game? conn email client-id)
+
+      (let [user-db-id                                          (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+            gameId (UUID/fromString game-id)
+            game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
+
+        (->> (game.games/start-game! conn user-db-id game-control (get args :startPosition 0))
+             (map :stock-ticks)
+             (map #(map graphql.encoder/stock-tick->graphql %)))))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 (defn resolve-buy-stock [context args _]
 
@@ -306,19 +382,26 @@
   ;; load game-status
   ;; seek to tick index
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        {{{email :email} :checked-authentication} :request} context
-        client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
+  (try
 
-    (check-user-device-doesnt-have-running-game? conn email client-id)
+    (check-client-id-exists context)
 
-    (let [game-id (UUID/fromString gameId)
-          event {:type :ControlEvent
-                 :event :resume
-                 :game-id game-id}]
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context
+          client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
 
-      (-> (game.games/send-control-event! game-id event)
-          (assoc :gameId gameId)))))
+      (check-user-device-has-paused-game? conn email client-id)
+
+      (let [game-id (UUID/fromString gameId)
+            event {:type :ControlEvent
+                   :event :resume
+                   :game-id game-id}]
+
+        (-> (game.games/send-control-event! game-id event)
+            (assoc :gameId gameId))))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 (defn resolve-exit-game [context {gameId :gameId} _]
 
