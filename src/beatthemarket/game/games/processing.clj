@@ -146,7 +146,7 @@
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn)))]
 
-    (util/pprint+identity profit-loss)
+    ;; (util/pprint+identity profit-loss)
 
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
@@ -156,12 +156,19 @@
 (defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as result}]
 
   (println (format ">> STREAM portfolio-update / " (pr-str result)))
-  (when (not (empty? profit-loss))
+  (let [profit-loss (->> result
+                         :profit-loss
+                         flatten
+                         (map #(dissoc % :user-id :tick-id)))]
 
-    (log/debug :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
     (util/pprint+identity profit-loss)
-    (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
-  result)
+
+    (when (not (empty? profit-loss))
+
+      (log/debug :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
+      (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
+
+    (update result :profit-loss (constantly profit-loss))))
 
 
 ;; C
@@ -194,7 +201,7 @@
           profit-threshold-met? (assoc :event :win)
           lose-threshold-met? (assoc :event :lose))]
 
-    (util/pprint+identity game-event-message)
+    ;; (util/pprint+identity game-event-message)
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
@@ -203,7 +210,7 @@
 (defn process-transact-level-update! [conn {level-update :level-update :as data}]
 
   (println (format ">> TRANSACT :level-update / " (pr-str level-update)))
-  (util/pprint+identity level-update)
+  ;; (util/pprint+identity level-update)
 
   (when (not (empty? level-update))
     (persistence.datomic/transact-entities! conn level-update))

@@ -82,40 +82,38 @@
 
 (defn check-user-device-has-created-game? [conn email client-id]
 
-  (when-not (util/pprint+identity
-              (ffirst
-                (d/q '[:find ?g
-                       :in $ ?email ?client-id
-                       :where
-                       [?g :game/start-time]
-                       [(missing? $ ?g :game/end-time)] ;; game still active?
-                       [?g :game/status :game-status/created] ;; game created?
-                       [?g :game/users ?us]
-                       [?us :game.user/user-client ?client-id]  ;; For a Device
-                       [?us :game.user/user ?u]
-                       [?u :user/email ?email] ;; For a User
-                       ]
-                     (d/db conn)
-                     email client-id)))
+  (when-not (ffirst
+              (d/q '[:find ?g
+                     :in $ ?email ?client-id
+                     :where
+                     [?g :game/start-time]
+                     [(missing? $ ?g :game/end-time)] ;; game still active?
+                     [?g :game/status :game-status/created] ;; game created?
+                     [?g :game/users ?us]
+                     [?us :game.user/user-client ?client-id]  ;; For a Device
+                     [?us :game.user/user ?u]
+                     [?u :user/email ?email] ;; For a User
+                     ]
+                   (d/db conn)
+                   email client-id))
     (throw (Exception. (format "User device doesn't have a created game / email %s / client-id %s" email client-id)))))
 
 (defn check-user-device-has-paused-game? [conn email client-id]
 
-  (when-not (util/pprint+identity
-              (ffirst
-                (d/q '[:find ?g
-                       :in $ ?email ?client-id
-                       :where
-                       [?g :game/start-time]
-                       [(missing? $ ?g :game/end-time)] ;; game still active?
-                       [?g :game/status :game-status/paused] ;; game paused?
-                       [?g :game/users ?us]
-                       [?us :game.user/user-client ?client-id]  ;; For a Device
-                       [?us :game.user/user ?u]
-                       [?u :user/email ?email] ;; For a User
-                       ]
-                     (d/db conn)
-                     email client-id)))
+  (when-not (ffirst
+              (d/q '[:find ?g
+                     :in $ ?email ?client-id
+                     :where
+                     [?g :game/start-time]
+                     [(missing? $ ?g :game/end-time)] ;; game still active?
+                     [?g :game/status :game-status/paused] ;; game paused?
+                     [?g :game/users ?us]
+                     [?us :game.user/user-client ?client-id]  ;; For a Device
+                     [?us :game.user/user ?u]
+                     [?u :user/email ?email] ;; For a User
+                     ]
+                   (d/db conn)
+                   email client-id))
     (throw (Exception. (format "User device doesn't have a paused game / email %s / client-id %s" email client-id)))))
 
 (defn check-client-id-exists [context]
@@ -223,7 +221,8 @@
 
 (defn resolve-buy-stock [context args _]
 
-  ;; (println "resolve-buy-stock CALLED /" args)
+  (println "resolve-buy-stock CALLED /" args)
+
   (let [{{{userId :uid
            email :email} :checked-authentication} :request} context
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
@@ -240,9 +239,9 @@
            (games.pipeline/buy-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false))
 
         {:message "Ack"}
-        {:message (ex-info "Error / resolve-buy-stock / INCOMPLETE /" {})})
+        (resolve-as nil {:message "Error / resolve-buy-stock / INCOMPLETE /"}))
       (catch Throwable e
-        {:message (ex-info "Error / resolve-buy-stock /" (bean e) e)}))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-sell-stock [context args _]
 
@@ -263,9 +262,9 @@
            (games.pipeline/sell-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false))
 
         {:message "Ack"}
-        {:message (ex-info "Error / resolve-sell-stock / INCOMPLETE /" {})})
+        (resolve-as nil {:message "Error / resolve-sell-stock / INCOMPLETE /"}))
       (catch Throwable e
-        {:message (ex-info "Error / resolve-sell-stock /" (bean e) e)}))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn update-sink-fn! [id-uuid sink-fn]
   (swap! (:game/games repl.state/system)

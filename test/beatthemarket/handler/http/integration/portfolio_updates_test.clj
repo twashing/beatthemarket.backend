@@ -13,12 +13,15 @@
   test-util/migration-fixture
   (test-util/subscriptions-fixture "ws://localhost:8081/ws"))
 
-
 (deftest portfolio-updates-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
-        gameLevel 1]
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
 
     (test-util/login-assertion service id-token)
 
@@ -33,6 +36,7 @@
                                      }"
                  :variables {:gameLevel gameLevel}}}))
 
+  (test-util/<message!! 1000)
 
   (let [{:keys [stocks id] :as createGameAck} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
@@ -51,7 +55,6 @@
                  :variables {:id id}}})
 
     (test-util/<message!! 1000)
-    (test-util/<message!! 1000)
 
     (test-util/send-data {:id   989
                 :type :start
@@ -66,6 +69,8 @@
                                          }
                                        }"
                  :variables {:gameId id}}})
+
+    (test-util/<message!! 1000)
 
     (test-util/send-data {:id   990
                 :type :start
@@ -90,7 +95,11 @@
                  :variables {:gameId id}}})
 
 
-    (test-util/<message!! 1000)
+    (util/pprint+identity (test-util/<message!! 1000))
+    (util/pprint+identity (test-util/<message!! 1000))
+    (util/pprint+identity (test-util/<message!! 1000))
+    (util/pprint+identity (test-util/<message!! 1000))
+    (util/pprint+identity (test-util/<message!! 1000))
 
     (let [latest-tick (->> (test-util/consume-subscriptions)
                            (filter #(= 989 (:id %)))
@@ -110,18 +119,27 @@
                                            message
                                          }
                                      }"
-                   :variables {:input {:gameId      id
-                                       :stockId     stockId
-                                       :stockAmount 100
-                                       :tickId      stockTickId
-                                       :tickPrice   stockTickClose}}}})
+                   :variables (util/pprint+identity {:input {:gameId      id
+                                                             :stockId     stockId
+                                                             :stockAmount 100
+                                                             :tickId      stockTickId
+                                                             :tickPrice   stockTickClose}})}})
+
+      (test-util/<message!! 1000)
+      (test-util/<message!! 1000)
+      (test-util/<message!! 1000)
+      (test-util/<message!! 1000)
 
       (let [expected-profit-loss-keys #{:profitLoss :stockId :gameId :profitLossType}
             expected-account-update-keys #{:id :name :balance :counterParty :amount}
             collect-events (comp :portfolioUpdates :data :payload)
             portfolio-updates (->> (test-util/consume-subscriptions)
                                    (filter #(= 990 (:id %)))
-                                   (map collect-events))]
+                                   (map collect-events))
+
+            expected-portfolio-update-count 1]
+
+        (is (= expected-portfolio-update-count (count portfolio-updates)))
 
         (->> (filter :profitLossType portfolio-updates)
              (map keys)
@@ -133,15 +151,4 @@
              (map keys)
              (map #(into #{} %))
              (map #(= expected-account-update-keys %))
-             is))
-
-      (test-util/send-data {:id   992
-                            :type :start
-                            :payload
-                            {:query "mutation exitGame($gameId: String!) {
-                                       exitGame(gameId: $gameId) {
-                                         event
-                                         gameId
-                                       }
-                                     }"
-                             :variables {:gameId id}}}))))
+             is)))))

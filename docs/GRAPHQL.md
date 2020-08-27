@@ -24,9 +24,9 @@ response: {"data":{"login":{"message":"userexists"}}}
 
 The kinds of subscriptions are itemized below
 
-* :stockTicks; a list of [:StockTick] (A)
-* :portfolioUpdates; a list of [:PortfolioUpdate] (B)
-* :gameEvents; a :GameEvent (C)
+* `:stockTicks` a list of [:StockTick] (A)
+* `:portfolioUpdates`; a list of [:PortfolioUpdate] (B)
+* `:gameEvents`; a :GameEvent (C)
 
 
 A.
