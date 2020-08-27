@@ -36,21 +36,20 @@
    (let [portfolio-with-journal (bookkeeping/->portfolio
                                   (bookkeeping/->journal))
 
-         game-users (-> (hash-map
-                          :game.user/user user
-                          :game.user/accounts accounts
-                          :game.user/portfolio portfolio-with-journal)
-                        persistence.core/bind-temporary-id
-                        list)]
+         game-user (cond-> (hash-map
+                             :game.user/user user
+                             :game.user/accounts accounts
+                             :game.user/portfolio portfolio-with-journal)
+                     client-id (assoc :game.user/user-client client-id))
+         game-users (list (persistence.core/bind-temporary-id game-user))]
 
-     (cond-> (hash-map
-               :game/id (or game-id (UUID/randomUUID))
-               :game/start-time (c/to-date (t/now))
-               :game/level game-level
-               :game/stocks stocks
-               :game/users game-users
-               :game/status game-status)
-       client-id (assoc :game.user/user-client client-id)))))
+     (hash-map
+       :game/id (or game-id (UUID/randomUUID))
+       :game/start-time (c/to-date (t/now))
+       :game/level game-level
+       :game/stocks stocks
+       :game/users game-users
+       :game/status game-status))))
 
 (defn ->stock
 

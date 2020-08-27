@@ -4,13 +4,18 @@
             [beatthemarket.persistence.core :as persistence.core]))
 
 
-(defn user-by-email [conn email]
-  (d/q '[:find (pull ?e [*])
-         :in $ ?email
-         :where
-         [?e :user/email ?email]]
-       (d/db conn)
-       email))
+(defn user-by-email
+
+  ([conn email] (user-by-email conn email '[*]))
+
+  ([conn email pull-expr]
+
+   (d/q '[:find (pull ?e pexpr)
+          :in $ ?email pexpr
+          :where
+          [?e :user/email ?email]]
+        (d/db conn)
+        email pull-expr)))
 
 (defn user-by-external-uid [conn external-uid]
   (d/q '[:find (pull ?e [*])
