@@ -387,7 +387,7 @@
                                        (:remaining-in-seconds remaining)
                                        (if controlv controlv :running)))
 
-      (let [x        (ffirst iters)
+      (let [_        (ffirst iters)
             expired? (time-expired? remaining)
 
             [nowA endA] (match [event expired?]

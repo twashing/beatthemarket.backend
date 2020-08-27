@@ -123,6 +123,7 @@
   (when-not (-> context :com.walmartlabs.lacinia/connection-params :client-id)
     (throw (Exception. "Missing :client-id in your connection_init"))))
 
+
 ;; RESOLVERS
 (defn resolve-login
   [context _ _]
@@ -164,13 +165,14 @@
 
   (try
 
-    (check-client-id-exists context)
+    ;; (check-client-id-exists context)
 
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context
-          client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
+          ;; client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))
+          ]
 
-      (check-user-device-doesnt-have-running-game? conn email client-id)
+      ;; (check-user-device-doesnt-have-running-game? conn email client-id)
 
       (let [user-db-id        (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
             mapped-game-level (get graphql.encoder/game-level-map gameLevel)
@@ -185,7 +187,8 @@
               :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level
                                                             combined-data-sequence-fn
                                                             {:accounts (game.core/->game-user-accounts)
-                                                             :client-id client-id})]
+                                                             ;; :client-id client-id
+                                                             })]
 
         (->> (game.games/game->new-game-message game user-db-id)
              (transform [:stocks ALL] #(dissoc % :db/id))
@@ -198,14 +201,14 @@
 
   (try
 
-    (check-client-id-exists context)
+    ;; (check-client-id-exists context)
 
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context
-          client-id
-          (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
+          ;; client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))
+          ]
 
-      (check-user-device-has-created-game? conn email client-id)
+      ;; (check-user-device-has-created-game? conn email client-id)
 
       (let [user-db-id                                          (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
             gameId (UUID/fromString game-id)
@@ -384,13 +387,14 @@
 
   (try
 
-    (check-client-id-exists context)
+    ;; (check-client-id-exists context)
 
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context
-          client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))]
+          ;; client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))
+          ]
 
-      (check-user-device-has-paused-game? conn email client-id)
+      ;; (check-user-device-has-paused-game? conn email client-id)
 
       (let [game-id (UUID/fromString gameId)
             event {:type :ControlEvent
