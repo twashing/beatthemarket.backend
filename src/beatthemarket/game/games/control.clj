@@ -1,10 +1,11 @@
 (ns beatthemarket.game.games.control
   (:require [clojure.core.async :as core.async]
             [clojure.core.match :refer [match]]
+            [clj-time.core :as t]
+            [clj-time.coerce :as c]
+            [datomic.client.api :as d]
             [io.pedestal.log :as log]
             [integrant.repl.state :as repl.state]
-            [clj-time.core :as t]
-            [datomic.client.api :as d]
 
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
@@ -229,10 +230,11 @@
 
 (defn exit-game! [conn game-id]
 
-  (let [{game-db-id :db/id
-         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+  (let [{game-db-id              :db/id
+         {game-status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
         data [[:db/retract  game-db-id :game/status game-status]
-              [:db/add      game-db-id :game/status :game-status/exited]]]
+              [:db/add      game-db-id :game/status :game-status/exited]
+              [:db/add      game-db-id :game/end-time (c/to-date (t/now))]]]
 
     (persistence.datomic/transact-entities! conn data)))
 

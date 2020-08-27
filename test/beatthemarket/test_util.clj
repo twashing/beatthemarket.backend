@@ -25,7 +25,8 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.util :as util])
-  (:import [com.google.firebase.auth FirebaseAuth]))
+  (:import [com.google.firebase.auth FirebaseAuth]
+           [java.util UUID]))
 
 
 ;; Spec Helpers
@@ -293,7 +294,10 @@
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (->id-token)
-        gameLevel 1]
+        gameLevel 1
+        client-id (UUID/randomUUID)]
+
+    (send-init {:client-id (str client-id)})
 
     (login-assertion service id-token)
 
@@ -308,6 +312,7 @@
                                      }"
                  :variables {:gameLevel gameLevel}}}))
 
+  (<message!! 1000)
 
   (let [{:keys [stocks id] :as createGameAck} (-> (<message!! 1000) :payload :data :createGame)]
 

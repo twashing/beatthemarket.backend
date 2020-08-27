@@ -10,6 +10,8 @@
             [datomic.client.api :as d]
             [io.pedestal.http :as server]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [integrant.repl.state :as repl.state]
+
             [beatthemarket.game.games :as game.games]
             [beatthemarket.test-util :as test-util]
             [integrant.repl.state :as state]
@@ -18,6 +20,7 @@
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.handler.http.service :as http.service]
             [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.util :as util]
             [clj-time.coerce :as c])
   (:import [java.util UUID]))
@@ -77,8 +80,11 @@
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
-        gameLevel 1]
+        gameLevel 1
 
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
 
     (testing "REST Login (not WebSocket) ; creates a user"
 
@@ -100,8 +106,9 @@
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
-      (let [result (test-util/<message!! 1000)
-            {:keys [stocks id]} (-> result :payload :data :createGame)]
+      (test-util/<message!! 1000)
+
+      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
         (is (UUID/fromString id))
         (is (= 4 (count stocks)))
@@ -146,11 +153,159 @@
                  (= expected-component-game-keys)
                  is)))))))
 
+(deftest one-game-per-user-per-device-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
+
+    (testing "REST Login (not WebSocket) ; creates a user"
+
+      (test-util/login-assertion service id-token))
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame($gameLevel: Int!) {
+                                       createGame(gameLevel: $gameLevel) {
+                                         id
+                                         stocks { id name symbol }
+                                       }
+                                     }"
+                             :variables {:gameLevel gameLevel}}})
+
+      (test-util/<message!! 1000)
+
+      (let [conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
+            {game-id :id}                                (-> (test-util/<message!! 1000) :payload :data :createGame)
+
+            {[{client-id-persisted :game.user/user-client}] :game/users}
+            (ffirst (persistence.core/entity-by-domain-id conn :game/id (UUID/fromString game-id)))]
+
+        (is (= client-id client-id-persisted))
+
+        (testing "User / device pair can only have 1 running game"
+
+          (testing "Creating another game should throw an error"
+
+            (test-util/send-data {:id   988
+                                  :type :start
+                                  :payload
+                                  {:query "mutation CreateGame($gameLevel: Int!) {
+                                             createGame(gameLevel: $gameLevel) {
+                                               id
+                                               stocks { id name symbol }
+                                             }
+                                           }"
+                                   :variables {:gameLevel gameLevel}}})
+
+            (test-util/<message!! 1000)
+            (let [errors (-> (test-util/<message!! 1000) :payload :errors)
+                  expected-error-count 1]
+
+              (is (= expected-error-count (count errors)))
+              (is (clojure.string/starts-with? (-> errors first :message) "User device has a running game")))))))))
+
+(deftest check-empty-client-id-start-or-resume-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
+
+    (testing "REST Login (not WebSocket) ; creates a user"
+
+      (test-util/login-assertion service id-token))
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame($gameLevel: Int!) {
+                                       createGame(gameLevel: $gameLevel) {
+                                         id
+                                         stocks { id name symbol }
+                                       }
+                                     }"
+                             :variables {:gameLevel gameLevel}}})
+
+      (test-util/<message!! 1000)
+
+      (let [{game-id :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+
+        (testing "User / device pair can only have 1 running game"
+
+          (testing "Starting a game should pass the :client-id, otherwise throw an error"
+
+            (test-util/send-init)
+            (test-util/<message!! 1000)
+
+            (test-util/send-data {:id   989
+                                  :type :start
+                                  :payload
+                                  {:query "mutation StartGame($id: String!) {
+                                             startGame(id: $id) {
+                                               stockTickId
+                                               stockTickTime
+                                               stockTickClose
+                                               stockId
+                                               stockName
+                                             }
+                                           }"
+                                   :variables {:id game-id}}})
+
+            (test-util/<message!! 1000)
+
+            (let [errors (-> (test-util/<message!! 1000) :payload :errors)
+                  expected-error-count 1
+                  expected-error-message "Missing :client-id in your connection_init"]
+
+              (are [x y] (= x y)
+                expected-error-count (count errors)
+                expected-error-message (-> errors first :message))))
+
+          (testing "Resuming a game should pass the :client-id, otherwise throw an error"
+
+            (test-util/send-data {:id   990
+                                  :type :start
+                                  :payload
+                                  {:query "mutation ResumeGame($gameId: String!) {
+                                             resumeGame(gameId: $gameId) {
+                                               event
+                                               gameId
+                                             }
+                                           }"
+                                   :variables {:gameId game-id}}})
+
+            (test-util/<message!! 1000)
+
+            (let [errors (-> (test-util/<message!! 1000) :payload :errors)
+                  expected-error-count 1
+                  expected-error-message "Missing :client-id in your connection_init"]
+
+              (are [x y] (= x y)
+                expected-error-count (count errors)
+                expected-error-message (-> errors first :message)))))))))
+
 (deftest start-game-resolver-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
-        gameLevel 1]
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
 
 
     (testing "REST Login (not WebSocket) ; creates a user"
@@ -172,6 +327,8 @@
                              :variables {:gameLevel gameLevel}}}))
 
     (testing "Start a Game"
+
+      (test-util/<message!! 1000)
 
       (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
@@ -209,8 +366,11 @@
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
-        gameLevel 1]
+        gameLevel 1
 
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
 
     (testing "REST Login (not WebSocket) ; creates a user"
 
@@ -231,6 +391,8 @@
                              :variables {:gameLevel gameLevel}}}))
 
     (testing "Start a Game"
+
+      (test-util/<message!! 1000)
 
       (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)
             startPosition 10]
@@ -278,37 +440,42 @@
 
 (deftest stream-stock-ticks-test
 
-    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-          id-token (test-util/->id-token)
-          gameLevel 1]
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
+
+    (testing "REST Login (not WebSocket) ; creates a user"
+
+      (test-util/login-assertion service id-token))
 
 
-      (testing "REST Login (not WebSocket) ; creates a user"
+    (testing "Create a Game"
 
-        (test-util/login-assertion service id-token))
-
-
-      (testing "Create a Game"
-
-        (test-util/send-data {:id   987
-                              :type :start
-                              :payload
-                              {:query "mutation CreateGame($gameLevel: Int!) {
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks  { id name symbol }
                                        }
                                      }"
-                               :variables {:gameLevel gameLevel}}}))
+                             :variables {:gameLevel gameLevel}}}))
 
-      (testing "Start a Game"
+    (testing "Start a Game"
 
-        (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+      (test-util/<message!! 1000)
 
-          (test-util/send-data {:id   987
-                                :type :start
-                                :payload
-                                {:query "mutation StartGame($id: String!) {
+      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+
+        (test-util/send-data {:id   987
+                              :type :start
+                              :payload
+                              {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
                                            stockTickId
                                            stockTickTime
@@ -317,12 +484,12 @@
                                            stockName
                                          }
                                        }"
-                                 :variables {:id id}}})
+                               :variables {:id id}}})
 
-          (test-util/<message!! 1000)
-          (test-util/<message!! 1000)
+        (test-util/<message!! 1000)
+        (test-util/<message!! 1000)
 
-          (testing "Stream Stock Ticks
+        (testing "Stream Stock Ticks
 
                   We should expect a structure that looks like this
 
@@ -352,10 +519,10 @@
                        :stockId \"e02e81a7-15c1-4c4e-996a-bc65c8de4a9a\"
                        :stockName \"Color-blind Maintenance\"}]}}}"
 
-            (test-util/send-data {:id   987
-                                  :type :start
-                                  :payload
-                                  {:query "subscription StockTicks($gameId: String!) {
+          (test-util/send-data {:id   987
+                                :type :start
+                                :payload
+                                {:query "subscription StockTicks($gameId: String!) {
                                            stockTicks(gameId: $gameId) {
                                              stockTickId
                                              stockTickTime
@@ -364,25 +531,25 @@
                                              stockName
                                          }
                                        }"
-                                   :variables {:gameId id}}}))
+                                 :variables {:gameId id}}}))
 
-          (as-> (:game/games state/system) gs
-            (deref gs)
-            (get gs (UUID/fromString id))
-            (:control-channel gs)
-            (core.async/>!! gs {:type :ControlEvent
-                                :event :exit
-                                :game-id id}))
+        (as-> (:game/games state/system) gs
+          (deref gs)
+          (get gs (UUID/fromString id))
+          (:control-channel gs)
+          (core.async/>!! gs {:type :ControlEvent
+                              :event :exit
+                              :game-id id}))
 
-          (test-util/<message!! 1000)
+        (test-util/<message!! 1000)
 
-          (let [expected-keys #{:stockTickId :stockTickTime :stockTickClose :stockId :stockName}
-                stockTicks (-> (test-util/<message!! 1000) :payload :data :stockTicks)]
+        (let [expected-keys #{:stockTickId :stockTickTime :stockTickClose :stockId :stockName}
+              stockTicks (-> (test-util/<message!! 1000) :payload :data :stockTicks)]
 
-            (->> (map #(into #{} (keys %)) stockTicks)
-                 (map #(= expected-keys %))
-                 (every? true?)
-                 is))))))
+          (->> (map #(into #{} (keys %)) stockTicks)
+               (map #(= expected-keys %))
+               (every? true?)
+               is))))))
 
 (defn- consume-latest-tick []
 
@@ -396,9 +563,13 @@
 
 (deftest buy-stock-test
 
-    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-          id-token (test-util/->id-token)
-          gameLevel 1]
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+      (test-util/send-init {:client-id (str client-id)})
 
       (test-util/login-assertion service id-token)
 
@@ -412,6 +583,8 @@
                                        }
                                      }"
                              :variables {:gameLevel gameLevel}}})
+
+      (test-util/<message!! 1000)
 
       (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
@@ -491,7 +664,11 @@
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
-        gameLevel 1]
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
 
     (test-util/login-assertion service id-token)
 
@@ -505,6 +682,8 @@
                                        }
                                      }"
                            :variables {:gameLevel gameLevel}}})
+
+    (test-util/<message!! 1000)
 
     (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 

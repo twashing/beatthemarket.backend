@@ -27,24 +27,21 @@
 
   ([game-level stocks user accounts]
    (->game game-level stocks user accounts {:game-id (UUID/randomUUID)
-                                            :game-status :game-status/created
-                                            ;; :data-seed (datasource.core/random-seed)
-                                            }))
+                                            :game-status :game-status/created}))
 
   ([game-level stocks user accounts {game-id :game-id
                                      game-status :game-status
-                                     ;; data-seed :data-seed
-                                     }]
+                                     client-id :client-id}]
 
    (let [portfolio-with-journal (bookkeeping/->portfolio
                                   (bookkeeping/->journal))
 
-         game-users (-> (hash-map
-                          :game.user/user user
-                          :game.user/accounts accounts
-                          :game.user/portfolio portfolio-with-journal)
-                        persistence.core/bind-temporary-id
-                        list)]
+         game-user (cond-> (hash-map
+                             :game.user/user user
+                             :game.user/accounts accounts
+                             :game.user/portfolio portfolio-with-journal)
+                     client-id (assoc :game.user/user-client client-id))
+         game-users (list (persistence.core/bind-temporary-id game-user))]
 
      (hash-map
        :game/id (or game-id (UUID/randomUUID))
