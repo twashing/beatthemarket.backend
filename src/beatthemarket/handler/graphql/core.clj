@@ -66,9 +66,19 @@
       (assoc base-response :message :useradded)
       (assoc base-response :message :userexists))))
 
+(defn- client-id-exists? [context]
+
+  (if-not [(-> context :com.walmartlabs.lacinia/connection-params :client-id)]
+    (throw (ex-info "Missing :client-id in your connection_init"))
+    true))
+
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
 
-  (let [conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
+  ;; {:pre [(client-id-exists? context)]}
+  ;; TODO make a spec for this ^^
+  
+  (let [{{client-id :client-id} :com.walmartlabs.lacinia/connection-params} context
+        conn                                                (-> repl.state/system :persistence/datomic :opts :conn)
         {{{email :email} :checked-authentication} :request} context
         user-db-id                                          (ffirst
                                                               (d/q '[:find ?e
@@ -81,8 +91,6 @@
 
 
         data-generators (-> repl.state/config :game/game :data-generators)
-        seed (beatthemarket.datasource.core/random-seed) ;; TODO ->> pull seed from DB (if resuming game)
-        ;; combined-data-sequence-fn (fn [] (games.control/->data-sequence data-generators seed))
         combined-data-sequence-fn games.control/->data-sequence
 
         ;; NOTE sink-fn updates once we start to stream a game
@@ -90,7 +98,8 @@
         {{game-id :game/id
           :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level
                                                         combined-data-sequence-fn
-                                                        {:accounts (game.core/->game-user-accounts)})]
+                                                        {:accounts (game.core/->game-user-accounts)
+                                                         :client-id (UUID/fromString client-id)})]
 
     (->> (game.games/game->new-game-message game user-db-id)
          (transform [:stocks ALL] #(dissoc % :db/id))

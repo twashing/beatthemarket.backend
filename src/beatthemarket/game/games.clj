@@ -63,7 +63,8 @@
 
    (initialize-game! conn user-entity accounts sink-fn :game-level/one games.control/->data-sequence {}))
 
-  ([conn user-entity accounts sink-fn game-level data-sequence-fn {:keys [level-timer-sec tick-sleep-ms game-id
+  ([conn user-entity accounts sink-fn game-level data-sequence-fn {:keys [client-id
+                                                                          level-timer-sec tick-sleep-ms game-id
                                                                           input-sequence profit-loss
 
                                                                           process-transact!
@@ -79,7 +80,8 @@
 
    (let [stocks               (game.core/generate-stocks! 4)
          data-generators      (-> integrant.repl.state/config :game/game :data-generators)
-         initialize-game-opts {:game-id     (or game-id (UUID/randomUUID))
+         initialize-game-opts {:client-id   client-id
+                               :game-id     (or game-id (UUID/randomUUID))
                                :game-status :game-status/created}
 
          {game-id                      :game/id
@@ -100,19 +102,19 @@
          ;; _ (util/pprint+identity (or input-sequence input-sequence-local))
          game-control (merge-with #(if %2 %2 %1)
                                   (games.core/default-game-control conn (:db/id user-entity) game-id
-                                                                   {:current-level           current-level})
+                                                                   {:current-level current-level})
                                   {:game                  game                  ;; TODO load
                                    :profit-loss           (or profit-loss {})   ;; TODO replay
                                    :stocks-with-tick-data stocks-with-tick-data ;; TODO load + seek to index
                                    :input-sequence        (or input-sequence input-sequence-local)
 
-                                   :tick-sleep-atom       (atom
-                                                            (or tick-sleep-ms
-                                                                (-> integrant.repl.state/config :game/game :tick-sleep-ms)))
-                                   :level-timer           (atom
-                                                            (or level-timer-sec
-                                                                (-> integrant.repl.state/config :game/game :level-timer-sec)))
-                                   :current-level         current-level
+                                   :tick-sleep-atom (atom
+                                                      (or tick-sleep-ms
+                                                          (-> integrant.repl.state/config :game/game :tick-sleep-ms)))
+                                   :level-timer     (atom
+                                                      (or level-timer-sec
+                                                          (-> integrant.repl.state/config :game/game :level-timer-sec)))
+                                   :current-level   current-level
 
                                    :control-channel         control-channel
                                    :stock-tick-stream       stock-tick-stream

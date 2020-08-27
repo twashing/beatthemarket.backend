@@ -131,7 +131,7 @@
   :db/doc         ""}
 
  {:db/ident       :game.user/user-client
-  :db/valueType   :db.type/string
+  :db/valueType   :db.type/uuid
   :db/cardinality :db.cardinality/one
   :db/isComponent false
   :db/doc         ""}

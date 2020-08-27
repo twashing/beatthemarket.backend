@@ -10,6 +10,8 @@
             [datomic.client.api :as d]
             [io.pedestal.http :as server]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [integrant.repl.state :as repl.state]
+
             [beatthemarket.game.games :as game.games]
             [beatthemarket.test-util :as test-util]
             [integrant.repl.state :as state]
@@ -18,6 +20,7 @@
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.handler.http.service :as http.service]
             [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.util :as util]
             [clj-time.coerce :as c])
   (:import [java.util UUID]))
@@ -100,8 +103,7 @@
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
-      (let [result (test-util/<message!! 1000)
-            {:keys [stocks id]} (-> result :payload :data :createGame)]
+      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
         (is (UUID/fromString id))
         (is (= 4 (count stocks)))
@@ -845,3 +847,39 @@
       (core.async/>!! gs {:type :ControlEvent
                           :event :exit
                           :gameId gameId}))))
+
+(deftest one-game-per-user-per-device-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        gameLevel 1
+
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
+
+    (testing "REST Login (not WebSocket) ; creates a user"
+
+      (test-util/login-assertion service id-token))
+
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame($gameLevel: Int!) {
+                                       createGame(gameLevel: $gameLevel) {
+                                         id
+                                         stocks { id name symbol }
+                                       }
+                                     }"
+                             :variables {:gameLevel gameLevel}}}))
+
+    (test-util/<message!! 1000)
+
+    (let [conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
+          {game-id :id}                                (-> (test-util/<message!! 1000) :payload :data :createGame)
+          {client-id-persisted :game.user/user-client} (ffirst (persistence.core/entity-by-domain-id conn :game/id (UUID/fromString game-id)))]
+
+      (is (= client-id client-id-persisted)))))
