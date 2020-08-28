@@ -31,6 +31,7 @@
                                 :stock-id         :stockId
                                 :profit-loss      :profitLoss
                                 :profit-loss-type :profitLossType})
+      (update :gameId str)
       (update :profitLossType #(if (= :realized-profit-loss %)
                                  :realized
                                  :running))))
@@ -41,27 +42,29 @@
     (lacinia.schema/tag-with-type a t)))
 
 
-
-
 (defmulti game-event->graphql :event)
 
 (defmethod game-event->graphql :pause [game-event]
-  (tag-with-type-wrapped
-    (clojure.set/rename-keys game-event {:game-id :gameId})))
+  (-> (clojure.set/rename-keys game-event {:game-id :gameId})
+      (update :gameId str)
+      tag-with-type-wrapped))
 
 (defmethod game-event->graphql :resume [game-event]
-  (tag-with-type-wrapped
-    (clojure.set/rename-keys game-event {:game-id :gameId})))
+  (-> (clojure.set/rename-keys game-event {:game-id :gameId})
+      (update :gameId str)
+      tag-with-type-wrapped))
 
 (defmethod game-event->graphql :exit [game-event]
-  (tag-with-type-wrapped
-    (clojure.set/rename-keys game-event {:game-id :gameId})))
+  (-> (clojure.set/rename-keys game-event {:game-id :gameId})
+      (update :gameId str)
+      tag-with-type-wrapped))
 
 (defmethod game-event->graphql :continue [game-event]
 
   (-> (clojure.set/rename-keys game-event {:game-id              :gameId
                                            :remaining-in-minutes :minutesRemaining
                                            :remaining-in-seconds :secondsRemaining})
+      (update :gameId str)
       (update :level #((clojure.set/map-invert game-level-map) %))
       tag-with-type-wrapped))
 
@@ -69,6 +72,7 @@
 
   (-> (clojure.set/rename-keys game-event {:game-id     :gameId
                                            :profit-loss :profitLoss})
+      (update :gameId str)
       (update :level #((clojure.set/map-invert game-level-map) %))
       tag-with-type-wrapped))
 
@@ -76,10 +80,9 @@
 
   (-> (clojure.set/rename-keys game-event {:game-id     :gameId
                                            :profit-loss :profitLoss})
+      (update :gameId str)
       (update :level #((clojure.set/map-invert game-level-map) %))
       tag-with-type-wrapped))
-
-
 
 
 (defmulti portfolio-update->graphql #(cond (:bookkeeping.account/id %) :AccountBalance
@@ -112,4 +115,5 @@
                                   :stock-id :stockId
                                   :profit-loss-type :profitLossType
                                   :profit-loss :profitLoss})
+        (update :gameId str)
         tag-with-type-wrapped)))

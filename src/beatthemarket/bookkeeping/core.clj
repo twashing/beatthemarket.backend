@@ -72,7 +72,7 @@
             :bookkeeping.credit/account account
             :bookkeeping.credit/value value)
 
-    (exists? tick-db-id) (assoc :bookkeeping.debit/tick {:db/id tick-db-id})
+    (exists? tick-db-id) (assoc :bookkeeping.credit/tick {:db/id tick-db-id})
     (exists? price)      (assoc :bookkeeping.credit/price price)
     (exists? amount)     (assoc :bookkeeping.credit/amount amount)))
 
@@ -302,7 +302,7 @@
         (ex-info (format "Cannot find corresponding account for stockId [%s]" stock-id)
                  inputs)))))
 
-(defn track-profit-loss+stream-portfolio-update! [conn gameId game-db-id user-id tentry]
+#_(defn track-profit-loss+stream-portfolio-update! [conn gameId game-db-id user-id tentry]
 
   ;; >> TODO
 

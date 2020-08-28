@@ -381,70 +381,6 @@
          (map #(local-transact-stock! opts %))
          doall)))
 
-;; TODO
-(deftest track-running-profit-loss-on-margin-trade-test
-
-  (let [;; A
-        conn (-> repl.state/system :persistence/datomic :opts :conn)
-        user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
-        userId         (:user/external-uid user)
-
-        ;; B
-        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
-        tick-length      (count (data-sequence-fn))
-
-        ;; C
-        sink-fn                identity
-
-        test-stock-ticks       (atom [])
-        test-portfolio-updates (atom [])
-
-        opts       {:level-timer-sec 5
-                    :accounts        (game.core/->game-user-accounts)}
-        game-level :game-level/one
-
-
-        ;; D Launch Game
-        {{gameId     :game/id
-          game-db-id :db/id
-          stocks     :game/stocks
-          :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
-
-
-        ;; E Buy Stock
-        {stockId   :game.stock/id
-         stockName :game.stock/name} (first stocks)
-
-        opts {:conn    conn
-              :userId  userId
-              :gameId  gameId
-              :stockId stockId
-              :game-control game-control}
-
-        ops  [{:op :buy :stockAmount 100}
-              {:op :buy :stockAmount 200}
-              {:op :sell :stockAmount 200}
-              {:op :sell :stockAmount 200}]
-        ops-count (count ops)]
-
-    (is true)
-
-
-    (with-redefs [state.subscriptions/margin-trading? (constantly true)]
-
-      (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
-
-                  (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
-                    (assoc v :local-transact-input (merge stock-tick op))))
-                (take ops-count iterations)
-                (take ops-count ops))
-           (map #(local-transact-stock! opts %))
-           doall))))
-
-;; TODO
 (deftest calculate-game-scores-test
 
   (let [;; A
@@ -592,6 +528,360 @@
               (select-keys [:profit-loss-type :profit-loss])
               (= expected-realized-profit-loss)
               is))))))
+
+(deftest track-running-profit-loss-on-margin-trade-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 , 105.0 120.0 , 110.0 105.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :accounts        (game.core/->game-user-accounts)}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; i.
+        ops-before  [{:op :buy :stockAmount 100}
+                     {:op :buy :stockAmount 200}
+                     {:op :sell :stockAmount 200}
+                     {:op :sell :stockAmount 200}]
+        ops-before-count (count ops-before)
+
+        ;; ii.
+        ops-after  [{:op :noop}]
+        ops-after-count (count ops-after)
+
+        ;; iii.
+        ops-short-sell  [{:op :buy :stockAmount 100}]
+        ops-short-sell-count (count ops-short-sell)]
+
+    (with-redefs [state.subscriptions/margin-trading? (constantly true)]
+
+      (testing "The stock account amount can go negative"
+
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-before-count iterations)
+                  (take ops-before-count ops-before))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stockId)
+              expected-running-profit-loss-before [{:stock-account-amount -100
+                                                    :pershare-gain-or-loss 0.0
+                                                    :running-profit-loss 0.0}]]
+
+          (->> running-profit-loss
+               (map #(select-keys % [:stock-account-amount :pershare-gain-or-loss :running-profit-loss]))
+               (= expected-running-profit-loss-before)
+               is)))
+
+      (testing "Subsequent ticks correctly recalculate a running P/L, when short selling"
+
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-after-count (drop ops-before-count iterations))
+                  (take ops-after-count ops-after))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stockId)
+              expected-running-profit-loss-after [{:stock-account-amount -100
+                                                   :pershare-gain-or-loss -10.0
+                                                   :running-profit-loss 1000.0}]]
+
+          (->> running-profit-loss
+               (map #(select-keys % [:stock-account-amount :pershare-gain-or-loss :running-profit-loss]))
+               (= expected-running-profit-loss-after)
+               is)))
+
+      (testing "Filling a short sell, correctly i. resolves the running P/L AND ii. stores the realized profit"
+
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-short-sell-count (drop (+ ops-before-count ops-after-count) iterations))
+                  (take ops-short-sell-count ops-short-sell))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stockId)
+              realized-profit-loss (game.calculation/realized-profit-loss-for-game conn result-user-id gameId)
+
+              expected-running-profit-loss-after [{:stock-account-amount -100
+                                                   :pershare-gain-or-loss -10.0
+                                                   :running-profit-loss 1000.0}]
+
+              expected-realized-count 3
+              expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
+              expected-realized-amount #{(.floatValue 6666.6665) (.floatValue -500.0) (.floatValue 1500.0)}]
+
+
+          (is (empty? running-profit-loss))
+          (is (= expected-realized-count (count realized-profit-loss)))
+
+          (->> realized-profit-loss
+               (map keys)
+               (map #(into #{} %))
+               (every? #(= expected-realized-keys %))
+               is)
+
+          (->> realized-profit-loss
+               (map :profit-loss)
+               (into #{})
+               (= expected-realized-amount)
+               is))))))
+
+(deftest win-level-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 112.0 , 105.0 120.0 , 110.0 105.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        game-event-stream (core.async/chan)
+        opts       {:level-timer-sec   5
+                    :accounts          (game.core/->game-user-accounts)
+                    :game-event-stream game-event-stream}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; i.
+        ops-before  [{:op :buy :stockAmount 100}
+                     {:op :sell :stockAmount 100}]
+        ops-before-count (count ops-before)]
+
+    (testing "Testing the correct level win message is shown"
+
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-before-count iterations)
+                  (take ops-before-count ops-before))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))
+
+             expected-game-event {:game-id gameId
+                                   :level :game-level/one
+                                   :profit-loss 1200.0
+                                   :event :win}]
+
+          (are [x y] (= x y)
+            expected-game-event (core.async/<!! game-event-stream)
+            level :game-level/two)))))
+
+(deftest lose-level-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 80.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        game-event-stream (core.async/chan)
+        opts       {:level-timer-sec   5
+                    :accounts          (game.core/->game-user-accounts)
+                    :game-event-stream game-event-stream}
+        game-level :game-level/one
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; i.
+        ops-before  [{:op :buy :stockAmount 100}
+                     {:op :noop}]
+        ops-before-count (count ops-before)]
+
+    (testing "Testing the correct level lose message is shown"
+
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-before-count iterations)
+                  (take ops-before-count ops-before))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))
+
+              expected-game-event {:game-id gameId
+                                   :level :game-level/one
+                                   :profit-loss -2000.0
+                                   :event :lose}]
+
+          (are [x y] (= x y)
+            expected-game-event (core.async/<!! game-event-stream)
+            level :game-level/one)))))
+
+(deftest win-game-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        result-user-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 1500100.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        game-event-stream (core.async/chan)
+        opts       {:level-timer-sec   5
+                    :accounts          (game.core/->game-user-accounts)
+                    :game-event-stream game-event-stream}
+        game-level :game-level/ten
+
+
+        ;; D Launch Game
+        {{gameId     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+
+
+        ;; E Buy Stock
+        {stockId   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  gameId
+              :stockId stockId
+              :game-control game-control}
+
+        ;; i.
+        ops-before  [{:op :buy :stockAmount 1000}
+                     {:op :sell :stockAmount 1000}]
+        ops-before-count (count ops-before)]
+
+    (testing "Testing the correct game win message is shown"
+
+      (with-redefs [state.subscriptions/margin-trading? (constantly true)]
+
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-before-count iterations)
+                  (take ops-before-count ops-before))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))
+
+              expected-game-event {:game-id gameId
+                                   :level :game-level/ten
+                                   :profit-loss 1.5E9
+                                   :event :win}]
+
+          (are [x y] (= x y)
+            expected-game-event (core.async/<!! game-event-stream)
+            level :game-level/bluesky))))))
 
 #_(deftest A-test
 

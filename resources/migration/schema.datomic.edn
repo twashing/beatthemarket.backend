@@ -29,6 +29,7 @@
  {:db/ident :game-level/eight}
  {:db/ident :game-level/nine}
  {:db/ident :game-level/ten}
+ {:db/ident :game-level/bluesky}
  {:db/ident :game-level/market}
 
 
