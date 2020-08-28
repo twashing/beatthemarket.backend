@@ -117,5 +117,4 @@
                         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))
                         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId))]
 
-                    ;; (println [game-db-id user-db-id :?stockId stock-db-id tickId stockAmount tickPrice])
                     (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id tick-db-id stockAmount tickPrice))))))

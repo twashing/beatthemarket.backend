@@ -85,8 +85,6 @@
       tag-with-type-wrapped))
 
 
-
-
 (defmulti portfolio-update->graphql #(cond (:bookkeeping.account/id %) :AccountBalance
                                            (:profit-loss-type %) :ProfitLoss))
 
