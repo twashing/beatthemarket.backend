@@ -41,7 +41,7 @@
 
         ;; Add User
         _              (iam.user/add-user! conn checked-authentication)
-        result-user-id (-> (d/q '[:find ?e
+        result-user-id (:db/id (ffirst (iam.persistence/user-by-email conn email))) #_(-> (d/q '[:find ?e
                                   :in $ ?email
                                   :where [?e :user/email ?email]]
                                 (d/db conn)
@@ -348,7 +348,7 @@
     (def id-token               (test-util/->id-token))
     (def checked-authentication (iam.auth/check-authentication id-token))
     (def add-user-db-result     (iam.user/conditionally-add-new-user! conn checked-authentication))
-    (def result-user-id         (ffirst
+    (def result-user-id         (:db/id (ffirst (iam.persistence/user-by-email conn (-> checked-authentication :claims (get "email"))))) #_(ffirst
                                   (d/q '[:find ?e
                                          :in $ ?email
                                          :where [?e :user/email ?email]]

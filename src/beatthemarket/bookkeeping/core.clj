@@ -72,7 +72,7 @@
             :bookkeeping.credit/account account
             :bookkeeping.credit/value value)
 
-    (exists? tick-db-id) (assoc :bookkeeping.debit/tick {:db/id tick-db-id})
+    (exists? tick-db-id) (assoc :bookkeeping.credit/tick {:db/id tick-db-id})
     (exists? price)      (assoc :bookkeeping.credit/price price)
     (exists? amount)     (assoc :bookkeeping.credit/amount amount)))
 

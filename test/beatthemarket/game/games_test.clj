@@ -381,7 +381,6 @@
          (map #(local-transact-stock! opts %))
          doall)))
 
-;; TODO
 (deftest track-running-profit-loss-on-margin-trade-test
 
   (let [;; A
@@ -391,7 +390,7 @@
         userId         (:user/external-uid user)
 
         ;; B
-        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
+        data-sequence-fn (constantly [100.0 110.0 , 105.0 120.0 , 110.0 105.0 130.0])
         tick-length      (count (data-sequence-fn))
 
         ;; C
@@ -424,27 +423,103 @@
               :stockId stockId
               :game-control game-control}
 
-        ops  [{:op :buy :stockAmount 100}
-              {:op :buy :stockAmount 200}
-              {:op :sell :stockAmount 200}
-              {:op :sell :stockAmount 200}]
-        ops-count (count ops)]
+        ;; i.
+        ops-before  [{:op :buy :stockAmount 100}
+                     {:op :buy :stockAmount 200}
+                     {:op :sell :stockAmount 200}
+                     {:op :sell :stockAmount 200}]
+        ops-before-count (count ops-before)
 
-    (is true)
+        ;; ii.
+        ops-after  [{:op :noop}]
+        ops-after-count (count ops-after)
 
+        ;; iii.
+        ops-short-sell  [{:op :buy :stockAmount 100}]
+        ops-short-sell-count (count ops-short-sell)]
 
     (with-redefs [state.subscriptions/margin-trading? (constantly true)]
 
-      (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+      (testing "The stock account amount can go negative"
 
-                  (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
-                    (assoc v :local-transact-input (merge stock-tick op))))
-                (take ops-count iterations)
-                (take ops-count ops))
-           (map #(local-transact-stock! opts %))
-           doall))))
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
 
-;; TODO
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-before-count iterations)
+                  (take ops-before-count ops-before))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stockId)
+              expected-running-profit-loss-before [{:stock-account-amount -100
+                                                    :pershare-gain-or-loss 0.0
+                                                    :running-profit-loss 0.0}]]
+
+          (->> running-profit-loss
+               (map #(select-keys % [:stock-account-amount :pershare-gain-or-loss :running-profit-loss]))
+               (= expected-running-profit-loss-before)
+               is)))
+
+      (testing "Subsequent ticks correctly recalculate a running P/L, when short selling"
+
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-after-count (drop ops-before-count iterations))
+                  (take ops-after-count ops-after))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stockId)
+              expected-running-profit-loss-after [{:stock-account-amount -100
+                                                   :pershare-gain-or-loss -10.0
+                                                   :running-profit-loss 1000.0}]]
+
+          (->> running-profit-loss
+               (map #(select-keys % [:stock-account-amount :pershare-gain-or-loss :running-profit-loss]))
+               (= expected-running-profit-loss-after)
+               is)))
+
+      (testing "Filling a short sell, correctly i. resolves the running P/L AND ii. stores the realized profit"
+
+        (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+                    (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                      (assoc v :local-transact-input (merge stock-tick op))))
+                  (take ops-short-sell-count (drop (+ ops-before-count ops-after-count) iterations))
+                  (take ops-short-sell-count ops-short-sell))
+             (map #(local-transact-stock! opts %))
+             doall)
+
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stockId)
+              realized-profit-loss (game.calculation/realized-profit-loss-for-game conn result-user-id gameId)
+
+              expected-running-profit-loss-after [{:stock-account-amount -100
+                                                   :pershare-gain-or-loss -10.0
+                                                   :running-profit-loss 1000.0}]
+
+              expected-realized-count 3
+              expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
+              expected-realized-amount #{(.floatValue 6666.6665) (.floatValue -500.0) (.floatValue 1500.0)}]
+
+
+          (is (empty? running-profit-loss))
+          (is (= expected-realized-count (count realized-profit-loss)))
+
+          (->> realized-profit-loss
+               (map keys)
+               (map #(into #{} %))
+               (every? #(= expected-realized-keys %))
+               is)
+
+          (->> realized-profit-loss
+               (map :profit-loss)
+               (into #{})
+               (= expected-realized-amount)
+               is))))))
+
 (deftest calculate-game-scores-test
 
   (let [;; A

@@ -112,18 +112,18 @@
           (-> latest-tick :payload :data :stockTicks)]
 
       (test-util/send-data {:id   991
-                  :type :start
-                  :payload
-                  {:query "mutation BuyStock($input: BuyStock!) {
+                            :type :start
+                            :payload
+                            {:query "mutation BuyStock($input: BuyStock!) {
                                          buyStock(input: $input) {
                                            message
                                          }
                                      }"
-                   :variables (util/pprint+identity {:input {:gameId      id
-                                                             :stockId     stockId
-                                                             :stockAmount 100
-                                                             :tickId      stockTickId
-                                                             :tickPrice   stockTickClose}})}})
+                             :variables (util/pprint+identity {:input {:gameId      id
+                                                                       :stockId     stockId
+                                                                       :stockAmount 100
+                                                                       :tickId      stockTickId
+                                                                       :tickPrice   stockTickClose}})}})
 
       (test-util/<message!! 1000)
       (test-util/<message!! 1000)
@@ -151,4 +151,15 @@
              (map keys)
              (map #(into #{} %))
              (map #(= expected-account-update-keys %))
-             is)))))
+             is))
+
+      (test-util/send-data {:id   992
+                            :type :start
+                            :payload
+                            {:query "mutation exitGame($gameId: String!) {
+                                       exitGame(gameId: $gameId) {
+                                         event
+                                         gameId
+                                       }
+                                     }"
+                             :variables {:gameId id}}}))))
