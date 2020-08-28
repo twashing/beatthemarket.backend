@@ -57,6 +57,7 @@
 
 
  :logging {:config {:level     :info
+                    ;; :level     :debug
                     :console   true
                     :appenders [{:appender          :rolling-file
                                  :rolling-policy    {:type      :fixed-window
@@ -80,7 +81,7 @@
  {:production {:service/service               {:join?         false
                                                :hostname      "0.0.0.0"
                                                :port          5000
-                                               :keep-alive-ms 20000}
+                                               :keep-alive-ms 10000}
                :server/server                 {:service #ig/ref :service/service}
                :firebase/firebase             #ref [:secrets :firebase]
                :persistence/datomic           {:datomic         #ref [:secrets :production :persistence/datomic]}
@@ -95,7 +96,7 @@
   :development {:service/service               {:join?         false
                                                 :hostname      "0.0.0.0"
                                                 :port          8080
-                                                :keep-alive-ms 20000}
+                                                :keep-alive-ms 10000}
                 :server/server                 {:service #ig/ref :service/service}
                 :firebase/firebase             #ref [:secrets :firebase]
                 :persistence/datomic           {:datomic         {:db-name "beaththemarket"
@@ -111,7 +112,7 @@
   :test {:service/service               {:join?         false
                                          :hostname      "0.0.0.0"
                                          :port          8081
-                                         :keep-alive-ms 20000}
+                                         :keep-alive-ms 10000}
          :server/server                 {:service #ig/ref :service/service}
          :firebase/firebase             #ref [:secrets :firebase]
          :persistence/datomic           {:datomic         {:db-name "beaththemarket"

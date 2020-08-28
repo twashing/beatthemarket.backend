@@ -300,7 +300,8 @@
 
   (let [remaining (calculate-remaining-time now end)]
     (log/info :game.games (format "< Paused > %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream control))
+    (core.async/>!! game-event-stream
+                    (assoc control :type :ControlEvent)))
 
   [])
 
@@ -309,7 +310,8 @@
   (let [remaining (calculate-remaining-time now end)]
 
     (log/info :game.games (format "%sExiting / Time Remaining / %s" (if m m "") (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream control))
+    (core.async/>!! game-event-stream
+                    (assoc control :type :ControlEvent)))
   [])
 
 (defmethod handle-control-event :win [conn game-event-stream {:keys [game-id level] :as control} now end]
@@ -319,14 +321,16 @@
     (transition-level! conn game-id level)
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
     (println (format "Win %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream control)
+    (core.async/>!! game-event-stream
+                    (assoc control :type :LevelStatus))
     [now end]))
 
 (defmethod handle-control-event :lose [conn game-event-stream control now end]
 
   (let [remaining (calculate-remaining-time now end)]
     (log/info :game.games (format "Lose %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream control)
+    (core.async/>!! game-event-stream
+                    (assoc control :type :LevelStatus))
     (handle-control-event conn game-event-stream {:event :exit :game-id (:game-id control)} now end)))
 
 (defmethod handle-control-event :timeout [_ game-event-stream control now end]
