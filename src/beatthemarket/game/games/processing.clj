@@ -194,14 +194,13 @@
         lose-threshold-met? (< running+realized-pl (* -1 lose-threshold))
 
         game-event-message
-
         (cond-> {:game-id game-id
                  :level level
                  :profit-loss running+realized-pl}
           profit-threshold-met? (assoc :event :win)
           lose-threshold-met? (assoc :event :lose))]
 
-    ;; (util/pprint+identity game-event-message)
+    (util/pprint+identity game-event-message)
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
@@ -209,10 +208,9 @@
 
 (defn process-transact-level-update! [conn {level-update :level-update :as data}]
 
-  (println (format ">> TRANSACT :level-update / " (pr-str level-update)))
+  ;; (println (format ">> TRANSACT :level-update / " (pr-str level-update)))
   ;; (util/pprint+identity level-update)
-
-  (when (not (empty? level-update))
+  #_(when (not (empty? level-update))
     (persistence.datomic/transact-entities! conn level-update))
   data)
 

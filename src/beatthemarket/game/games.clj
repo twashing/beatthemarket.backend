@@ -5,6 +5,7 @@
             [clojure.data.json :as json]
             [datomic.client.api :as d]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [clojure.core.match :refer [match]]
             [rop.core :as rop]
             [integrant.core :as ig]
             [integrant.repl.state :as repl.state]
@@ -98,8 +99,6 @@
                               :profit-threshold profit-threshold
                               :lose-threshold   lose-threshold})
 
-         ;; _ (util/pprint+identity "AAAaarrrggghhh!!")
-         ;; _ (util/pprint+identity (or input-sequence input-sequence-local))
          game-control (merge-with #(if %2 %2 %1)
                                   (games.core/default-game-control conn (:db/id user-entity) game-id
                                                                    {:current-level current-level})
@@ -283,24 +282,23 @@
    ;; (util/pprint+identity (:game game-control))
 
    ;; A
-
    (update-start-position! conn game-id start-position)
 
-   #_(core.async/go-loop [now (t/now)
-                          end (t/plus now (t/seconds @level-timer))]
+   (core.async/go-loop [now (t/now)
+                        end (t/plus now (t/seconds @level-timer))]
 
-       (let [remaining (calculate-remaining-time now end)
-             expired? (time-expired? remaining)
+     (let [remaining (games.control/calculate-remaining-time now end)
+           expired? (games.control/time-expired? remaining)
 
-             [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
-             {message :event :as controlv} (if (nil? controlv) {:event :continue} controlv)
+           [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
+           {message :event :as controlv} (if (nil? controlv) {:event :continue} controlv)
 
-             [nowA endA] (match [message expired?]
-                                [_ false] (games.control/handle-control-event conn game-event-stream controlv now end)
-                                [_ true] (games.control/handle-control-event conn game-event-stream {:event :timeout} now end))]
+           [nowA endA] (match [message expired?]
+                              [_ false] (games.control/handle-control-event conn game-event-stream controlv now end)
+                              [_ true] (games.control/handle-control-event conn game-event-stream {:event :timeout} now end))]
 
-         (when (and nowA endA)
-           (recur nowA endA))))
+       (when (and nowA endA)
+         (recur nowA endA))))
 
    ;; B
    (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control)

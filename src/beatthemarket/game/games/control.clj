@@ -318,6 +318,7 @@
 
     (transition-level! conn game-id level)
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
+    (println (format "Win %s" (format-remaining-time remaining)))
     (core.async/>!! game-event-stream control)
     [now end]))
 
