@@ -53,7 +53,12 @@
 
                                 :game-level/bluesky {:profit-threshold ##Inf
                                                      :lose-threshold 1000000.0
-                                                     :order 11}}}
+                                                     :order 11}
+
+                                ;; market trading
+                                :game-level/market {:profit-threshold ##Inf
+                                                    :lose-threshold ##Inf
+                                                    :order 12}}}
 
 
  :logging {:config {:level     :info

@@ -10,7 +10,8 @@
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
-            [beatthemarket.game.games.processing :as game.games.processing]
+            [beatthemarket.game.games.processing :as games.processing]
+            [beatthemarket.game.games.control :as games.control]
             [beatthemarket.util :as util]
             [beatthemarket.test-util :as test-util]))
 
@@ -40,7 +41,7 @@
 
     ;; B
     ;; (def data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0]))
-    (def data-sequence-fn game.games/->data-sequence)
+    (def data-sequence-fn games.control/->data-sequence)
     (def tick-length      7)
 
 
@@ -67,7 +68,7 @@
 
 
       ;; ii.
-      (def data-sequence-fn game.games/->data-sequence)
+      (def data-sequence-fn games.control/->data-sequence)
       (def input-sequence
         (-> (map #(game.games/bind-data-sequence (data-sequence-fn) %) stocks)
             game.games/stocks->stock-sequences))
@@ -193,5 +194,53 @@
 
   ;; >
   (game.games/sell-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice validate?])
+
+  )
+
+
+;; MARKET
+(comment
+
+  ;; WITH User
+  (do
+
+    (def opts       {:level-timer-sec 5
+                     :user            {:db/id result-user-id}
+                     :accounts        (game.core/->game-user-accounts)
+                     :game-level      :game-level/one})
+
+    (def game-control (game.games/create-game! conn sink-fn data-sequence-fn opts)))
+
+  ;; WITHOUT User
+  (do
+
+    (def opts       {:level-timer-sec 5
+                     :stocks-in-game 10
+                     :game-level      :game-level/market})
+
+    (def game-control (game.games/create-game! conn sink-fn data-sequence-fn opts)))
+
+
+  ;; .. pass number of stocks to create game with
+  ;; [ok] pass :game-level/market
+  ;; [x] no start/end times
+
+
+  (do
+    (def game              (:game game-control))
+    (def gameId            (:game/id game))
+    (def game-db-id        (:db/id game))
+    (def stocks            (:game/stocks game))
+    (def control-channel   (:control-channel game-control))
+    (def game-event-stream (:game-event-stream game-control))
+
+
+    ;; i.
+    ;; (def start-results (game.games/start-workbench! conn result-user-id game-control))
+    ;; (def iterations (second start-results))
+    )
+
+  ;; >
+  (def stock-tick-pipeline (game.games/stock-tick-pipeline game-control))
 
   )

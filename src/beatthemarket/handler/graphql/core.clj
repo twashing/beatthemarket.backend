@@ -182,9 +182,10 @@
             ;; NOTE sink-fn updates once we start to stream a game
             sink-fn                identity
             {{game-id :game/id
-              :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level
-                                                            combined-data-sequence-fn
-                                                            {:accounts (game.core/->game-user-accounts)
+              :as     game} :game} (game.games/create-game! conn sink-fn combined-data-sequence-fn
+                                                            {:user (hash-map :db/id user-db-id)
+                                                             :accounts (game.core/->game-user-accounts)
+                                                             :game-level mapped-game-level
                                                              ;; :client-id client-id
                                                              })]
 
