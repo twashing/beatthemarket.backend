@@ -84,7 +84,7 @@
                                           user-entity ;; PASSED in as options
                                           accounts
                                           game-level]
-                                   :or {game-id (UUID/randomUUID)
+                                   :or {game-id        (UUID/randomUUID)
                                         stocks-in-game 4}
                                    :as opts}]
 

@@ -7,10 +7,12 @@
             [io.pedestal.log :as log]
             [integrant.repl.state :as repl.state]
 
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games.core :as games.core]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.util :as util])
@@ -387,6 +389,8 @@
             :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
                                                    control-channel])]
 
+      ;; TODO i. If this is a market, and ii. there are no players, :pause
+
       (log/debug :game.games (format "game-loop %s:%s / %s"
                                        (:remaining-in-minutes remaining)
                                        (:remaining-in-seconds remaining)
@@ -534,6 +538,7 @@
         f          (fn [[x xs]] (first+rest xs))]
     (iterate f (first+rest control-chain))))
 
+
 (defn resume-common!
 
   ([conn game-id user-db-id game-control]
@@ -674,7 +679,8 @@
    ;; >> return historical data <<
 
 
-   (let [{:keys [tick-sleep-atom level-timer] :as game-control-live} (resume-common! conn game-id user-db-id game-control data-sequence-fn)]
+   (let [{:keys [tick-sleep-atom level-timer] :as game-control-live}
+         (resume-common! conn game-id user-db-id game-control data-sequence-fn)]
 
      (run-game! conn
                 game-control-live
@@ -709,3 +715,48 @@
    ;; >> return historical data <<
 
    (resume-common! conn game-id user-db-id game-control data-sequence-fn)))
+
+
+
+(defn disconnect-from-game! [])
+
+(defn connect-to-game! [])
+
+(defn check-user-does-not-have-running-game [conn user-db-id]
+
+  (when-let [user-games (flatten (iam.persistence/game-user-by-user conn user-db-id '[{:game.user/_user
+                                                                                       [:db/id
+                                                                                        :game/id
+                                                                                        :game/status]}]))]
+
+    (when (->> (map (comp :db/ident :game/status :game.user/_user) (util/pprint+identity user-games))
+               (into #{})
+               (some #{:game-status/running}))
+
+      (throw (Exception. "User has a running game / :game/id %s" "asdf")))))
+
+(defn user-joined-game? [conn game user-db-id])
+(defn conditionally-resume-game [conn game])
+
+(defn join-game [conn game-id user-db-id game-control]
+
+  (check-user-does-not-have-running-game conn user-db-id)
+
+  (let [game (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))]
+
+    ;; TODO
+    (when-not (user-joined-game? conn game user-db-id)
+
+      ;; Join
+      (->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
+                                                         :accounts    (game.core/->game-user-accounts)})
+           (persistence.datomic/transact-entities! conn)
+           ;; TODO
+           (conditionally-resume-game conn)))
+
+    ;; TODO
+    ;; Stream
+    ;; connect-to-game (if already joined))
+
+
+  )

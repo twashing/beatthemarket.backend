@@ -2,6 +2,7 @@
   (:require [io.pedestal.log :as log]
             [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.game.calculation :as game.calculation]
@@ -50,24 +51,13 @@
              profit-loss))
 
 
-
 (def profit-loss-type-entity-map
   {:running-profit-loss :profit-loss/running
    :realized-profit-loss :profit-loss/realized})
 
-(defn game-user-by-user [conn user-id]
-
-  (ffirst
-    (d/q '[:find (pull ?u [{:game.user/_user [*]}])
-           :in $ ?u
-           :where
-           [?u]]
-         (d/db conn)
-         user-id)))
-
 (defn profit-loss->entity [conn {:keys [user-id tick-id game-id stock-id profit-loss-type profit-loss]}]
 
-  (let [{{game-user-db-id :db/id} :game.user/_user} (game-user-by-user conn user-id)
+  (let [{{game-user-db-id :db/id} :game.user/_user} (ffirst (iam.persistence/game-user-by-user conn user-id))
 
         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tick-id))
         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stock-id))
@@ -108,6 +98,11 @@
 
     stock-ticks))
 
+
+;; TODO Calculate analytics on a peruser basis
+;; stock-tick-stream
+;; portfolio-update-stream
+;; game-event-stream
 
 ;; B.i
 (defmulti calculate-profit-loss (fn [op _ _ _] op))
