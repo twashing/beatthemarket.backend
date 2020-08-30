@@ -435,12 +435,12 @@
   (-> repl.state/system :game/games deref (get game-id) :profit-loss))
 
 (defn update-level!-then->game-control-replay
-  [conn user-db-id game {:keys [control-channel
-                                current-level
-                                stock-tick-stream
-                                portfolio-update-stream
-                                game-event-stream
-                                sink-fn] :as game-control} data-sequence-fn]
+  [conn game {:keys [control-channel
+                     current-level
+                     stock-tick-stream
+                     portfolio-update-stream
+                     game-event-stream
+                     sink-fn] :as game-control} data-sequence-fn]
 
   (let [{game-db-id             :db/id
          game-id                :game/id
@@ -463,9 +463,9 @@
 
     ;; X. Update :game/status
     #_(let [data [[:db/retract  game-db-id :game/status (:db/ident game-status)]
-                [:db/add      game-db-id :game/status :game-status/running]]]
+                  [:db/add      game-db-id :game/status :game-status/running]]]
 
-      (persistence.datomic/transact-entities! conn data))
+        (persistence.datomic/transact-entities! conn data))
 
 
     ;; X. Update :game/level
@@ -473,7 +473,7 @@
 
     (merge-with #(if %2 %2 %1)
                 game-control
-                (games.core/default-game-control conn user-db-id game-id
+                (games.core/default-game-control conn game-id
                                                  {:control-channel         control-channel
                                                   :current-level           current-level
                                                   :stock-tick-stream       stock-tick-stream
@@ -579,7 +579,7 @@
 
 
          ;; Game Control
-         game-control-replay (update-level!-then->game-control-replay conn user-db-id game game-control data-sequence-fn)
+         game-control-replay (update-level!-then->game-control-replay conn game game-control data-sequence-fn)
 
 
          ;; Re-play game
@@ -617,7 +617,7 @@
      ;; Re-start game
      (let [data-generators (-> integrant.repl.state/config :game/game :data-generators)
            {:keys [tick-sleep-atom level-timer] :as game-control-live}
-           (as-> (games.core/default-game-control conn user-db-id game-id game-control-replay) v
+           (as-> (games.core/default-game-control conn game-id game-control-replay) v
              (merge-with #(if %2 %2 %1)
                          game-control-replay
                          v
@@ -649,14 +649,15 @@
 
 (defn resume-game!
 
-  ([conn game-id user-db-id game-control]
+  ([conn user-db-id game-control]
 
-   (resume-game! conn game-id user-db-id game-control ->data-sequence))
+   (resume-game! conn user-db-id game-control ->data-sequence))
 
-  ([conn game-id user-db-id {:keys [control-channel
-                                    stock-tick-stream
-                                    portfolio-update-stream
-                                    sink-fn] :as game-control} data-sequence-fn]
+  ([conn user-db-id {control-channel         :control-channel
+                     stock-tick-stream       :stock-tick-stream
+                     portfolio-update-stream :portfolio-update-stream
+                     sink-fn                 :sink-fn
+                     {game-id :game/id}      :game :as game-control} data-sequence-fn]
 
    ;; :game/start-position
    ;; :game/status #:db{:id 17592186045430 :ident :game-status/paused}
@@ -725,38 +726,59 @@
 (defn check-user-does-not-have-running-game [conn user-db-id]
 
   (when-let [user-games (flatten (iam.persistence/game-user-by-user conn user-db-id '[{:game.user/_user
-                                                                                       [:db/id
-                                                                                        :game/id
-                                                                                        :game/status]}]))]
+                                                                                       [{:game/_users
+                                                                                         [:db/id
+                                                                                          :game/id
+                                                                                          :game/status
+                                                                                          :game/users]}]}]))]
 
-    (when (->> (map (comp :db/ident :game/status :game.user/_user) (util/pprint+identity user-games))
+    (def user-games* user-games)
+    (when (->> (map (comp :db/ident :game/status :game/_users :game.user/_user) (util/pprint+identity user-games))
                (into #{})
                (some #{:game-status/running}))
 
-      (throw (Exception. "User has a running game / :game/id %s" "asdf")))))
+      (throw (Exception. "User has a running game / :game/id %s" "asdf")))
 
-(defn user-joined-game? [conn game user-db-id])
-(defn conditionally-resume-game [conn game])
+    user-games))
+
+(defn user-joined-game? [user-games game-id user-db-id]
+
+  (util/exists? (for [user-game user-games
+                      game-user (-> user-game :game.user/_user :game/_users :game/users)
+                      :let [gid (-> user-game :game.user/_user :game/_users :game/id)
+                            uid (-> game-user :game.user/user :db/id)]
+                      :when (and (= gid game-id)
+                                 (= uid user-db-id))]
+                  game-user)))
+
+(defn conditionally-resume-game [conn game]
+
+  ;; (-> user-game :game.user/_user :game/_users :game/id)
+  ;; created or paused
+
+  (beatthemarket.game.games/start-game! [conn user-db-id game-control])
+  (resume-game! [conn user-db-id game-control])
+
+
+  )
 
 (defn join-game [conn game-id user-db-id game-control]
 
-  (check-user-does-not-have-running-game conn user-db-id)
+  (let [user-games (check-user-does-not-have-running-game conn user-db-id)]
 
-  (let [game (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))]
-
-    ;; TODO
-    (when-not (user-joined-game? conn game user-db-id)
+    (when-not (user-joined-game? user-games game-id user-db-id)
 
       ;; Join
       (->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
                                                          :accounts    (game.core/->game-user-accounts)})
            (persistence.datomic/transact-entities! conn)
            ;; TODO
-           (conditionally-resume-game conn)))
+           (conditionally-resume-game conn))
+      )
 
     ;; TODO
     ;; Stream
     ;; connect-to-game (if already joined))
 
 
-  )
+    ))

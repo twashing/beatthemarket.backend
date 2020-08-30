@@ -2593,7 +2593,7 @@
       (persistence.core/entity-by-domain-id conn :game/id gameId))
 
     ;; Resume game
-    (games.control/resume-game! conn gameId result-user-id game-control)
+    (games.control/resume-game! conn result-user-id game-control)
 
     ))
 

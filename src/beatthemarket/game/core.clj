@@ -31,14 +31,15 @@
 
     game
 
-    (->> (cond-> (assoc game
-                        :game.user/user        user
-                        :game.user/accounts    accounts
-                        :game.user/portfolio   (bookkeeping/->portfolio (bookkeeping/->journal)))
+    (->> (cond-> (hash-map
+                   :game.user/user        user
+                   :game.user/accounts    accounts
+                   :game.user/portfolio   (bookkeeping/->portfolio (bookkeeping/->journal)))
            client-id           (assoc :game.user/user-client client-id))
          persistence.core/bind-temporary-id
          list
-         (assoc game :game/users))))
+         (assoc game :game/users)
+         util/pprint+identity)))
 
 (defn ->game [{game-id     :game-id
                game-status :game-status

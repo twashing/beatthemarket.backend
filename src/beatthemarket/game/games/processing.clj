@@ -99,10 +99,15 @@
     stock-ticks))
 
 
-;; TODO Calculate analytics on a peruser basis
+;; TODO Calculate analytics on a peruser basis !! Store & retrieve in-memory P/L, per game, per user
 ;; stock-tick-stream
 ;; portfolio-update-stream
 ;; game-event-stream
+
+{:game {:user1 {:stock1 []
+                :stock2 []}
+        :user2 {:stock3 []
+                :stock2 []}}}
 
 ;; B.i
 (defmulti calculate-profit-loss (fn [op _ _ _] op))

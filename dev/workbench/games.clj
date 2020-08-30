@@ -231,6 +231,7 @@
 
     (games.control/join-game conn game-id user-db-id game-control))
 
+  (pprint (persistence.core/entity-by-domain-id conn :game/id (-> game-control :game :game/id)))
 
   #_(pprint
 
@@ -242,3 +243,4 @@
          (some #{:game-status/running})))
 
   )
+
