@@ -99,7 +99,7 @@
     stock-ticks))
 
 
-;; TODO Calculate analytics on a peruser basis
+;; TODO Calculate analytics on a peruser basis !! Store & retrieve in-memory P/L, per game, per user
 ;; stock-tick-stream
 ;; portfolio-update-stream
 ;; game-event-stream

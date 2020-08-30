@@ -725,38 +725,100 @@
 (defn check-user-does-not-have-running-game [conn user-db-id]
 
   (when-let [user-games (flatten (iam.persistence/game-user-by-user conn user-db-id '[{:game.user/_user
-                                                                                       [:db/id
-                                                                                        :game/id
-                                                                                        :game/status]}]))]
+                                                                                       [{:game/_users
+                                                                                         [:db/id
+                                                                                          :game/id
+                                                                                          :game/status
+                                                                                          :game/users]}]}]))]
 
-    (when (->> (map (comp :db/ident :game/status :game.user/_user) (util/pprint+identity user-games))
+    (def user-games* user-games)
+    (when (->> (map (comp :db/ident :game/status :game/_users :game.user/_user) (util/pprint+identity user-games))
                (into #{})
                (some #{:game-status/running}))
 
-      (throw (Exception. "User has a running game / :game/id %s" "asdf")))))
+      (throw (Exception. "User has a running game / :game/id %s" "asdf")))
 
-(defn user-joined-game? [conn game user-db-id])
+    user-games))
+
+(defn user-joined-game? [user-games game-id user-db-id]
+
+  (util/exists? (for [user-game user-games
+                      game-user (-> user-game :game.user/_user :game/_users :game/users)
+                      :let [gid (-> user-game :game.user/_user :game/_users :game/id)
+                            uid (-> game-user :game.user/user :db/id)]
+                      :when (and (= gid game-id)
+                                 (= uid user-db-id))]
+                  game-user)))
+
 (defn conditionally-resume-game [conn game])
 
 (defn join-game [conn game-id user-db-id game-control]
 
-  (check-user-does-not-have-running-game conn user-db-id)
+  (let [user-games (check-user-does-not-have-running-game conn user-db-id)]
 
-  (let [game (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))]
-
-    ;; TODO
-    (when-not (user-joined-game? conn game user-db-id)
+    (when-not (user-joined-game? user-games game-id user-db-id)
 
       ;; Join
-      (->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
+      #_(->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
                                                          :accounts    (game.core/->game-user-accounts)})
-           (persistence.datomic/transact-entities! conn)
+           ;; (persistence.datomic/transact-entities! conn)
            ;; TODO
-           (conditionally-resume-game conn)))
+             (conditionally-resume-game conn))
+      )
 
     ;; TODO
     ;; Stream
     ;; connect-to-game (if already joined))
 
 
-  )
+    ))
+
+#_'(#:game.user{:_user
+                #:game{:_users
+                       {:db/id 17592186045447
+                        :game/id #uuid "0f5aaa76-8310-4252-bc40-3d4867360210"
+                        :game/status
+                        #:db{:id 17592186045429
+                             :ident :game-status/created}
+                        :game/users
+                        [{:db/id 17592186045452
+                          :game.user/user
+                          {:db/id 17592186045445
+                           :user/email "twashing@gmail.com"
+                           :user/name "Timothy Washington"
+                           :user/external-uid
+                           "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
+                          :game.user/accounts
+                          [{:db/id 17592186045453
+                            :bookkeeping.account/id
+                            #uuid "9a17c667-3f89-46dd-8168-d16888577335"
+                            :bookkeeping.account/name "Cash"
+                            :bookkeeping.account/type
+                            #:db{:id 17592186045437
+                                 :ident :bookkeeping.account.type/asset}
+                            :bookkeeping.account/balance 100000.0
+                            :bookkeeping.account/amount 0
+                            :bookkeeping.account/orientation
+                            #:db{:id 17592186045442
+                                 :ident
+                                 :bookkeeping.account.orientation/debit}}
+                           {:db/id 17592186045454
+                            :bookkeeping.account/id
+                            #uuid "8ad10ec0-e6d9-43ca-b011-1dc72544905b"
+                            :bookkeeping.account/name "Equity"
+                            :bookkeeping.account/type
+                            #:db{:id 17592186045441
+                                 :ident :bookkeeping.account.type/equity}
+                            :bookkeeping.account/balance 100000.0
+                            :bookkeeping.account/amount 0
+                            :bookkeeping.account/orientation
+                            #:db{:id 17592186045443
+                                 :ident :bookkeeping.account.orientation/credit}}]
+                          :game.user/portfolio
+                          {:db/id 17592186045455
+                           :bookkeeping.portfolio/id
+                           #uuid "172433da-beed-4f3e-ad48-9c1ca90ecdc3"
+                           :bookkeeping.portfolio/journals
+                           [{:db/id 17592186045456
+                             :bookkeeping.journal/id
+                             #uuid "8532ae7c-b4c1-4415-8cca-ca70f7a51f59"}]}}]}}})
