@@ -34,7 +34,7 @@
                                                         (dissoc :order)
                                                         constantly))))))
 
-(defn default-game-control [conn user-id game-id
+(defn default-game-control [conn game-id
                             {:keys [current-level
                                     control-channel
 

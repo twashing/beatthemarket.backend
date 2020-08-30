@@ -104,6 +104,11 @@
 ;; portfolio-update-stream
 ;; game-event-stream
 
+{:game {:user1 {:stock1 []
+                :stock2 []}
+        :user2 {:stock3 []
+                :stock2 []}}}
+
 ;; B.i
 (defmulti calculate-profit-loss (fn [op _ _ _] op))
 

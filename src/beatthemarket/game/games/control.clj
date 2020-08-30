@@ -435,12 +435,12 @@
   (-> repl.state/system :game/games deref (get game-id) :profit-loss))
 
 (defn update-level!-then->game-control-replay
-  [conn user-db-id game {:keys [control-channel
-                                current-level
-                                stock-tick-stream
-                                portfolio-update-stream
-                                game-event-stream
-                                sink-fn] :as game-control} data-sequence-fn]
+  [conn game {:keys [control-channel
+                     current-level
+                     stock-tick-stream
+                     portfolio-update-stream
+                     game-event-stream
+                     sink-fn] :as game-control} data-sequence-fn]
 
   (let [{game-db-id             :db/id
          game-id                :game/id
@@ -463,9 +463,9 @@
 
     ;; X. Update :game/status
     #_(let [data [[:db/retract  game-db-id :game/status (:db/ident game-status)]
-                [:db/add      game-db-id :game/status :game-status/running]]]
+                  [:db/add      game-db-id :game/status :game-status/running]]]
 
-      (persistence.datomic/transact-entities! conn data))
+        (persistence.datomic/transact-entities! conn data))
 
 
     ;; X. Update :game/level
@@ -473,7 +473,7 @@
 
     (merge-with #(if %2 %2 %1)
                 game-control
-                (games.core/default-game-control conn user-db-id game-id
+                (games.core/default-game-control conn game-id
                                                  {:control-channel         control-channel
                                                   :current-level           current-level
                                                   :stock-tick-stream       stock-tick-stream
@@ -579,7 +579,7 @@
 
 
          ;; Game Control
-         game-control-replay (update-level!-then->game-control-replay conn user-db-id game game-control data-sequence-fn)
+         game-control-replay (update-level!-then->game-control-replay conn game game-control data-sequence-fn)
 
 
          ;; Re-play game
@@ -617,7 +617,7 @@
      ;; Re-start game
      (let [data-generators (-> integrant.repl.state/config :game/game :data-generators)
            {:keys [tick-sleep-atom level-timer] :as game-control-live}
-           (as-> (games.core/default-game-control conn user-db-id game-id game-control-replay) v
+           (as-> (games.core/default-game-control conn game-id game-control-replay) v
              (merge-with #(if %2 %2 %1)
                          game-control-replay
                          v
@@ -649,14 +649,15 @@
 
 (defn resume-game!
 
-  ([conn game-id user-db-id game-control]
+  ([conn user-db-id game-control]
 
-   (resume-game! conn game-id user-db-id game-control ->data-sequence))
+   (resume-game! conn user-db-id game-control ->data-sequence))
 
-  ([conn game-id user-db-id {:keys [control-channel
-                                    stock-tick-stream
-                                    portfolio-update-stream
-                                    sink-fn] :as game-control} data-sequence-fn]
+  ([conn user-db-id {control-channel         :control-channel
+                     stock-tick-stream       :stock-tick-stream
+                     portfolio-update-stream :portfolio-update-stream
+                     sink-fn                 :sink-fn
+                     {game-id :game/id}      :game :as game-control} data-sequence-fn]
 
    ;; :game/start-position
    ;; :game/status #:db{:id 17592186045430 :ident :game-status/paused}
@@ -750,7 +751,16 @@
                                  (= uid user-db-id))]
                   game-user)))
 
-(defn conditionally-resume-game [conn game])
+(defn conditionally-resume-game [conn game]
+
+  ;; (-> user-game :game.user/_user :game/_users :game/id)
+  ;; created or paused
+
+  (beatthemarket.game.games/start-game! [conn user-db-id game-control])
+  (resume-game! [conn user-db-id game-control])
+
+
+  )
 
 (defn join-game [conn game-id user-db-id game-control]
 
@@ -759,11 +769,11 @@
     (when-not (user-joined-game? user-games game-id user-db-id)
 
       ;; Join
-      #_(->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
+      (->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
                                                          :accounts    (game.core/->game-user-accounts)})
-           ;; (persistence.datomic/transact-entities! conn)
+           (persistence.datomic/transact-entities! conn)
            ;; TODO
-             (conditionally-resume-game conn))
+           (conditionally-resume-game conn))
       )
 
     ;; TODO
@@ -772,53 +782,3 @@
 
 
     ))
-
-#_'(#:game.user{:_user
-                #:game{:_users
-                       {:db/id 17592186045447
-                        :game/id #uuid "0f5aaa76-8310-4252-bc40-3d4867360210"
-                        :game/status
-                        #:db{:id 17592186045429
-                             :ident :game-status/created}
-                        :game/users
-                        [{:db/id 17592186045452
-                          :game.user/user
-                          {:db/id 17592186045445
-                           :user/email "twashing@gmail.com"
-                           :user/name "Timothy Washington"
-                           :user/external-uid
-                           "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}
-                          :game.user/accounts
-                          [{:db/id 17592186045453
-                            :bookkeeping.account/id
-                            #uuid "9a17c667-3f89-46dd-8168-d16888577335"
-                            :bookkeeping.account/name "Cash"
-                            :bookkeeping.account/type
-                            #:db{:id 17592186045437
-                                 :ident :bookkeeping.account.type/asset}
-                            :bookkeeping.account/balance 100000.0
-                            :bookkeeping.account/amount 0
-                            :bookkeeping.account/orientation
-                            #:db{:id 17592186045442
-                                 :ident
-                                 :bookkeeping.account.orientation/debit}}
-                           {:db/id 17592186045454
-                            :bookkeeping.account/id
-                            #uuid "8ad10ec0-e6d9-43ca-b011-1dc72544905b"
-                            :bookkeeping.account/name "Equity"
-                            :bookkeeping.account/type
-                            #:db{:id 17592186045441
-                                 :ident :bookkeeping.account.type/equity}
-                            :bookkeeping.account/balance 100000.0
-                            :bookkeeping.account/amount 0
-                            :bookkeeping.account/orientation
-                            #:db{:id 17592186045443
-                                 :ident :bookkeeping.account.orientation/credit}}]
-                          :game.user/portfolio
-                          {:db/id 17592186045455
-                           :bookkeeping.portfolio/id
-                           #uuid "172433da-beed-4f3e-ad48-9c1ca90ecdc3"
-                           :bookkeeping.portfolio/journals
-                           [{:db/id 17592186045456
-                             :bookkeeping.journal/id
-                             #uuid "8532ae7c-b4c1-4415-8cca-ca70f7a51f59"}]}}]}}})
