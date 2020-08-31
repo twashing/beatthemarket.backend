@@ -38,8 +38,7 @@
            client-id           (assoc :game.user/user-client client-id))
          persistence.core/bind-temporary-id
          list
-         (assoc game :game/users)
-         util/pprint+identity)))
+         (assoc game :game/users))))
 
 (defn ->game [{game-id     :game-id
                game-status :game-status
