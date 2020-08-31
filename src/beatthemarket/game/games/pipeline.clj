@@ -66,8 +66,6 @@
          game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id))
          op :buy]
 
-     ;; (util/pprint+identity [:buy-stock-pipeline user-external-id game-id game-db-id])
-
      (->> (games.trades/buy-stock! conn user-db-id user-external-id game-id stockId stockAmount tickId tickPrice validate?)
           (stream-account-balance-updates conn portfolio-update-stream game-db-id user-db-id)
           list
@@ -87,13 +85,11 @@
          game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id))
          op :sell]
 
-     ;; (util/pprint+identity [:buy-stock-pipeline user-external-id game-id game-db-id])
-
      (->> (games.trades/sell-stock! conn user-db-id user-external-id game-id stockId stockAmount tickId tickPrice validate?)
           (stream-account-balance-updates conn portfolio-update-stream game-db-id user-db-id)
           list
-          (map (partial games.processing/calculate-profit-loss user-db-id game-id))
-          (execution-pipeline :sell game-control)
+          (map (partial games.processing/calculate-profit-loss op user-db-id game-id))
+          (execution-pipeline game-control)
           doall))))
 
 (defn replay-stock-pipeline [game-control maybe-tentries]

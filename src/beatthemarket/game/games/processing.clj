@@ -163,11 +163,11 @@
 
   ;; TODO ensure we are filtering on nested user P/Ls
   (println (format ">> TRANSACT :profit-loss / " (pr-str data)))
-
-  #_(let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
+  ;; (util/pprint+identity data)
+  (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn)))]
 
-    ;; (util/pprint+identity profit-loss)
+    ;; (util/pprint+identity realized-profit-loss)
 
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
