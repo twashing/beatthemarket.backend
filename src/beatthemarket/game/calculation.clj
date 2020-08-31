@@ -265,12 +265,13 @@
                                                     pershare-purchase-ratio] :as calculation}]
 
   (let [updated-stock-account-amount (Math/abs updated-stock-account-amount)
-        old-account-amount (Math/abs counter-balance-amount)
+        old-account-amount           (Math/abs counter-balance-amount)
 
         shrinkage                       (/ updated-stock-account-amount old-account-amount)
         updated-pershare-purchase-ratio (* shrinkage pershare-purchase-ratio)
         pershare-gain-or-loss           (- latest-price price)
-        running-profit-loss             (* pershare-gain-or-loss updated-pershare-purchase-ratio)]
+        A                               (* pershare-gain-or-loss updated-pershare-purchase-ratio)
+        running-profit-loss             (* A updated-stock-account-amount)]
 
     (assoc calculation
            :latest-price->price     [latest-price price]
@@ -303,8 +304,9 @@
   (let [{updated-stock-account-amount :stock-account-amount
          latest-price                 :price} profit-loss-calculation
 
-        updated-trade-history                  (-> (user-stock->profit-loss user-id game-id stock-id)
-                                                   (conj (assoc profit-loss-calculation :counter-balance-amount updated-stock-account-amount)))
+        updated-trade-history (user-stock->profit-loss user-id game-id stock-id)
+        #_(-> (user-stock->profit-loss user-id game-id stock-id)
+              (conj (assoc profit-loss-calculation :counter-balance-amount updated-stock-account-amount)))
 
         updated-profit-loss (map (partial recalculate-PL-on-decrease-mappingfn updated-stock-account-amount latest-price)
                                  updated-trade-history)
@@ -422,7 +424,7 @@
         crossing-counter-balance-threshold? (crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
 
 
-    ;; (util/pprint+identity [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
+    (util/pprint+identity [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
 
     (match [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?]
 

@@ -102,7 +102,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -115,7 +115,7 @@
 
 (defn- local-transact-stock! [{conn :conn
                                userId :userId
-                               gameId :gameId
+                               game-id :gameId
                                stockId :stockId
                                game-control :game-control}
                               {{tickId      :game.stock.tick/id
@@ -124,8 +124,8 @@
                                 stockAmount :stockAmount} :local-transact-input :as v}]
 
   (case op
-    :buy (games.pipeline/buy-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
-    :sell (games.pipeline/sell-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false)
+    :buy (games.pipeline/buy-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
+    :sell (games.pipeline/sell-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
     :noop)
   v)
 
@@ -234,7 +234,6 @@
 
           (is (= expected-after-running-profit-loss running-profit-loss)))))))
 
-;; TODO
 (deftest multiple-buy-track-running-proft-loss-test
 
   (let [;; A
@@ -253,45 +252,66 @@
         test-portfolio-updates (atom [])
 
         opts       {:level-timer-sec 5
-                    :accounts        (game.core/->game-user-accounts)}
-        game-level :game-level/one
+                    :user            {:db/id user-db-id}
+                    :accounts        (game.core/->game-user-accounts)
+                    :game-level      :game-level/one}
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id    :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn game-control)
 
 
         ;; E Buy Stock
-        {stock-id   :game.stock/id
+        {stock-id  :game.stock/id
          stockName :game.stock/name} (first stocks)
 
-        opts {:conn    conn
-              :userId  userId
-              :gameId  gameId
-              :stockId stock-id
+        opts {:conn         conn
+              :userId       userId
+              :gameId       game-id
+              :stockId      stock-id
               :game-control game-control}
 
         ops  [{:op :buy :stockAmount 100}
               {:op :buy :stockAmount 200}]
         ops-count (count ops)]
 
-    (is true)
+    (testing "Expected profit-loss data after multiple buys"
 
-    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+      (run-trades! iterations stock-id opts ops ops-count)
 
-                (let [stock-tick (util/narrow-stock-ticks stock-id stock-ticks)]
-                  (assoc v :local-transact-input (merge stock-tick op))))
-              (take ops-count iterations)
-              (take ops-count ops))
-         (map #(local-transact-stock! opts %))
-         doall)))
+      (let [expected-profit-loss {user-db-id
+                                  {stock-id
+                                   ({:amount 200
+                                     :counter-balance-direction :buy
+                                     :stock-account-amount 300
+                                     :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                     :op :buy
+                                     :latest-price->price [110.0 110.0]
+                                     :counter-balance-amount 300
+                                     :pershare-gain-or-loss 0.0
+                                     :running-profit-loss 0.0
+                                     :price 110.0
+                                     :pershare-purchase-ratio 2/3}
+                                    {:amount 100
+                                     :counter-balance-direction :buy
+                                     :stock-account-amount 100
+                                     :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                     :op :buy
+                                     :latest-price->price [110.0 100.0]
+                                     :counter-balance-amount 300
+                                     :pershare-gain-or-loss 10.0
+                                     :running-profit-loss 999.9999999999999
+                                     :price 100.0
+                                     :pershare-purchase-ratio 1/3})}}]
 
-;; TODO
+        (-> (game.calculation/running-profit-loss-for-game game-id)
+            (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x))))))))
+
 (deftest multiple-buy-sell-track-realized-proft-loss-test
 
   (let [;; A
@@ -310,18 +330,20 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
+
         opts       {:level-timer-sec 5
-                    :accounts        (game.core/->game-user-accounts)}
-        game-level :game-level/one
+                    :user            {:db/id user-db-id}
+                    :accounts        (game.core/->game-user-accounts)
+                    :game-level      :game-level/one}
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id    :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn game-control)
 
 
         ;; E Buy Stock
@@ -330,26 +352,66 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
         ops  [{:op :buy :stockAmount 100}
-              ;; {:op :sell :stockAmount 100}
               {:op :buy :stockAmount 200}
               {:op :sell :stockAmount 200}]
         ops-count (count ops)]
 
-    (is true)
+    (testing "We are seeing the correct running profit-loss, after realizing a portion of the P/L"
 
-    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+      (run-trades! iterations stock-id opts ops ops-count)
 
-                (let [stock-tick (util/narrow-stock-ticks stock-id stock-ticks)]
-                  (assoc v :local-transact-input (merge stock-tick op))))
-              (take ops-count iterations)
-              (take ops-count ops))
-         (map #(local-transact-stock! opts %))
-         doall)))
+      (let [expected-running-profit-loss {user-db-id
+                                          {stock-id
+                                           #{{:amount 200
+                                              :counter-balance-direction :buy
+                                              :stock-account-amount 300
+                                              :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                              :op :buy
+                                              :shrinkage 1/3
+                                              :latest-price->price [(.floatValue 105.0) (.floatValue 110.0)]
+                                              :counter-balance-amount 100
+                                              :pershare-gain-or-loss -5.0
+                                              :running-profit-loss -111
+                                              :price (.floatValue 110.0)
+                                              :pershare-purchase-ratio 2/9}
+                                             {:amount 100
+                                              :counter-balance-direction :buy
+                                              :stock-account-amount 100
+                                              :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                              :op :buy
+                                              :shrinkage 1/3
+                                              :latest-price->price [(.floatValue 105.0) (.floatValue 100.0)]
+                                              :counter-balance-amount 100
+                                              :pershare-gain-or-loss 5.0
+                                              :running-profit-loss 56
+                                              :price (.floatValue 100.0)
+                                              :pershare-purchase-ratio 1/9}}}}
+
+            expected-realized-profit-loss #{{:user-id user-db-id
+                                             ;; :tick-id #uuid "1a428ad8-f5ca-45c4-8d5e-9d7f8c27a9fd"
+                                             :game-id game-id
+                                             :stock-id stock-id
+                                             :profit-loss-type :realized-profit-loss
+                                             :profit-loss (.floatValue -500.0)}}
+
+            running-profit-loss (-> (game.calculation/running-profit-loss-for-game game-id)
+                                    (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
+                                    (update-in [user-db-id stock-id] (fn [x] (map #(assoc % :running-profit-loss (Math/round (:running-profit-loss %))) x)))
+                                    (update-in [user-db-id stock-id] (fn [x] (into #{} x))))
+
+            realized-profit-loss (->> (game.calculation/realized-profit-loss-for-game conn user-db-id game-id)
+                                      (map #(dissoc % :tick-id))
+                                      (into #{}))]
+
+        (are [x y] (= x y)
+          expected-running-profit-loss running-profit-loss
+          expected-realized-profit-loss realized-profit-loss)))))
+
 
 ;; TODO
 (deftest multiple-buy-sell-track-realized-closeout-running-test
@@ -376,7 +438,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -390,7 +452,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -442,7 +504,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -456,7 +518,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -482,7 +544,7 @@
       (let [expected-realized-count 2
             expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
             expected-realized-amount #{(.floatValue 666.6667) (.floatValue -500.0)}
-            realized-profit-losses (game.calculation/collect-realized-profit-loss-pergame conn user-db-id gameId)]
+            realized-profit-losses (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id)]
 
         (is (= expected-realized-count (count realized-profit-losses)))
 
@@ -504,7 +566,7 @@
               expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
               expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
                                              :profit-loss (.floatValue 166.67)}
-              realized-profit-losses-perstock (game.calculation/collect-realized-profit-loss-pergame conn user-db-id gameId true)]
+              realized-profit-losses-perstock (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id true)]
 
 
           (is (= expected-realized-count (count realized-profit-losses-perstock)))
@@ -530,7 +592,7 @@
               realized-profit-losses-allgames
               (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?)
 
-              realized-profit-losses-allgames-forgame (get realized-profit-losses-allgames gameId)]
+              realized-profit-losses-allgames-forgame (get realized-profit-losses-allgames game-id)]
 
 
           (is (= expected-realized-count (count realized-profit-losses-allgames-forgame)))
@@ -589,7 +651,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -603,7 +665,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -635,7 +697,7 @@
              (map #(local-transact-stock! opts %))
              doall)
 
-        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stock-id)
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game game-id) stock-id)
               expected-running-profit-loss-before [{:stock-account-amount -100
                                                     :pershare-gain-or-loss 0.0
                                                     :running-profit-loss 0.0}]]
@@ -656,7 +718,7 @@
              (map #(local-transact-stock! opts %))
              doall)
 
-        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stock-id)
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game game-id) stock-id)
               expected-running-profit-loss-after [{:stock-account-amount -100
                                                    :pershare-gain-or-loss -10.0
                                                    :running-profit-loss 1000.0}]]
@@ -677,8 +739,8 @@
              (map #(local-transact-stock! opts %))
              doall)
 
-        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stock-id)
-              realized-profit-loss (game.calculation/realized-profit-loss-for-game conn user-db-id gameId)
+        (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game game-id) stock-id)
+              realized-profit-loss (game.calculation/realized-profit-loss-for-game conn user-db-id game-id)
 
               expected-running-profit-loss-after [{:stock-account-amount -100
                                                    :pershare-gain-or-loss -10.0
@@ -730,7 +792,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -744,7 +806,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -764,9 +826,9 @@
            (map #(local-transact-stock! opts %))
            doall)
 
-      (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))
+      (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
-            expected-game-event {:game-id gameId
+            expected-game-event {:gameId game-id
                                  :level :game-level/one
                                  :profit-loss 1200.0
                                  :event :win}]
@@ -801,7 +863,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -815,7 +877,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -835,9 +897,9 @@
            (map #(local-transact-stock! opts %))
            doall)
 
-      (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))
+      (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
-            expected-game-event {:game-id gameId
+            expected-game-event {:gameId game-id
                                  :level :game-level/one
                                  :profit-loss -2000.0
                                  :event :lose}]
@@ -872,7 +934,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -886,7 +948,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -908,9 +970,9 @@
              (map #(local-transact-stock! opts %))
              doall)
 
-        (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))
+        (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
-              expected-game-event {:game-id gameId
+              expected-game-event {:gameId game-id
                                    :level :game-level/ten
                                    :profit-loss 1.5E9
                                    :event :win}]
@@ -943,7 +1005,7 @@
 
 
           ;; D Launch Game
-          {{gameId     :game/id
+          {{game-id     :game/id
             game-db-id :db/id
             stocks     :game/stocks
             :as        game} :game
@@ -957,7 +1019,7 @@
 
           opts {:conn    conn
                 :userId  userId
-                :gameId  gameId
+                :gameId  game-id
                 :stockId stock-id
                 :game-control game-control}
 
@@ -1007,7 +1069,7 @@
                                                 (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                 a)}
         game-level :game-level/one
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id :as game} :game
          control-channel              :control-channel
          game-event-stream            :game-event-stream
@@ -1065,7 +1127,7 @@
                                                 (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                 a)}
         game-level :game-level/one
-        {{gameId     :game/id :as game} :game
+        {{game-id     :game/id :as game} :game
          :as                          game-control}
         (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
@@ -1074,18 +1136,18 @@
     (testing "Running game has correct settings"
 
       (let [{start-time :game/start-time
-             {status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))]
+             {status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))]
 
         (is (util/exists? start-time))
         (is (= :game-status/created status))))
 
-    (games.control/exit-game! conn gameId)
+    (games.control/exit-game! conn game-id)
 
     (testing "Exiting a game, correctly sets :game/end-time abd :game/status"
 
       (let [{start-time :game/start-time
              end-time :game/end-time
-             {status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id gameId))]
+             {status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))]
 
         (is (t/after? (c/to-date-time end-time) (c/to-date-time start-time)))
         (is (= :game-status/exited status))))))
@@ -1119,7 +1181,7 @@
                                                 (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                 a)}
         game-level :game-level/one
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id :as game} :game
          control-channel              :control-channel
          game-event-stream            :game-event-stream
@@ -1185,7 +1247,7 @@
                                                   (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                   a)}
           game-level :game-level/one
-          {{gameId     :game/id
+          {{game-id     :game/id
             game-db-id :db/id
             stocks     :game/stocks :as game} :game
            control-channel                    :control-channel
@@ -1216,10 +1278,10 @@
           (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId "non-existant-game-id" stock-id stockAmount tickId1 tickPrice1))))
 
         (testing "Error is thrown when submitted price does not match price from tickId"
-          (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stock-id stockAmount tickId1 (Float. (- tickPrice1 1))))))
+          (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId game-id stock-id stockAmount tickId1 (Float. (- tickPrice1 1))))))
 
         #_(testing "Error is thrown when submitted tick is no the latest"
-            (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId gameId stock-id stockAmount tickId0 (Float. tickPrice0)))))
+            (is (thrown? ExceptionInfo (game.games/buy-stock! conn userId game-id stock-id stockAmount tickId0 (Float. tickPrice0)))))
 
         (testing "Returned Tentry matches what was submitted"
           (let [{tickPriceL :game.stock.tick/close
@@ -1233,7 +1295,7 @@
                 expected-debit-value        (- (-> repl.state/config :game/game :starting-balance) expected-credit-value)
                 expected-debit-account-name "Cash"
 
-                result-tentry (game.games/buy-stock! conn userId gameId stock-id stockAmount tickIdL (Float. tickPriceL))
+                result-tentry (game.games/buy-stock! conn userId game-id stock-id stockAmount tickIdL (Float. tickPriceL))
 
                 {debit-account-name :bookkeeping.account/name
                  debit-value        :bookkeeping.account/balance}
@@ -1284,7 +1346,7 @@
                                                   (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                   a)}
           game-level :game-level/one
-          {{gameId     :game/id
+          {{game-id     :game/id
             game-db-id :db/id
             stocks     :game/stocks :as game} :game
            control-channel                :control-channel
@@ -1316,10 +1378,10 @@
           (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId "non-existant-game-id" stock-id stockAmount tickId1 tickPrice1))))
 
         (testing "Error is thrown when submitted price does not match price from tickId"
-          (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stock-id stockAmount tickId1 (Float. (- tickPrice1 1))))))
+          (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId game-id stock-id stockAmount tickId1 (Float. (- tickPrice1 1))))))
 
         (testing "Error is thrown when submitted tick is no the latest"
-          (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId gameId stock-id stockAmount tickId0 (Float. tickPrice0)))))
+          (is (thrown? ExceptionInfo (game.games/sell-stock! conn userId game-id stock-id stockAmount tickId0 (Float. tickPrice0)))))
 
         (testing "Ensure we have the stock on hand before selling"
 
@@ -1328,7 +1390,7 @@
                 (->> @test-stock-ticks last
                      (filter #(= stock-id (:game.stock/id %))) first)]
 
-            (game.games/buy-stock! conn userId gameId stock-id stockAmount tickIdL (Float. tickPriceL))
+            (game.games/buy-stock! conn userId game-id stock-id stockAmount tickIdL (Float. tickPriceL))
 
             (testing "Returned Tentry matches what was submitted"
 
@@ -1341,7 +1403,7 @@
                                                     debit-value-change)
                     expected-credit-account-name "Cash"
 
-                    result-tentry (game.games/sell-stock! conn userId gameId stock-id stockAmount tickIdL (Float. tickPriceL))
+                    result-tentry (game.games/sell-stock! conn userId game-id stock-id stockAmount tickIdL (Float. tickPriceL))
 
                     {debit-account-name :bookkeeping.account/name
                      debit-value        :bookkeeping.account/balance}
@@ -1393,7 +1455,7 @@
                                                   (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                   a)}
           game-level :game-level/one
-          {{gameId     :game/id
+          {{game-id     :game/id
             game-db-id :db/id
             stocks     :game/stocks :as game} :game
            control-channel                    :control-channel
@@ -1430,8 +1492,8 @@
               expected-debit-value        (- (-> repl.state/config :game/game :starting-balance) expected-credit-value)
               expected-debit-account-name "Cash"
 
-              result-A (game.games/buy-stock! conn userId gameId stock-idA stockAmount tickIdA (Float. tickPriceA) false)
-              result-B (game.games/buy-stock! conn userId gameId stock-idB stockAmount tickIdB (Float. tickPriceB) false)
+              result-A (game.games/buy-stock! conn userId game-id stock-idA stockAmount tickIdA (Float. tickPriceA) false)
+              result-B (game.games/buy-stock! conn userId game-id stock-idB stockAmount tickIdB (Float. tickPriceB) false)
 
               expected-pl-entry-count 2
               expected-pl-calculation-keys
@@ -1440,7 +1502,7 @@
 
               game-profit-loss (-> repl.state/system :game/games
                                    deref
-                                   (get gameId)
+                                   (get game-id)
                                    :profit-loss)
               pl-entries ((juxt
                             #(get % stock-idA)
@@ -1492,7 +1554,7 @@
                                                     (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                     a)}
             game-level :game-level/one
-            {{gameId     :game/id
+            {{game-id     :game/id
               game-db-id :db/id
               stocks     :game/stocks :as game} :game
              control-channel                :control-channel
@@ -1506,7 +1568,7 @@
 
             opts {:conn    conn
                   :userId  userId
-                  :gameId  gameId
+                  :gameId  game-id
                   :stockId stock-id}
             ops  [{:op :buy :stockAmount 100}
                   {:op :sell :stockAmount 100}
@@ -1527,7 +1589,7 @@
                doall)
 
           (let [profit-loss (-> repl.state/system
-                                :game/games deref (get gameId)
+                                :game/games deref (get game-id)
                                 :profit-loss
                                 (get stock-id))
 
@@ -1551,7 +1613,7 @@
                doall)
 
           (let [profit-loss (-> repl.state/system
-                                :game/games deref (get gameId)
+                                :game/games deref (get game-id)
                                 :profit-loss
                                 (get stock-id))
 
@@ -1566,7 +1628,7 @@
 
         (testing "We correct game.games/collect-realized-profit-loss-pergame"
 
-          (-> (game.calculation/collect-realized-profit-loss-pergame gameId)
+          (-> (game.calculation/collect-realized-profit-loss-pergame game-id)
               first
               :profit-loss
               (= 3000.0)
@@ -1612,7 +1674,7 @@
                                                     (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                     a)}
             game-level :game-level/one
-            {{gameId     :game/id
+            {{game-id     :game/id
               game-db-id :db/id
               stocks     :game/stocks :as game} :game
              control-channel                :control-channel
@@ -1626,7 +1688,7 @@
 
             opts {:conn    conn
                   :userId  userId
-                  :gameId  gameId
+                  :gameId  game-id
                   :stockId stock-id}
             ops  [{:op :buy :stockAmount 75}
                   {:op :buy :stockAmount 25}
@@ -1651,7 +1713,7 @@
         (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, single sell (multiple times)"
 
           (let [profit-loss (-> repl.state/system
-                                :game/games deref (get gameId)
+                                :game/games deref (get game-id)
                                 :profit-loss
                                 (get stock-id))
 
@@ -1676,7 +1738,7 @@
 
         (testing "game.calculation game.games/collect-realized-profit-loss-pergame"
 
-          (-> (game.calculation/collect-realized-profit-loss-pergame gameId)
+          (-> (game.calculation/collect-realized-profit-loss-pergame game-id)
               first
               :profit-loss
               (= (.floatValue 9675.21))
@@ -1728,7 +1790,7 @@
                                                     (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                     a)}
             game-level :game-level/one
-            {{gameId     :game/id
+            {{game-id     :game/id
               game-db-id :db/id
               stocks     :game/stocks :as game} :game
              control-channel                :control-channel
@@ -1742,7 +1804,7 @@
 
             opts {:conn    conn
                   :userId  userId
-                  :gameId  gameId
+                  :gameId  game-id
                   :stockId stock-id}
             ops  [{:op :buy :stockAmount 75}
                   {:op :buy :stockAmount 25}
@@ -1774,7 +1836,7 @@
         (testing "Chunks Realized profit/losses are correctly calculated, for multiple buys, multiple sells (multiple times)"
 
           (let [profit-loss (-> repl.state/system
-                                :game/games deref (get gameId)
+                                :game/games deref (get game-id)
                                 :profit-loss
                                 (get stock-id))
 
@@ -1826,7 +1888,7 @@
 
         (testing "game.calculation game.games/collect-realized-profit-loss-pergame"
 
-          (->> (game.calculation/collect-realized-profit-loss-pergame gameId)
+          (->> (game.calculation/collect-realized-profit-loss-pergame game-id)
                first
                :profit-loss
                (= (.floatValue 17729.78))
@@ -1990,7 +2052,7 @@
 
             game-id (UUID/randomUUID)
             opts          {:level-timer-sec               10
-                           :game-id                       game-id
+                           :gameId                       game-id
                            :accounts                      (game.core/->game-user-accounts)
                            :collect-profit-loss (fn [{:keys [profit-loss] :as result}]
                                                   (swap! profit-loss-history #(conj % profit-loss))
@@ -1998,7 +2060,7 @@
                                                        (assoc result :profit-loss)))}
 
             game-level :game-level/one
-            {{gameId     :game/id
+            {{game-id     :game/id
               game-db-id :db/id
               stocks     :game/stocks :as game} :game
              control-channel                :control-channel
@@ -2013,7 +2075,7 @@
 
             opts                   {:conn    conn
                                     :userId  userId
-                                    :gameId  gameId
+                                    :gameId  game-id
                                     :stockId stock-id}
             ops [{:op :buy :stockAmount 75}
                  {:op :buy :stockAmount 25}
@@ -2137,7 +2199,7 @@
                          :accounts        (game.core/->game-user-accounts)}
 
           game-level :game-level/one
-          {{gameId     :game/id
+          {{game-id     :game/id
             game-db-id :db/id
             stocks     :game/stocks :as game} :game
            control-channel                :control-channel
@@ -2150,7 +2212,7 @@
 
           opts                   {:conn    conn
                                   :userId  userId
-                                  :gameId  gameId
+                                  :gameId  game-id
                                   :stockId stock-id}
           ops [{:op :noop}
                {:op :buy :stockAmount 75}
@@ -2253,7 +2315,7 @@
           ;; C create-game!
           sink-fn    identity
           game-level :game-level/one
-          {{gameId     :game/id
+          {{game-id     :game/id
             stocks     :game/stocks :as game} :game
            game-event-stream              :game-event-stream
            :as                            game-control}
@@ -2263,25 +2325,25 @@
       (testing "Pause, resume and exit signals"
 
         (game.games/start-game! conn user-db-id game-control)
-        (is (not (game.games/game-paused? gameId)))
+        (is (not (game.games/game-paused? game-id)))
 
 
-        (game.games/send-control-event! gameId {:event :pause :game-id gameId})
+        (game.games/send-control-event! game-id {:event :pause :game-id game-id})
         (Thread/sleep 1000)
-        (is (game.games/game-paused? gameId))
+        (is (game.games/game-paused? game-id))
 
 
-        (game.games/send-control-event! gameId {:event :resume :game-id gameId})
+        (game.games/send-control-event! game-id {:event :resume :game-id game-id})
         (Thread/sleep 1000)
-        (is (not (game.games/game-paused? gameId)))
+        (is (not (game.games/game-paused? game-id)))
 
 
         (testing "Checking game-message after a pause, then resume"
 
           (let [expected-events #{{:event :pause
-                                   :game-id gameId}
+                                   :game-id game-id}
                                   {:event :resume
-                                   :game-id gameId}}
+                                   :game-id game-id}}
 
                 expected-level-timer-keys #{:remaining-in-minutes :remaining-in-seconds :game-id :type :level :event}
 
@@ -2301,14 +2363,14 @@
                  (every? #(= expected-level-timer-keys %))
                  is)))
 
-        (game.games/send-control-event! gameId {:event :exit :game-id gameId})
+        (game.games/send-control-event! game-id {:event :exit :game-id game-id})
         (Thread/sleep 1000)
-        (is (not (game.games/game-paused? gameId))))
+        (is (not (game.games/game-paused? game-id))))
 
 
       (testing "Checking game-message after an exit"
 
-        (let [expected-game-events [{:event :exit :game-id gameId}]
+        (let [expected-game-events [{:event :exit :game-id game-id}]
               game-events (test-util/to-coll game-event-stream)]
 
           (is expected-game-events game-events)))))
@@ -2330,7 +2392,7 @@
           ;; C create-game!
           sink-fn    identity
           game-level :game-level/one
-          {{gameId     :game/id
+          {{game-id     :game/id
             game-db-id :db/id
             stocks     :game/stocks :as game} :game
            control-channel                :control-channel
@@ -2345,7 +2407,7 @@
 
           opts                   {:conn    conn
                                   :userId  userId
-                                  :gameId  gameId
+                                  :gameId  game-id
                                   :stockId stock-id}
           ops                    [{:op :buy :stockAmount 75}
                                   {:op :buy :stockAmount 25}
@@ -2364,7 +2426,7 @@
       (testing "Correct game message is received"
 
         (let [expected-count   1
-              expected-message {:game-id     gameId
+              expected-message {:game-id     game-id
                                 :level       :game-level/one
                                 :profit-loss 1750.0
                                 :event :win}
@@ -2380,7 +2442,7 @@
                                        :lose-threshold   2000.0
                                        :level            :game-level/two}
                   current-game-level  (-> repl.state/system
-                                          :game/games deref (get gameId)
+                                          :game/games deref (get game-id)
                                           :current-level)
 
                   expected-db-game-level :game-level/two
@@ -2390,7 +2452,7 @@
                                                     [?g :game/id ?game-id]
                                                     [?g :game/level ?l]]
                                                   (d/db conn)
-                                                  gameId)
+                                                  game-id)
                                              ffirst
                                              :db/ident)]
 
@@ -2415,7 +2477,7 @@
           ;; C create-game!
           sink-fn    identity
           game-level :game-level/one
-          {{gameId     :game/id
+          {{game-id     :game/id
             game-db-id :db/id
             stocks     :game/stocks :as game} :game
            control-channel                :control-channel
@@ -2429,7 +2491,7 @@
 
           opts                   {:conn    conn
                                   :userId  userId
-                                  :gameId  gameId
+                                  :gameId  game-id
                                   :stockId stock-id}
           ops                    [{:op :buy :stockAmount 50}
                                   {:op :noop}
@@ -2447,12 +2509,12 @@
       (testing "Correct game message is received"
 
         (let [expected-count    2
-              expected-messages [{:game-id     gameId
+              expected-messages [{:game-id     game-id
                                   :level       :game-level/one
                                   :profit-loss -9500.0
                                   :event     :lose}
                                  {:event :exit
-                                  :game-id gameId}]
+                                  :game-id game-id}]
               result-messages   (test-util/to-coll game-event-stream)]
 
           (are [x y] (= x y)
@@ -2466,7 +2528,7 @@
                                        :lose-threshold   1000.0}
 
                   current-game-level (-> repl.state/system
-                                         :game/games deref (get gameId)
+                                         :game/games deref (get game-id)
                                          :current-level
                                          deref)
 
@@ -2477,7 +2539,7 @@
                                                     [?g :game/id ?game-id]
                                                     [?g :game/level ?l]]
                                                   (d/db conn)
-                                                  gameId)
+                                                  game-id)
                                              ffirst
                                              :db/ident)]
 
@@ -2510,7 +2572,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -2524,7 +2586,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -2546,7 +2608,7 @@
          doall)
 
     ;; :pause
-    (games.control/pause-game! conn gameId)
+    (games.control/pause-game! conn game-id)
 
     ;; :game/start-position
     ;; :game.user/profit-loss
@@ -2558,7 +2620,7 @@
 
     ;; B AFTER :pause
     (util/pprint+identity
-      (persistence.core/entity-by-domain-id conn :game/id gameId))
+      (persistence.core/entity-by-domain-id conn :game/id game-id))
     ))
 
 ;; TODO
@@ -2586,7 +2648,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -2600,7 +2662,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -2622,11 +2684,11 @@
          doall)
 
     ;; :pause
-    (games.control/pause-game! conn gameId)
+    (games.control/pause-game! conn game-id)
 
     ;; B AFTER :pause
     #_(util/pprint+identity
-        (persistence.core/entity-by-domain-id conn :game/id gameId))
+        (persistence.core/entity-by-domain-id conn :game/id game-id))
 
     ;; Resume game
     (games.control/resume-game! conn user-db-id game-control)
@@ -2658,7 +2720,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -2672,7 +2734,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -2702,14 +2764,14 @@
          doall)
 
     ;; :pause
-    (games.control/pause-game! conn gameId)
+    (games.control/pause-game! conn game-id)
 
     ;; B AFTER :pause
     #_(util/pprint+identity
-        (persistence.core/entity-by-domain-id conn :game/id gameId))
+        (persistence.core/entity-by-domain-id conn :game/id game-id))
 
     ;; Resume game
-    (let [{iterations :iterations} (games.control/resume-workbench! conn gameId user-db-id game-control data-sequence-fn)]
+    (let [{iterations :iterations} (games.control/resume-workbench! conn game-id user-db-id game-control data-sequence-fn)]
 
       (->> (map first iterations)
            (take 5)
@@ -2742,7 +2804,7 @@
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -2756,7 +2818,7 @@
 
         opts {:conn    conn
               :userId  userId
-              :gameId  gameId
+              :gameId  game-id
               :stockId stock-id
               :game-control game-control}
 
@@ -2786,14 +2848,14 @@
          doall)
 
     ;; :pause
-    (games.control/pause-game! conn gameId)
+    (games.control/pause-game! conn game-id)
 
     ;; B AFTER :pause
     #_(util/pprint+identity
-        (persistence.core/entity-by-domain-id conn :game/id gameId))
+        (persistence.core/entity-by-domain-id conn :game/id game-id))
 
     ;; Resume game
-    (let [{iterations :iterations} (games.control/resume-workbench! conn gameId user-db-id game-control data-sequence-fn)]
+    (let [{iterations :iterations} (games.control/resume-workbench! conn game-id user-db-id game-control data-sequence-fn)]
 
       (->> (map first iterations)
            (take 5)
