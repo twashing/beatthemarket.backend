@@ -756,8 +756,8 @@
   ;; (-> user-game :game.user/_user :game/_users :game/id)
   ;; created or paused
 
-  (beatthemarket.game.games/start-game! [conn user-db-id game-control])
-  (resume-game! [conn user-db-id game-control])
+  ;; (beatthemarket.game.games/start-game! conn user-db-id game-control)
+  ;; (resume-game! conn user-db-id game-control)
 
 
   )
@@ -768,17 +768,27 @@
 
     (when-not (user-joined-game? user-games game-id user-db-id)
 
-      ;; Join
-      (->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
-                                                         :accounts    (game.core/->game-user-accounts)})
-           (persistence.datomic/transact-entities! conn)
-           ;; TODO
-           (conditionally-resume-game conn))
+      (let [game nil ;; user-games
+            ]
+
+        ;; Join
+        (->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
+                                                           :accounts    (game.core/->game-user-accounts)})
+             (persistence.datomic/transact-entities! conn)
+             ;; TODO
+             (conditionally-resume-game conn)))
       )
 
     ;; TODO
     ;; Stream
-    ;; connect-to-game (if already joined))
+    ;; No explicit connect-to-game (if already joined))
+    ;; ... just start and stop a GQL subscription
 
+    ;; stream-stock-ticks
+    ;; stream-portfolio-updates
+    ;; stream-game-events
+
+    ;; ! Can stream (connect-to-game) only if they've joined game
+    ;; ! disconnect-from-game just stops subscription; noop if already disconnected
 
     ))

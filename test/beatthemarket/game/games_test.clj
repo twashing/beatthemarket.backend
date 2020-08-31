@@ -14,6 +14,7 @@
             [beatthemarket.game.games :as game.games]
 
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
+            [beatthemarket.bookkeeping.core :as bookkeeping.core]
             [beatthemarket.game.games.processing :as games.processing]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
@@ -39,9 +40,9 @@
   (testing "Creating a game returns the expected game control keys"
 
     (let [conn           (-> repl.state/system :persistence/datomic :opts :conn)
-          result-user-id (:db/id (test-util/generate-user! conn))
+          user-db-id (:db/id (test-util/generate-user! conn))
           sink-fn        identity
-          game-control   (game.games/create-game! conn result-user-id sink-fn)
+          game-control   (game.games/create-game! conn user-db-id sink-fn)
 
           expected-game-control-keys
           #{:game
@@ -83,7 +84,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -105,8 +106,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)]
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)]
 
 
     (doall (take 2 iterations))
@@ -120,7 +121,6 @@
                               {{tickId      :game.stock.tick/id
                                 tickPrice   :game.stock.tick/close
                                 op          :op
-
                                 stockAmount :stockAmount} :local-transact-input :as v}]
 
   (case op
@@ -133,9 +133,9 @@
 (deftest single-buy-and-track-running-proft-loss-test
 
   (let [;; A
-        conn (-> repl.state/system :persistence/datomic :opts :conn)
-        user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        conn           (-> repl.state/system :persistence/datomic :opts :conn)
+        user           (test-util/generate-user! conn)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -147,56 +147,62 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
-        opts       {:level-timer-sec 5
-                    :accounts        (game.core/->game-user-accounts)}
-        game-level :game-level/one
+        opts {:level-timer-sec 5
+              :user            {:db/id user-db-id}
+              :accounts        (game.core/->game-user-accounts)
+              :game-level      :game-level/one}
 
 
         ;; D Launch Game
-        {{gameId     :game/id
+        {{game-id     :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations]                   (game.games/start-workbench! conn game-control)
 
 
         ;; E Buy Stock
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
 
-        opts {:conn    conn
-              :userId  userId
-              :gameId  gameId
-              :stockId stockId
+        opts {:conn         conn
+              :userId       userId
+              :gameId       game-id
+              :stockId      stockId
               :game-control game-control}
 
-        ops  [{:op :buy :stockAmount 100}
-              ;; {:op :sell :stockAmount 100}
-              ;; {:op :buy :stockAmount 200}
-              ;; {:op :sell :stockAmount 200}
-              ]
-
+        ops [{:op :buy :stockAmount 100}
+             {:op :noop}]
         ops-count (count ops)]
-
-
-    ;; (doall (take 2 iterations))
-    (is true)
-    ;; (-> iterations first pprint)
 
     (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
 
-                (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
+                  (let [stock-tick (util/narrow-stock-ticks stockId stock-ticks)]
                   (assoc v :local-transact-input (merge stock-tick op))))
               (take ops-count iterations)
               (take ops-count ops))
          (map #(local-transact-stock! opts %))
-         doall
-         ;; (take 2)
-         ;; util/pprint+identity
-         )
+         doall)
 
-    ))
+    (let [expected-running-profit-loss {user-db-id
+                                        {stockId
+                                         [{:amount 100
+                                           :counter-balance-direction :buy
+                                           :stock-account-amount 100
+                                           :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                           :op :buy
+                                           :latest-price->price [110.0 100.0]
+                                           :counter-balance-amount 100
+                                           :pershare-gain-or-loss 10.0
+                                           :running-profit-loss 1000.0
+                                           :price 100.0
+                                           :pershare-purchase-ratio 1}]}}
+
+          running-profit-loss (-> (game.calculation/running-profit-loss-for-game game-id)
+                                  (update-in [user-db-id stockId] (fn [x] (map #(dissoc % :stock-account-id) x))))]
+
+      (is (= expected-running-profit-loss running-profit-loss)))))
 
 ;; TODO
 (deftest multiple-buy-track-running-proft-loss-test
@@ -204,7 +210,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -226,8 +232,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -261,7 +267,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -284,8 +290,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -321,7 +327,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -344,8 +350,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -386,7 +392,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
         email          (:user/email user)
 
@@ -410,8 +416,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -446,7 +452,7 @@
       (let [expected-realized-count 2
             expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
             expected-realized-amount #{(.floatValue 666.6667) (.floatValue -500.0)}
-            realized-profit-losses (game.calculation/collect-realized-profit-loss-pergame conn result-user-id gameId)]
+            realized-profit-losses (game.calculation/collect-realized-profit-loss-pergame conn user-db-id gameId)]
 
         (is (= expected-realized-count (count realized-profit-losses)))
 
@@ -468,7 +474,7 @@
               expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
               expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
                                              :profit-loss (.floatValue 166.67)}
-              realized-profit-losses-perstock (game.calculation/collect-realized-profit-loss-pergame conn result-user-id gameId true)]
+              realized-profit-losses-perstock (game.calculation/collect-realized-profit-loss-pergame conn user-db-id gameId true)]
 
 
           (is (= expected-realized-count (count realized-profit-losses-perstock)))
@@ -492,7 +498,7 @@
               expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
                                              :profit-loss (.floatValue 166.67)}
               realized-profit-losses-allgames
-              (game.calculation/collect-realized-profit-loss-allgames conn result-user-id group-by-stock?)
+              (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?)
 
               realized-profit-losses-allgames-forgame (get realized-profit-losses-allgames gameId)]
 
@@ -513,7 +519,7 @@
               expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
                                              :profit-loss (.floatValue 166.67)}
               realized-profit-losses-allgames
-              (game.calculation/collect-realized-profit-loss-allgames conn result-user-id group-by-stock?) ]
+              (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?) ]
 
 
           (is (= expected-realized-count (count realized-profit-losses-allgames)))
@@ -534,7 +540,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -557,8 +563,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -642,7 +648,7 @@
              doall)
 
         (let [running-profit-loss (get (game.calculation/running-profit-loss-for-game gameId) stockId)
-              realized-profit-loss (game.calculation/realized-profit-loss-for-game conn result-user-id gameId)
+              realized-profit-loss (game.calculation/realized-profit-loss-for-game conn user-db-id gameId)
 
               expected-running-profit-loss-after [{:stock-account-amount -100
                                                    :pershare-gain-or-loss -10.0
@@ -673,7 +679,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -698,8 +704,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -744,7 +750,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -769,8 +775,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -815,7 +821,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -840,8 +846,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -888,7 +894,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -911,8 +917,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -946,7 +952,7 @@
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -976,9 +982,9 @@
          control-channel              :control-channel
          game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)]
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)]
 
 
     (testing "Chaining the control pipeline, produces the correct value.
@@ -1004,7 +1010,7 @@
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -1031,9 +1037,9 @@
         game-level :game-level/one
         {{gameId     :game/id :as game} :game
          :as                          game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)]
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)]
 
     (testing "Running game has correct settings"
 
@@ -1058,7 +1064,7 @@
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -1088,10 +1094,10 @@
          control-channel              :control-channel
          game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
         start-position               3
-        [historical-data iterations] (game.games/start-workbench! conn result-user-id game-control start-position)]
+        [historical-data iterations] (game.games/start-workbench! conn user-db-id game-control start-position)]
 
 
     (testing "Game's startPosition is seeking to the correct location"
@@ -1124,7 +1130,7 @@
   ;; A
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -1155,9 +1161,9 @@
          control-channel                    :control-channel
          game-event-stream                  :game-event-stream
          :as                                game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
         stockAmount                  100]
@@ -1223,7 +1229,7 @@
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -1254,9 +1260,9 @@
          control-channel                :control-channel
          game-event-stream              :game-event-stream
          :as                            game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
@@ -1332,7 +1338,7 @@
   ;; A
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -1363,9 +1369,9 @@
          control-channel                    :control-channel
          game-event-stream                  :game-event-stream
          :as                                game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
         {stockIdA   :game.stock/id
          stockNameA :game.stock/name} (first stocks)
         {stockIdB   :game.stock/id
@@ -1431,7 +1437,7 @@
 
     (let [;; A
           conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-          {result-user-id :db/id
+          {user-db-id :db/id
            userId         :user/external-uid} (test-util/generate-user! conn)
 
           ;; B
@@ -1462,9 +1468,9 @@
            control-channel                :control-channel
            game-event-stream              :game-event-stream
            :as                            game-control}
-          (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+          (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-          [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+          [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
           {stockId   :game.stock/id
            stockName :game.stock/name} (first stocks)
 
@@ -1551,7 +1557,7 @@
 
     (let [;; A
           conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-          {result-user-id :db/id
+          {user-db-id :db/id
            userId         :user/external-uid} (test-util/generate-user! conn)
 
           ;; B
@@ -1582,9 +1588,9 @@
            control-channel                :control-channel
            game-event-stream              :game-event-stream
            :as                            game-control}
-          (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+          (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-          [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+          [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
           {stockId   :game.stock/id
            stockName :game.stock/name} (first stocks)
 
@@ -1667,7 +1673,7 @@
 
     (let [;; A
           conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-          {result-user-id :db/id
+          {user-db-id :db/id
            userId         :user/external-uid} (test-util/generate-user! conn)
 
           ;; B
@@ -1698,9 +1704,9 @@
            control-channel                :control-channel
            game-event-stream              :game-event-stream
            :as                            game-control}
-          (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+          (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-          [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+          [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
           {stockId   :game.stock/id
            stockName :game.stock/name} (first stocks)
 
@@ -1937,7 +1943,7 @@
 
     (let [;; A
           conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-          {result-user-id :db/id
+          {user-db-id :db/id
            userId         :user/external-uid} (test-util/generate-user! conn)
 
           ;; B
@@ -1969,9 +1975,9 @@
            stock-tick-stream              :stock-tick-stream
            portfolio-update-stream        :portfolio-update-stream
            game-event-stream              :game-event-stream
-           :as                            game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+           :as                            game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-          [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+          [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
           {stockId   :game.stock/id
            stockName :game.stock/name} (first stocks)
 
@@ -2081,7 +2087,7 @@
   ;; A
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -2106,9 +2112,9 @@
           stocks     :game/stocks :as game} :game
          control-channel                :control-channel
          portfolio-update-stream        :portfolio-update-stream
-         :as                            game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+         :as                            game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
 
@@ -2203,7 +2209,7 @@
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -2221,12 +2227,12 @@
           stocks     :game/stocks :as game} :game
          game-event-stream              :game-event-stream
          :as                            game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)]
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)]
 
 
     (testing "Pause, resume and exit signals"
 
-      (game.games/start-game! conn result-user-id game-control)
+      (game.games/start-game! conn user-db-id game-control)
       (is (not (game.games/game-paused? gameId)))
 
 
@@ -2281,7 +2287,7 @@
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -2300,9 +2306,9 @@
          control-channel                :control-channel
          game-event-stream              :game-event-stream
          :as                            game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
         {stockId   :game.stock/id
          ;; stockName :game.stock/name
          } (first stocks)
@@ -2366,7 +2372,7 @@
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
-        {result-user-id :db/id
+        {user-db-id :db/id
          userId         :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
@@ -2385,9 +2391,9 @@
          control-channel                :control-channel
          game-event-stream              :game-event-stream
          :as                            game-control}
-        (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
         {stockId   :game.stock/id
          stockName :game.stock/name} (first stocks)
 
@@ -2455,7 +2461,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -2478,8 +2484,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -2531,7 +2537,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -2554,8 +2560,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -2593,7 +2599,7 @@
       (persistence.core/entity-by-domain-id conn :game/id gameId))
 
     ;; Resume game
-    (games.control/resume-game! conn result-user-id game-control)
+    (games.control/resume-game! conn user-db-id game-control)
 
     ))
 
@@ -2603,7 +2609,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -2626,8 +2632,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -2673,7 +2679,7 @@
       (persistence.core/entity-by-domain-id conn :game/id gameId))
 
     ;; Resume game
-    (let [{iterations :iterations} (games.control/resume-workbench! conn gameId result-user-id game-control data-sequence-fn)]
+    (let [{iterations :iterations} (games.control/resume-workbench! conn gameId user-db-id game-control data-sequence-fn)]
 
       (->> (map first iterations)
            (take 5)
@@ -2687,7 +2693,7 @@
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         user (test-util/generate-user! conn)
-        result-user-id (:db/id user)
+        user-db-id (:db/id user)
         userId         (:user/external-uid user)
 
         ;; B
@@ -2710,8 +2716,8 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn result-user-id game-control)
+         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
 
 
         ;; E Buy Stock
@@ -2757,7 +2763,7 @@
       (persistence.core/entity-by-domain-id conn :game/id gameId))
 
     ;; Resume game
-    (let [{iterations :iterations} (games.control/resume-workbench! conn gameId result-user-id game-control data-sequence-fn)]
+    (let [{iterations :iterations} (games.control/resume-workbench! conn gameId user-db-id game-control data-sequence-fn)]
 
       (->> (map first iterations)
            (take 5)

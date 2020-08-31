@@ -1,6 +1,7 @@
 (ns beatthemarket.game.games.processing
   (:require [io.pedestal.log :as log]
             [integrant.repl.state :as repl.state]
+            [com.rpl.specter :refer [select transform ALL MAP-VALS MAP-KEYS]]
             [datomic.client.api :as d]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.core :as persistence.core]
@@ -26,29 +27,48 @@
 
 (defn recalculate-profit-loss-on-tick-perstock [price profit-loss-perstock]
 
-  #_(let [[butlast-chunks latest-chunk] (->> (game.persistence/profit-loss->chunks profit-loss-perstock)
-                                             ((juxt butlast last)))]
-
-      (if (latest-chunk-closed? latest-chunk)
-
-        profit-loss-perstock
-
-        (->> latest-chunk
-             (map (partial game.persistence/recalculate-profit-loss-on-tick price))
-             (concat butlast-chunks)
-             flatten)))
-
   (map (partial game.persistence/recalculate-profit-loss-on-tick price) profit-loss-perstock))
 
 (defn recalculate-profitloss-perstock-fn [stock-ticks profit-loss]
-  (reduce-kv (fn [m k v]
-               (if-let [{price :game.stock.tick/close} (stock-tick-by-id k stock-ticks)]
-                 (assoc
-                   m k
-                   (recalculate-profit-loss-on-tick-perstock price v))
-                 m))
-             {}
-             profit-loss))
+
+  ;; [m user-k user-pls]
+
+  #_(reduce-kv (fn [m k v]
+
+                 (if-let [{price :game.stock.tick/close} (stock-tick-by-id k stock-ticks)]
+                   (assoc
+                     m k
+                     (recalculate-profit-loss-on-tick-perstock price v))
+                   m)
+
+                 )
+               {}
+               profit-loss)
+
+  #_(transform [MAP-VALS ALL]
+             (fn [[s vs]]
+               (println [s vs])
+               [s vs])
+             profit-loss)
+
+  (let [transform-fn (fn [[stock-id v]]
+
+                       (let [{price :game.stock.tick/close} (stock-tick-by-id stock-id stock-ticks)
+                             uv (recalculate-profit-loss-on-tick-perstock price v)]
+
+                         [stock-id uv]))]
+
+    (transform [MAP-VALS ALL] transform-fn profit-loss)))
+
+(def one (atom {:game1 {:profit-loss {:user1 {:stock1 [1 2 3]
+                                              :stock2 [4 5]}
+                                      :user2 {:stock3 [6 10]
+                                              :stock2 [7 32]}}}
+                :game2 {:profit-loss {:user3 {:stock3 [10 20]}
+                                      :user4 {:stock1 [15 12]
+                                              :stock5 [67 3]}}}}))
+
+;; (transform [:game1 :profit-loss MAP-VALS ALL] (fn [[s vs]] [s (map inc vs)]) @one)
 
 
 (def profit-loss-type-entity-map
@@ -104,10 +124,10 @@
 ;; portfolio-update-stream
 ;; game-event-stream
 
-{:game {:user1 {:stock1 []
-                :stock2 []}
-        :user2 {:stock3 []
-                :stock2 []}}}
+{:game {:profit-loss {:user1 {:stock1 []
+                              :stock2 []}
+                      :user2 {:stock3 []
+                              :stock2 []}}}}
 
 ;; B.i
 (defmulti calculate-profit-loss (fn [op _ _ _] op))
@@ -141,9 +161,10 @@
 ;; B.ii
 (defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
 
+  ;; TODO ensure we are filtering on nested user P/Ls
   (println (format ">> TRANSACT :profit-loss / " (pr-str data)))
 
-  (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
+  #_(let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn)))]
 
     ;; (util/pprint+identity profit-loss)
@@ -153,10 +174,11 @@
   data)
 
 ;; B.iii
-(defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as result}]
+(defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as data}]
 
-  (println (format ">> STREAM portfolio-update / " (pr-str result)))
-  (let [profit-loss (->> result
+  ;; TODO same here
+  (println (format ">> STREAM portfolio-update / " (pr-str data)))
+  #_(let [profit-loss (->> data
                          :profit-loss
                          flatten
                          (map #(dissoc % :user-id :tick-id)))]
@@ -168,15 +190,17 @@
       (log/debug :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
       (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
 
-    (update result :profit-loss (constantly profit-loss))))
+    (update data :profit-loss (constantly profit-loss)))
+  data)
 
 
 ;; C
-(defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as result}]
+(defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as data}]
 
-  (println (format ">> CHECK level-complete / " (pr-str result)))
+  ;; TODO same here
+  (println (format ">> CHECK level-complete / " (pr-str data)))
 
-  (let [{profit-threshold :profit-threshold
+  #_(let [{profit-threshold :profit-threshold
          lose-threshold :lose-threshold
          level :level} (deref current-level)
 
@@ -204,7 +228,7 @@
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
-  (assoc result :level-update {}))
+  (assoc data :level-update {}))
 
 (defn process-transact-level-update! [conn {level-update :level-update :as data}]
 

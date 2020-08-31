@@ -81,7 +81,7 @@
                                           calculate-profit-loss stream-portfolio-update!
                                           check-level-complete stream-level-update!
 
-                                          user-entity ;; PASSED in as options
+                                          user ;; PASSED in as options
                                           accounts
                                           game-level]
                                    :or {game-id        (UUID/randomUUID)
@@ -109,7 +109,7 @@
                               :lose-threshold   lose-threshold})
 
          game-control (merge-with #(if %2 %2 %1)
-                                  (games.core/default-game-control conn (:db/id user-entity) game-id
+                                  (games.core/default-game-control conn game-id
                                                                    {:current-level current-level})
                                   {:game                  game                  ;; TODO load
                                    :profit-loss           (or profit-loss {})   ;; TODO replay
@@ -251,10 +251,10 @@
 
 (defn start-game!
 
-  ([conn user-db-id game-control]
-   (start-game! conn user-db-id game-control 0))
+  ([conn game-control]
+   (start-game! conn game-control 0))
 
-  ([conn user-db-id {{game-id :game/id} :game :as game-control} start-position]
+  ([conn {{game-id :game/id} :game :as game-control} start-position]
 
    ;; A
    (update-start-position! conn game-id start-position)
@@ -264,7 +264,7 @@
                  tick-sleep-atom
                  level-timer]} game-control
 
-         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control)
+         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
 
      (as-> inputs-at-position v
@@ -276,10 +276,10 @@
 
 (defn start-workbench!
 
-  ([conn user-db-id game-control]
-   (start-workbench! conn user-db-id game-control 0))
+  ([conn game-control]
+   (start-workbench! conn game-control 0))
 
-  ([conn user-db-id
+  ([conn
     {{game-id :game/id} :game
      level-timer :level-timer
      tick-sleep-atom :tick-sleep-atom
@@ -308,7 +308,7 @@
          (recur nowA endA))))
 
    ;; B
-   (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control)
+   (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
 
-     [historical-data (games.control/run-iteration inputs-at-position)])))
+       [historical-data (games.control/run-iteration inputs-at-position)])))
