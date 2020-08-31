@@ -412,8 +412,6 @@
           expected-running-profit-loss running-profit-loss
           expected-realized-profit-loss realized-profit-loss)))))
 
-
-;; TODO
 (deftest multiple-buy-sell-track-realized-closeout-running-test
 
   (let [;; A
@@ -432,18 +430,20 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
+
         opts       {:level-timer-sec 5
-                    :accounts        (game.core/->game-user-accounts)}
-        game-level :game-level/one
+                    :user            {:db/id user-db-id}
+                    :accounts        (game.core/->game-user-accounts)
+                    :game-level      :game-level/one}
 
 
         ;; D Launch Game
-        {{game-id     :game/id
+        {{game-id    :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations] (game.games/start-workbench! conn game-control)
 
 
         ;; E Buy Stock
@@ -456,28 +456,36 @@
               :stockId stock-id
               :game-control game-control}
 
-        ;; ops  [{:op :buy :stockAmount 100}
-        ;;       ;; {:op :sell :stockAmount 100}
-        ;;       {:op :buy :stockAmount 200}
-        ;;       {:op :sell :stockAmount 200}]
-
         ops  [{:op :buy :stockAmount 100}
               {:op :buy :stockAmount 200}
               {:op :sell :stockAmount 200}
-              {:op :sell :stockAmount 100}
-              ]
+              {:op :sell :stockAmount 100}]
         ops-count (count ops)]
 
-    (is true)
+    (testing "We are seeing the correct running profit-loss, after realizing all of the P/L"
 
-    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+      (run-trades! iterations stock-id opts ops ops-count)
 
-                (let [stock-tick (util/narrow-stock-ticks stock-id stock-ticks)]
-                  (assoc v :local-transact-input (merge stock-tick op))))
-              (take ops-count iterations)
-              (take ops-count ops))
-         (map #(local-transact-stock! opts %))
-         doall)))
+      (let [expected-running-profit-loss {user-db-id {stock-id []}}
+            expected-realized-profit-loss #{{:user-id user-db-id
+                                             :game-id game-id
+                                             :stock-id stock-id
+                                             :profit-loss-type :realized-profit-loss
+                                             :profit-loss (.floatValue 444.44446)}
+                                            {:user-id user-db-id
+                                             :game-id game-id
+                                             :stock-id stock-id
+                                             :profit-loss-type :realized-profit-loss
+                                             :profit-loss (.floatValue -500.0)}}
+
+            running-profit-loss (game.calculation/running-profit-loss-for-game game-id)
+            realized-profit-loss (->> (game.calculation/realized-profit-loss-for-game conn user-db-id game-id)
+                                      (map #(dissoc % :tick-id))
+                                      (into #{}))]
+
+        (are [x y] (= x y)
+          expected-running-profit-loss running-profit-loss
+          expected-realized-profit-loss realized-profit-loss)))))
 
 (deftest calculate-game-scores-test
 
