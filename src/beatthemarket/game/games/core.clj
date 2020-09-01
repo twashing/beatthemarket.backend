@@ -25,8 +25,9 @@
 (defn update-inmemory-game-level! [game-id level]
 
   (let [[[source-level-name _ :as source]
-         [dest-level-name dest-level-config :as dest]] (level->source-and-destination level)]
+         [dest-level-name dest-level-config :as dest]] (util/pprint+identity (level->source-and-destination level))]
 
+    (println "Site B: Updating new level in memory / " dest-level-name)
     (swap! (:game/games repl.state/system)
            (fn [gs]
              (update-in gs [game-id :current-level] (-> dest-level-config
@@ -61,6 +62,6 @@
      :process-transact-profit-loss! (partial games.processing/process-transact-profit-loss! conn)
      :stream-portfolio-update!      (partial games.processing/stream-portfolio-update! portfolio-update-stream)
 
-     :check-level-complete           (partial games.processing/check-level-complete game-id control-channel current-level)
+     :check-level-complete           (partial games.processing/check-level-complete conn game-id control-channel current-level)
      :process-transact-level-update! (partial games.processing/process-transact-level-update! conn)
      :stream-level-update!           (partial games.processing/stream-level-update! game-event-stream)}))

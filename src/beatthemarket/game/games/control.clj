@@ -265,10 +265,11 @@
           data [[:db/retract  game-db-id :game/level source-level-name]
                 [:db/add      game-db-id :game/level dest-level-name]]
 
-          {db-after :db-after} (persistence.datomic/transact-entities! conn data)]
+          _ (println "Site A: Transacting new level")
+          {db-after :db-after} (persistence.datomic/transact-entities! conn (util/pprint+identity data))]
 
       (if db-after
-        (games.core/update-inmemory-game-level! game-id dest-level-name)
+        (games.core/update-inmemory-game-level! game-id source-level-name)
         (throw (Exception. (format "Couldn't level up from to [%s %s]" source dest)))))))
 
 (defn conditionally-reset-level-time! [conn game-id [[source-level-name _               :as source]

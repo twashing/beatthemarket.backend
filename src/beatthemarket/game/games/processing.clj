@@ -161,7 +161,7 @@
                          flatten
                          (map #(dissoc % :user-id :tick-id)))]
 
-    (util/pprint+identity profit-loss)
+    ;; GG(util/pprint+identity profit-loss)
 
     (when (not (empty? profit-loss))
 
@@ -172,9 +172,13 @@
 
 
 ;; C
-(defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as result}]
+(defn check-level-complete [conn game-id control-channel current-level {:keys [profit-loss] :as result}]
 
-  (println (format ">> CHECK level-complete / " (pr-str result)))
+  (println "\n")
+  (println (format ">> CHECK level-complete / " #_(pr-str result)))
+
+  (println (deref current-level))
+  (println (:game/level (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))))
 
   (let [{profit-threshold :profit-threshold
          lose-threshold :lose-threshold
@@ -200,7 +204,7 @@
           profit-threshold-met? (assoc :event :win)
           lose-threshold-met? (assoc :event :lose))]
 
-    (util/pprint+identity game-event-message)
+    ;; (util/pprint+identity game-event-message)
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
