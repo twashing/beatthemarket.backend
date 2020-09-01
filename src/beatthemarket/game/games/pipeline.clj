@@ -19,7 +19,6 @@
                    (game.calculation/collect-account-balances conn game-db-id user-id)))
   tentry)
 
-
 (defn execution-pipeline [{control-channel :control-channel
                            current-level :current-level
                            portfolio-update-stream :portfolio-update-stream
@@ -41,7 +40,6 @@
        (map stream-level-update!)))
 
 (defn stock-tick-and-stream-pipeline [{{game-id :game/id} :game
-                                       ;; stock-tick-stream :stock-tick-stream
                                        process-transact! :process-transact!
                                        stream-stock-tick :stream-stock-tick}
                                       input]
@@ -51,6 +49,8 @@
        (map (partial games.processing/calculate-profit-loss :tick nil game-id))))
 
 (defn stock-tick-pipeline [{input-sequence :input-sequence :as game-control}]
+
+  ;; (util/pprint+identity [:stock-tick-pipeline :input-sequence input-sequence])
   (->> (stock-tick-and-stream-pipeline game-control input-sequence)
        (execution-pipeline game-control)))
 
@@ -92,13 +92,17 @@
           (execution-pipeline game-control)
           doall))))
 
-(defn replay-stock-pipeline [game-control maybe-tentries]
+(defn replay-stock-pipeline [user-db-id {{game-id :game/id} :game :as game-control} maybe-tentries]
 
-  (map (fn [{op :op :as maybe-tentry}]
+  (map (fn [{buy-or-sell :op :as maybe-tentry}]
 
-         (if op
+         ;; (println "replay-stock-pipeline / A /")
+         ;; (util/pprint+identity maybe-tentry)
+
+         (if buy-or-sell
            (->> (list maybe-tentry)
-                (execution-pipeline game-control (:op maybe-tentry))
+                (map (partial games.processing/calculate-profit-loss buy-or-sell user-db-id game-id))
+                (execution-pipeline game-control)
                 doall)
            maybe-tentry))
        maybe-tentries))

@@ -33,11 +33,8 @@
 
   (let [transform-fn (fn [[stock-id v]]
 
-                       (let [{price :game.stock.tick/close} (stock-tick-by-id stock-id stock-ticks)
+                       (let [{price :game.stock.tick/close :as stock-tick} (stock-tick-by-id stock-id stock-ticks)
                              uv (recalculate-profit-loss-on-tick-perstock price v)]
-
-                         #_(util/pprint+identity [price stock-id uv])
-
                          [stock-id uv]))]
 
     (transform [MAP-VALS ALL] transform-fn profit-loss)))
@@ -73,12 +70,7 @@
 
 (defn stream-stock-tick [stock-tick-stream stock-tick-pairs]
 
-  (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)
-
-        #_(map (fn [a]
-                 (-> (update a :game.stock.tick/id str)
-                     (update :game.stock/id str)))
-               (group-stock-tick-pairs stock-tick-pairs))]
+  (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
 
     (log/debug :game.games (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
     (println (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
@@ -95,13 +87,15 @@
 
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
-  (println (format ">> calculate-profit-loss on TICK / %s" (count stock-ticks)))
+  (println (format ">> calculate-profit-loss on TICK / " (pr-str stock-ticks)))
   (let [updated-profit-loss-calculations
         (-> repl.state/system :game/games
             deref
             (get game-id)
             :profit-loss
             ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
+
+    ;; (util/pprint+identity updated-profit-loss-calculations)
 
     (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
     (hash-map :stock-ticks stock-ticks
@@ -185,7 +179,7 @@
           profit-threshold-met? (assoc :event :win)
           lose-threshold-met? (assoc :event :lose))]
 
-    (util/pprint+identity game-event-message)
+    ;; (util/pprint+identity game-event-message)
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
