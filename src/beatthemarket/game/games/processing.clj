@@ -201,6 +201,6 @@
 
 (defn stream-level-update! [game-event-stream data]
 
-  ;; #_(println (format ">> STREAM level-update! / " (pr-str data)))
+  (println (format ">> STREAM level-update! / " (pr-str data)))
   ;; (log/debug :game.games (format ">> stream-level-update! /" data))
   data)

@@ -110,7 +110,7 @@
 
          game-control (merge-with #(if %2 %2 %1)
                                   (games.core/default-game-control conn game-id
-                                                                   {:current-level current-level})
+                                                                   (assoc opts :current-level current-level))
                                   {:game                  game                  ;; TODO load
                                    :profit-loss           (or profit-loss {})   ;; TODO replay
                                    :stocks-with-tick-data stocks-with-tick-data ;; TODO load + seek to index
@@ -154,7 +154,9 @@
                                                accounts   (game.core/->game-user-accounts)}
                                    :as        opts}]
 
-   (initialize-game! conn sink-fn data-sequence-fn opts)))
+   (initialize-game! conn sink-fn data-sequence-fn (assoc opts
+                                                          :game-level game-level
+                                                          :accounts accounts))))
 
 
 ;; START

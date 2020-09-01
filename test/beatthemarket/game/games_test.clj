@@ -35,14 +35,47 @@
   test-util/migration-fixture)
 
 
-#_(deftest create-game!-test
+(defn- local-transact-stock! [{conn :conn
+                               userId :userId
+                               game-id :gameId
+                               stockId :stockId
+                               game-control :game-control}
+                              {{tickId      :game.stock.tick/id
+                                tickPrice   :game.stock.tick/close
+                                op          :op
+                                stockAmount :stockAmount} :local-transact-input :as v}]
+
+  (case op
+    :buy (games.pipeline/buy-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
+    :sell (games.pipeline/sell-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
+    :noop)
+  v)
+
+(defn- run-trades! [iterations stock-id opts ops ops-count]
+
+  (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+              (let [stock-tick (util/narrow-stock-ticks stock-id stock-ticks)]
+                (assoc v :local-transact-input (merge stock-tick op))))
+            (take ops-count iterations)
+            (take ops-count ops))
+       (map #(local-transact-stock! opts %))
+       doall))
+
+(defn- pull-from-stock-tick-pipeline! [stock-tick-pipeline ops-before-count]
+
+  (->> (drop ops-before-count stock-tick-pipeline)
+       (take 1)
+       doall))
+
+(deftest create-game!-test
 
   (testing "Creating a game returns the expected game control keys"
 
-    (let [conn           (-> repl.state/system :persistence/datomic :opts :conn)
-          user-db-id (:db/id (test-util/generate-user! conn))
-          sink-fn        identity
-          game-control   (game.games/create-game! conn user-db-id sink-fn)
+    (let [conn         (-> repl.state/system :persistence/datomic :opts :conn)
+          user-db-id   (:db/id (test-util/generate-user! conn))
+          sink-fn      identity
+          game-control (game.games/create-game! conn sink-fn)
 
           expected-game-control-keys
           #{:game
@@ -78,7 +111,9 @@
            (= expected-game-control-keys )
            is))))
 
-#_(deftest transact-stock-tick-and-stream-pipeline-test
+
+;; StockTick Streaming
+(deftest transact-stock-tick-and-stream-pipeline-test
 
 
   (let [;; A
@@ -96,9 +131,13 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
-        opts       {:level-timer-sec 5
-                    :accounts        (game.core/->game-user-accounts)}
-        game-level :game-level/one
+
+        stock-tick-stream (core.async/chan)
+        opts {:level-timer-sec 5
+              :user            {:db/id user-db-id}
+              :accounts        (game.core/->game-user-accounts)
+              :game-level      :game-level/one
+              :stock-tick-stream stock-tick-stream}
 
 
         ;; D Launch Game
@@ -106,45 +145,25 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
-         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)]
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations]                   (game.games/start-workbench! conn game-control)
 
+        container (atom [])
+        tick-amount 2
 
-    (doall (take 2 iterations))
-    (is true)))
+        expected-tick-prices '((100.0 100.0 100.0 100.0) (110.0 110.0 110.0 110.0))]
 
-(defn- local-transact-stock! [{conn :conn
-                               userId :userId
-                               game-id :gameId
-                               stockId :stockId
-                               game-control :game-control}
-                              {{tickId      :game.stock.tick/id
-                                tickPrice   :game.stock.tick/close
-                                op          :op
-                                stockAmount :stockAmount} :local-transact-input :as v}]
+    (->> (games.pipeline/stock-tick-pipeline game-control)
+         (take tick-amount)
+         doall)
 
-  (case op
-    :buy (games.pipeline/buy-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
-    :sell (games.pipeline/sell-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
-    :noop)
-  v)
+    (test-util/consume-messages stock-tick-stream container)
+    (Thread/sleep 2000)
 
-(defn- run-trades! [iterations stock-id opts ops ops-count]
-
-  (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
-
-              (let [stock-tick (util/narrow-stock-ticks stock-id stock-ticks)]
-                (assoc v :local-transact-input (merge stock-tick op))))
-            (take ops-count iterations)
-            (take ops-count ops))
-       (map #(local-transact-stock! opts %))
-       doall))
-
-(defn- pull-from-stock-tick-pipeline! [stock-tick-pipeline ops-before-count]
-
-  (->> (drop ops-before-count stock-tick-pipeline)
-       (take 1)
-       doall))
+    (->> (take-last tick-amount @container)
+         (map (fn [a] (map (comp double :game.stock.tick/close) a)))
+         (= expected-tick-prices)
+         is)))
 
 (deftest single-buy-and-track-running-proft-loss-test
 
