@@ -600,7 +600,7 @@
 
                                              (doall
                                                (map #(list %1 %2)
-                                                    (games.pipeline/stock-tick-pipeline user-db-id (assoc game-control-replay :input-sequence (map first ticks-and-trade)))
+                                                    (games.pipeline/stock-tick-pipeline (assoc game-control-replay :input-sequence (map first ticks-and-trade)))
                                                     (games.pipeline/replay-stock-pipeline game-control-replay user-db-id (map second ticks-and-trade)))))]
 
 
@@ -629,8 +629,8 @@
                                                    second))))
 
            ;; _ (util/pprint+identity (:input-sequence game-control-live))
-           ;; [historical-data inputs-at-position] (games.pipeline/stock-tick-pipeline user-db-id game-control-live)
-           inputs-at-position (games.pipeline/stock-tick-pipeline user-db-id game-control-live)]
+           ;; [historical-data inputs-at-position] (games.pipeline/stock-tick-pipeline game-control-live)
+           inputs-at-position (games.pipeline/stock-tick-pipeline game-control-live)]
 
 
        ;; (util/pprint+identity "D /")
