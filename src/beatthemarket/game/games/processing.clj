@@ -31,45 +31,16 @@
 
 (defn recalculate-profitloss-perstock-fn [stock-ticks profit-loss]
 
-  ;; [m user-k user-pls]
-
-  #_(reduce-kv (fn [m k v]
-
-                 (if-let [{price :game.stock.tick/close} (stock-tick-by-id k stock-ticks)]
-                   (assoc
-                     m k
-                     (recalculate-profit-loss-on-tick-perstock price v))
-                   m)
-
-                 )
-               {}
-               profit-loss)
-
-  #_(transform [MAP-VALS ALL]
-             (fn [[s vs]]
-               (println [s vs])
-               [s vs])
-             profit-loss)
-
   (let [transform-fn (fn [[stock-id v]]
 
                        (let [{price :game.stock.tick/close} (stock-tick-by-id stock-id stock-ticks)
                              uv (recalculate-profit-loss-on-tick-perstock price v)]
 
+                         #_(util/pprint+identity [price stock-id uv])
+
                          [stock-id uv]))]
 
     (transform [MAP-VALS ALL] transform-fn profit-loss)))
-
-(def one (atom {:game1 {:profit-loss {:user1 {:stock1 [1 2 3]
-                                              :stock2 [4 5]}
-                                      :user2 {:stock3 [6 10]
-                                              :stock2 [7 32]}}}
-                :game2 {:profit-loss {:user3 {:stock3 [10 20]}
-                                      :user4 {:stock1 [15 12]
-                                              :stock5 [67 3]}}}}))
-
-;; (transform [:game1 :profit-loss MAP-VALS ALL] (fn [[s vs]] [s (map inc vs)]) @one)
-
 
 (def profit-loss-type-entity-map
   {:running-profit-loss :profit-loss/running
@@ -118,16 +89,6 @@
 
     stock-ticks))
 
-
-;; TODO Calculate analytics on a peruser basis !! Store & retrieve in-memory P/L, per game, per user
-;; stock-tick-stream
-;; portfolio-update-stream
-;; game-event-stream
-
-{:game {:profit-loss {:user1 {:stock1 []
-                              :stock2 []}
-                      :user2 {:stock3 []
-                              :stock2 []}}}}
 
 ;; B.i
 (defmulti calculate-profit-loss (fn [op _ _ _] op))
@@ -199,8 +160,8 @@
 
   ;; TODO same here
   (println (format ">> CHECK level-complete / " (pr-str data)))
-
-  #_(let [{profit-threshold :profit-threshold
+  ;; (util/pprint+identity data)
+  (let [{profit-threshold :profit-threshold
          lose-threshold :lose-threshold
          level :level} (deref current-level)
 
@@ -240,6 +201,6 @@
 
 (defn stream-level-update! [game-event-stream data]
 
-  ;; #_(println (format ">> STREAM level-update! / " (pr-str data)))
+  (println (format ">> STREAM level-update! / " (pr-str data)))
   ;; (log/debug :game.games (format ">> stream-level-update! /" data))
   data)

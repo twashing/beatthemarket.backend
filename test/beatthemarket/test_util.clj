@@ -379,3 +379,12 @@
       (<message!! 1000))
 
     createGameAck))
+
+(defn consume-messages [channel container]
+
+  (core.async/go-loop []
+
+    (let [[message ch] (core.async/alts! [(core.async/timeout 1000) channel])]
+      (when message
+        (swap! container #(conj % message))
+        (recur)))))

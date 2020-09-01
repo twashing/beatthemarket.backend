@@ -105,16 +105,29 @@
 
   ([game-id profit-loss]
 
+   #_(util/pprint+identity [game-id profit-loss])
    (let [profit-loss-type :running-profit-loss]
 
-     (for [[stock-id vs] profit-loss
-           :let [profit-loss-amount (->> (filter profit-loss-type vs)
-                                         (reduce (fn [ac {pl profit-loss-type}]
-                                                   (+ ac pl))
-                                                 0.0)
-                                         (format "%.2f") (Float.))]]
+     #_(for [[user-db-id pls] profit-loss
+             [stock-id vs] pls
+             :let [profit-loss-amount (->> (reduce (fn [ac {pl profit-loss-type}]
+                                                     (+ ac pl))
+                                                   0.0)
+                                           (format "%.2f") (Float.))]]
 
-       (->profit-loss-event nil nil game-id stock-id profit-loss-type profit-loss-amount)))))
+         (util/pprint+identity (->profit-loss-event nil nil game-id stock-id profit-loss-type profit-loss-amount)))
+
+     (util/pprint+identity
+       (for [[user-db-id pls] profit-loss
+             [stock-id vs] pls
+             :let [profit-loss-amount (->> (reduce (fn [ac {pl profit-loss-type}]
+                                                     (+ ac pl))
+                                                   0.0
+                                                   vs)
+                                           (format "%.2f")
+                                           (Float.))]]
+
+         (->profit-loss-event nil nil game-id stock-id profit-loss-type profit-loss-amount))))))
 
 (defn collect-account-balances [conn game-id user-id]
 
