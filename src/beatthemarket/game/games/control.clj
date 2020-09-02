@@ -281,10 +281,11 @@
           data [[:db/retract  game-db-id :game/level source-level-name]
                 [:db/add      game-db-id :game/level dest-level-name]]
 
-          {db-after :db-after} (persistence.datomic/transact-entities! conn data)]
+          _ (println "Site A: Transacting new level")
+          {db-after :db-after} (persistence.datomic/transact-entities! conn (util/pprint+identity data))]
 
       (if db-after
-        (games.core/update-inmemory-game-level! game-id dest-level-name)
+        (games.core/update-inmemory-game-level! game-id source-level-name)
         (throw (Exception. (format "Couldn't level up from to [%s %s]" source dest)))))))
 
 (defn conditionally-reset-level-time! [conn game-id [[source-level-name _               :as source]
@@ -336,8 +337,11 @@
     (transition-level! conn game-id level)
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
     (println (format "Win %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream
-                    (assoc control :type :LevelStatus))
+    (core.async/>!! game-event-stream (assoc control :type :LevelStatus))
+
+    ;;  KLUDGE need the level to  properly update
+    (Thread/sleep 4000)
+
     [now end]))
 
 (defmethod handle-control-event :lose [conn game-event-stream control now end]
@@ -400,8 +404,7 @@
 
     (let [remaining                            (calculate-remaining-time now end)
           [{event :event
-            :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom)
-                                                   control-channel])]
+            :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])]
 
       ;; TODO i. If this is a market, and ii. there are no players, :pause
 
@@ -750,7 +753,7 @@
 
 ;; (create game.core/->game-user-accounts)
 ;; (Cannot have another "running" game)
-(defn join-game [conn game-id user-db-id game-control]
+(defn join-game! [conn game-id user-db-id game-control]
 
   (let [user-games (check-user-does-not-have-running-game conn user-db-id)]
 
