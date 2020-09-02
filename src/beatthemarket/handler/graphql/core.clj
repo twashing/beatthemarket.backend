@@ -209,7 +209,7 @@
 
       ;; (check-user-device-has-created-game? conn email client-id)
 
-      (let [user-db-id                                          (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+      (let [user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
             gameId (UUID/fromString game-id)
             game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
 
@@ -396,11 +396,57 @@
 
       ;; (check-user-device-has-paused-game? conn email client-id)
 
-      (let [game-id (UUID/fromString gameId)
+      (let [data-sequence-fn games.control/->data-sequence
+            user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+            game-id (UUID/fromString gameId)
+            game-control (->> repl.state/system :game/games deref (#(get % game-id)))
+
             event {:type :ControlEvent
                    :event :resume
                    :game-id game-id}]
 
+
+        ;; Resume Game
+        (games.control/resume-game! conn game-id user-db-id game-control data-sequence-fn)
+
+
+        ;; Response
+        (-> (game.games/send-control-event! game-id event)
+            (assoc :gameId gameId)))
+      )
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defn resolve-join-game [context {gameId :gameId} _]
+
+  (try
+
+    ;; (check-client-id-exists context)
+
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context
+          ;; client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))
+          ]
+
+      ;; TODO
+      ;; (check-user-device-not-already-joined? conn email client-id)
+
+      (let [data-sequence-fn games.control/->data-sequence
+            user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+            game-id (UUID/fromString gameId)
+            game-control (->> repl.state/system :game/games deref (#(get % game-id)))
+
+            event {:type :ControlEvent
+                   :event :join
+                   :game-id game-id}]
+
+
+        ;; Join Game
+        (games.control/join-game! conn game-id user-db-id game-control)
+
+
+        ;; Response
         (-> (game.games/send-control-event! game-id event)
             (assoc :gameId gameId))))
 

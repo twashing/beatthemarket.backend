@@ -739,15 +739,17 @@
 
 (defn conditionally-resume-game [conn game]
 
+  ;; TODO
   ;; (-> user-game :game.user/_user :game/_users :game/id)
   ;; created or paused
 
   ;; (beatthemarket.game.games/start-game! conn user-db-id game-control)
   ;; (resume-game! conn user-db-id game-control)
 
-
   )
 
+;; (create game.core/->game-user-accounts)
+;; (Cannot have another "running" game)
 (defn join-game [conn game-id user-db-id game-control]
 
   (let [user-games (check-user-does-not-have-running-game conn user-db-id)]
@@ -761,9 +763,7 @@
         (->> (game.core/conditionally-add-game-users game {:user        {:db/id user-db-id}
                                                            :accounts    (game.core/->game-user-accounts)})
              (persistence.datomic/transact-entities! conn)
-             ;; TODO
-             (conditionally-resume-game conn)))
-      )
+             (conditionally-resume-game conn))))
 
     ;; TODO
     ;; Stream

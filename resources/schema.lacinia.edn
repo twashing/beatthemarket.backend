@@ -102,7 +102,7 @@
   {:values [:running :realized]}
 
   :ControlEventType
-  {:values      [:pause :resume :exit]}
+  {:values      [:pause :resume :join :exit]}
 
   :LevelStatusType
   {:values [:win :lose]}
