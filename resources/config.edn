@@ -12,15 +12,15 @@
                           :datasource.oscillating/generate-oscillating-sequence]
         :levels                {;; thousands
                                 :game-level/one {:profit-threshold 100.0
-                                                 :lose-threshold 10000.0
+                                                 :lose-threshold 100.0
                                                  :order 1
 
                                                  ;; TODO stock behaviours for this level
                                                  :beta-distributions 1
                                                  :time-limit         1}
 
-                                :game-level/two {:profit-threshold 10000.0
-                                                 :lose-threshold 2000.0
+                                :game-level/two {:profit-threshold 100.0
+                                                 :lose-threshold 200.0
                                                  :order 2}
                                 :game-level/three {:profit-threshold 50000.0
                                                    :lose-threshold 2000.0

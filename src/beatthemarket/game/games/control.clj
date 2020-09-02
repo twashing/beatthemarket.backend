@@ -304,7 +304,7 @@
 
   (let [source-and-destination (games.core/level->source-and-destination level)]
 
-    (conditionally-level-up! conn game-id source-and-destination)
+    ;; (conditionally-level-up! conn game-id source-and-destination)
     (conditionally-reset-level-time! conn game-id source-and-destination)))
 
 
@@ -335,13 +335,10 @@
 
   (let [remaining (calculate-remaining-time now end)]
 
-    ;;  (transition-level! conn game-id level)
+    (transition-level! conn game-id level)
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
     (println (format "Win %s" (format-remaining-time remaining)))
     (core.async/>!! game-event-stream (assoc control :type :LevelStatus))
-
-    ;; KLUDGE need the level to  properly update
-    ;; (Thread/sleep 1000)
 
     [now end]))
 
@@ -425,13 +422,14 @@
 
                                [(_ :guard #{:exit :win :lose}) _] (handle-control-event conn game-event-stream controlv now end)
 
-                               [_ false] (let [{current-level :level} (-> repl.state/system :game/games
-                                                                          deref
-                                                                          (get game-id)
-                                                                          :current-level)
+                               [_ false] (let [current-level (-> repl.state/system :game/games
+                                                                 deref
+                                                                 (get game-id)
+                                                                 :current-level
+                                                                 deref)
                                                controlv {:event   :continue
                                                          :game-id game-id
-                                                         :level   (:level @current-level)
+                                                         :level   (:level current-level)
                                                          :type :LevelTimer}]
 
                                            (handle-control-event conn game-event-stream controlv now end))
