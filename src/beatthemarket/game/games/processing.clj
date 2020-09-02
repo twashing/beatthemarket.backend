@@ -133,7 +133,7 @@
 
   ;; TODO same here
   (println (format ">> STREAM portfolio-update / " (pr-str data)))
-  #_(let [profit-loss (->> data
+  (let [profit-loss (->> data
                          :profit-loss
                          flatten
                          (map #(dissoc % :user-id :tick-id)))]
@@ -142,7 +142,7 @@
 
     (when (not (empty? profit-loss))
 
-      (log/debug :game.games (format ">> STREAM portfolio-update / %s" (pr-str profit-loss)))
+      (log/debug :game.games (format ">> STREAM portfolio-update / " (pr-str profit-loss)))
       (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
 
     (update data :profit-loss (constantly profit-loss)))
@@ -150,12 +150,18 @@
 
 
 ;; C
-(defn check-level-complete [game-id control-channel current-level {:keys [profit-loss] :as data}]
+(defn check-level-complete [game-id control-channel _current-level {:keys [profit-loss] :as data}]
 
   ;; TODO same here
   (println (format ">> CHECK level-complete / " (pr-str data)))
   ;; (util/pprint+identity data)
-  (let [{profit-threshold :profit-threshold
+
+  (let [current-level (-> repl.state/system :game/games
+                          deref
+                          (get game-id)
+                          :current-level)
+
+        {profit-threshold :profit-threshold
          lose-threshold :lose-threshold
          level :level} (deref current-level)
 
@@ -179,7 +185,7 @@
           profit-threshold-met? (assoc :event :win)
           lose-threshold-met? (assoc :event :lose))]
 
-    ;; (util/pprint+identity game-event-message)
+    (util/pprint+identity game-event-message)
     (when (:event game-event-message)
       (core.async/go (core.async/>! control-channel game-event-message))))
 

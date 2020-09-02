@@ -27,11 +27,13 @@
   (let [[[source-level-name _ :as source]
          [dest-level-name dest-level-config :as dest]] (level->source-and-destination level)]
 
+    (println "Site B: Updating new level in memory / " dest-level-name)
     (swap! (:game/games repl.state/system)
            (fn [gs]
              (update-in gs [game-id :current-level] (-> dest-level-config
                                                         (assoc :level dest-level-name)
                                                         (dissoc :order)
+                                                        atom
                                                         constantly))))))
 
 (defn default-game-control [conn game-id
