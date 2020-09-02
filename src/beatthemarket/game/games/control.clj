@@ -215,14 +215,14 @@
 
 (defn pause-game! [conn game-id]
 
-  ;; Update :game/status :game/level-timer
+  ;; A. Update :game/status :game/level-timer
   (let [level-timer (-> repl.state/system
                         :game/games deref (get game-id)
                         :level-timer deref)
 
+        ;; Store :game/status and :game/timer
         {game-db-id :db/id
          {game-status :db/ident} :game/status
-         game-start-position :game/start-position
          game-level-timer :game/level-timer} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
         data (cond-> [[:db/retract  game-db-id :game/status game-status]
@@ -231,7 +231,18 @@
                game-level-timer (conj [:db/retract game-db-id :game/level-timer game-level-timer])
                true (conj [:db/add game-db-id :game/level-timer level-timer]))]
 
-    (persistence.datomic/transact-entities! conn data)))
+    (persistence.datomic/transact-entities! conn data))
+
+
+  ;; NOTE !! DANGER !! doing this on a market game, will disconnect all clients
+  ;; Unsubscribe clients, close streams
+  (let [{:keys [stock-tick-stream
+                portfolio-update-stream
+                game-event-stream]}
+        (select-keys repl.state/system [:stock-tick-stream :portfolio-update-stream :game-event-stream])]
+
+    (run! #(when % (core.async/close! %))
+          [stock-tick-stream portfolio-update-stream game-event-stream])))
 
 (defn exit-game! [conn game-id]
 
