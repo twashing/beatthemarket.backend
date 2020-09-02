@@ -62,7 +62,8 @@
   ([{portfolio-update-stream
      :portfolio-update-stream :as game-control} conn user-external-id game-id stockId stockAmount tickId tickPrice validate?]
 
-   (let [user-db-id (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id))
+   (let [game-control-without-check-level (assoc game-control :check-level-complete identity)
+         user-db-id (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id))
          game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id))
          op :buy]
 
@@ -70,7 +71,7 @@
           (stream-account-balance-updates conn portfolio-update-stream game-db-id user-db-id)
           list
           (map (partial games.processing/calculate-profit-loss op user-db-id game-id))
-          (execution-pipeline game-control)
+          (execution-pipeline game-control-without-check-level)
           doall))))
 
 (defn sell-stock-pipeline
@@ -81,7 +82,8 @@
   ([{portfolio-update-stream :portfolio-update-stream :as game-control}
     conn user-external-id game-id stockId stockAmount tickId tickPrice validate?]
 
-   (let [user-db-id  (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id))
+   (let [game-control-without-check-level (assoc game-control :check-level-complete identity)
+         user-db-id  (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id))
          game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id))
          op :sell]
 
@@ -89,7 +91,7 @@
           (stream-account-balance-updates conn portfolio-update-stream game-db-id user-db-id)
           list
           (map (partial games.processing/calculate-profit-loss op user-db-id game-id))
-          (execution-pipeline game-control)
+          (execution-pipeline game-control-without-check-level)
           doall))))
 
 (defn replay-stock-pipeline [user-db-id {{game-id :game/id} :game :as game-control} maybe-tentries]

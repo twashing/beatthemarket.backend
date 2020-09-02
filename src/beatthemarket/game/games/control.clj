@@ -277,6 +277,8 @@
 
   (when dest
 
+    ;; (games.core/update-inmemory-game-level! game-id source-level-name)
+
     (let [{game-db-id :db/id} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
           data [[:db/retract  game-db-id :game/level source-level-name]
                 [:db/add      game-db-id :game/level dest-level-name]]
@@ -284,8 +286,7 @@
           _ (println "Site A: Transacting new level")
           {db-after :db-after} (persistence.datomic/transact-entities! conn (util/pprint+identity data))]
 
-      (if db-after
-        (games.core/update-inmemory-game-level! game-id source-level-name)
+      (if-not db-after
         (throw (Exception. (format "Couldn't level up from to [%s %s]" source dest)))))))
 
 (defn conditionally-reset-level-time! [conn game-id [[source-level-name _               :as source]
@@ -334,13 +335,13 @@
 
   (let [remaining (calculate-remaining-time now end)]
 
-    (transition-level! conn game-id level)
+    ;;  (transition-level! conn game-id level)
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
     (println (format "Win %s" (format-remaining-time remaining)))
     (core.async/>!! game-event-stream (assoc control :type :LevelStatus))
 
-    ;;  KLUDGE need the level to  properly update
-    (Thread/sleep 4000)
+    ;; KLUDGE need the level to  properly update
+    ;; (Thread/sleep 1000)
 
     [now end]))
 

@@ -37,12 +37,13 @@
                                                         constantly))))))
 
 (defn default-game-control [conn game-id
-                            {:keys [current-level
-                                    control-channel
+                            {{user-db-id :db/id} :user
+                             current-level :current-level
+                             control-channel :control-channel
 
-                                    stock-tick-stream
-                                    portfolio-update-stream
-                                    game-event-stream]}]
+                             stock-tick-stream :stock-tick-stream
+                             portfolio-update-stream :portfolio-update-stream
+                             game-event-stream :game-event-stream}]
 
   (let [stream-buffer 10
 
@@ -63,6 +64,6 @@
      :process-transact-profit-loss! (partial games.processing/process-transact-profit-loss! conn)
      :stream-portfolio-update!      (partial games.processing/stream-portfolio-update! portfolio-update-stream)
 
-     :check-level-complete           (partial games.processing/check-level-complete game-id control-channel current-level)
+     :check-level-complete           (partial games.processing/check-level-complete conn user-db-id game-id control-channel)
      :process-transact-level-update! (partial games.processing/process-transact-level-update! conn)
      :stream-level-update!           (partial games.processing/stream-level-update! game-event-stream)}))

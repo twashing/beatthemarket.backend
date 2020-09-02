@@ -126,38 +126,43 @@
 (defn resolve-login
   [context _ _]
 
-  (let [{{{email :email :as checked-authentication} :checked-authentication}
-         :request}                                   context
-        conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
-        {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)
+  (try
 
-        rename-user-key-map {:user/email :userEmail
-                             :user/name :userName
-                             :user/external-uid :userExternalUid
-                             :user/accounts :userAccounts}
+    (let [{{{email :email :as checked-authentication} :checked-authentication}
+           :request}                                   context
+          conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
+          {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)
 
-        rename-user-accounts-key-map {:bookkeeping.account/id :accountId
-                                      :bookkeeping.account/name :accountName
-                                      :bookkeeping.account/balance :accountBalance
-                                      :bookkeeping.account/amount :accountAmount}
+          rename-user-key-map {:user/email :userEmail
+                               :user/name :userName
+                               :user/external-uid :userExternalUid
+                               :user/accounts :userAccounts}
 
-        base-response {:user (->> [:user/email
-                                    :user/name
-                                    :user/external-uid
-                                    {:user/accounts [:bookkeeping.account/id
-                                                     :bookkeeping.account/name
-                                                     :bookkeeping.account/balance
-                                                     :bookkeeping.account/amount]}]
-                                 (persistence.core/entity-by-domain-id
-                                   conn :user/email email)
-                                 ffirst
-                                 (transform identity #(clojure.set/rename-keys % rename-user-key-map))
-                                 (transform [:userAccounts ALL] #(clojure.set/rename-keys % rename-user-accounts-key-map))
-                                 (#(json/write-str % :value-fn coerce-uuid->str)))}]
+          rename-user-accounts-key-map {:bookkeeping.account/id :accountId
+                                        :bookkeeping.account/name :accountName
+                                        :bookkeeping.account/balance :accountBalance
+                                        :bookkeeping.account/amount :accountAmount}
 
-    (if (util/truthy? (and db-before db-after tx-data tempids))
-      (assoc base-response :message :useradded)
-      (assoc base-response :message :userexists))))
+          base-response {:user (->> [:user/email
+                                     :user/name
+                                     :user/external-uid
+                                     {:user/accounts [:bookkeeping.account/id
+                                                      :bookkeeping.account/name
+                                                      :bookkeeping.account/balance
+                                                      :bookkeeping.account/amount]}]
+                                    (persistence.core/entity-by-domain-id
+                                      conn :user/email email)
+                                    ffirst
+                                    (transform identity #(clojure.set/rename-keys % rename-user-key-map))
+                                    (transform [:userAccounts ALL] #(clojure.set/rename-keys % rename-user-accounts-key-map))
+                                    (#(json/write-str % :value-fn coerce-uuid->str)))}]
+
+      (if (util/truthy? (and db-before db-after tx-data tempids))
+        (assoc base-response :message :useradded)
+        (assoc base-response :message :userexists)))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
 
@@ -236,11 +241,13 @@
         tickPrice (Float. tickPrice)]
 
     (try
+
       (if ((comp :bookkeeping.tentry/id :tentry first)
            (games.pipeline/buy-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false))
 
         {:message "Ack"}
         (resolve-as nil {:message "Error / resolve-buy-stock / INCOMPLETE /"}))
+
       (catch Throwable e
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
@@ -259,11 +266,13 @@
         tickPrice (Float. tickPrice)]
 
     (try
+
       (if ((comp :bookkeeping.tentry/id :tentry first)
            (games.pipeline/sell-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false))
 
         {:message "Ack"}
         (resolve-as nil {:message "Error / resolve-sell-stock / INCOMPLETE /"}))
+
       (catch Throwable e
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 

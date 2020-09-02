@@ -149,8 +149,30 @@
   data)
 
 
+(defn- level->source-and-destination* [level]
+
+  (->> repl.state/config :game/game :levels seq
+       (sort-by (comp :order second))
+       (partition 2 1)
+       (filter (fn [[[level-name _] r]] (= level level-name)))
+       first))
+
+(defn- update-inmemory-game-level!* [game-id level]
+
+  (let [[[source-level-name _ :as source]
+         [dest-level-name dest-level-config :as dest]] (level->source-and-destination* level)]
+
+    (println "Site B: Updating new level in memory / " dest-level-name)
+    (swap! (:game/games repl.state/system)
+           (fn [gs]
+             (update-in gs [game-id :current-level] (-> dest-level-config
+                                                        (assoc :level dest-level-name)
+                                                        (dissoc :order)
+                                                        atom
+                                                        constantly))))))
+
 ;; C
-(defn check-level-complete [game-id control-channel _current-level {:keys [profit-loss] :as data}]
+(defn check-level-complete [conn user-db-id game-id control-channel {:keys [profit-loss] :as data}]
 
   ;; TODO same here
   (println (format ">> CHECK level-complete / " (pr-str data)))
@@ -169,24 +191,32 @@
                         (filter #(= :running-profit-loss (:profit-loss-type %)))
                         (reduce #(+ %1 (:profit-loss %2)) 0.0))
 
-        realized-pl (->> profit-loss
+        realized-pl (reduce (fn [ac {pl :profit-loss}]
+                              (+ ac pl))
+                            0.0
+                            (game.calculation/realized-profit-loss-for-game conn user-db-id game-id))
+
+        #_(->> profit-loss
                          (filter #(= :realized-profit-loss (:profit-loss-type %)))
                          (reduce #(+ %1 (:profit-loss %2)) 0.0))
 
-        running+realized-pl (+ running-pl realized-pl)
+        ;; running+realized-pl (+ running-pl realized-pl)
 
-        profit-threshold-met? (> running+realized-pl profit-threshold)
-        lose-threshold-met? (< running+realized-pl (* -1 lose-threshold))
+        profit-threshold-met? (> realized-pl profit-threshold)
+        lose-threshold-met? (< running-pl (* -1 lose-threshold))
 
         game-event-message
         (cond-> {:game-id game-id
-                 :level level
-                 :profit-loss running+realized-pl}
-          profit-threshold-met? (assoc :event :win)
-          lose-threshold-met? (assoc :event :lose))]
+                 :level level}
+          profit-threshold-met? (assoc :event :win
+                                       :profit-loss realized-pl)
+          lose-threshold-met? (assoc :event :lose
+                                     :profit-loss running-pl))]
 
     (util/pprint+identity game-event-message)
     (when (:event game-event-message)
+
+      (update-inmemory-game-level!* game-id level)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
   (assoc data :level-update {}))
