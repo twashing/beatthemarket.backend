@@ -277,6 +277,8 @@
 
   (when dest
 
+    ;; (games.core/update-inmemory-game-level! game-id source-level-name)
+
     (let [{game-db-id :db/id} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
           data [[:db/retract  game-db-id :game/level source-level-name]
                 [:db/add      game-db-id :game/level dest-level-name]]
@@ -284,8 +286,7 @@
           _ (println "Site A: Transacting new level")
           {db-after :db-after} (persistence.datomic/transact-entities! conn (util/pprint+identity data))]
 
-      (if db-after
-        (games.core/update-inmemory-game-level! game-id source-level-name)
+      (if-not db-after
         (throw (Exception. (format "Couldn't level up from to [%s %s]" source dest)))))))
 
 (defn conditionally-reset-level-time! [conn game-id [[source-level-name _               :as source]
@@ -303,7 +304,7 @@
 
   (let [source-and-destination (games.core/level->source-and-destination level)]
 
-    (conditionally-level-up! conn game-id source-and-destination)
+    ;; (conditionally-level-up! conn game-id source-and-destination)
     (conditionally-reset-level-time! conn game-id source-and-destination)))
 
 
@@ -338,9 +339,6 @@
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
     (println (format "Win %s" (format-remaining-time remaining)))
     (core.async/>!! game-event-stream (assoc control :type :LevelStatus))
-
-    ;;  KLUDGE need the level to  properly update
-    (Thread/sleep 4000)
 
     [now end]))
 
@@ -383,7 +381,7 @@
 
 (defn run-game! [conn
                  {{game-id :game/id} :game
-                  current-level :current-level
+                  ;; current-level :current-level
                   iterations :iterations
                   control-channel :control-channel
                   game-event-stream :game-event-stream}
@@ -424,9 +422,14 @@
 
                                [(_ :guard #{:exit :win :lose}) _] (handle-control-event conn game-event-stream controlv now end)
 
-                               [_ false] (let [controlv {:event   :continue
+                               [_ false] (let [current-level (-> repl.state/system :game/games
+                                                                 deref
+                                                                 (get game-id)
+                                                                 :current-level
+                                                                 deref)
+                                               controlv {:event   :continue
                                                          :game-id game-id
-                                                         :level   (:level @current-level)
+                                                         :level   (:level current-level)
                                                          :type :LevelTimer}]
 
                                            (handle-control-event conn game-event-stream controlv now end))
