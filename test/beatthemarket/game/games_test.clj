@@ -1212,77 +1212,6 @@
 
         (is (= expected-game-status game-status))))))
 
-#_(deftest replay-reconstructs-running-profit-loss-test
-
-  (let [;; A
-        conn (-> repl.state/system :persistence/datomic :opts :conn)
-        user (test-util/generate-user! conn)
-        user-db-id (:db/id user)
-        userId         (:user/external-uid user)
-
-        ;; B
-        data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
-        tick-length      (count (data-sequence-fn))
-
-        ;; C
-        sink-fn                identity
-
-        test-stock-ticks       (atom [])
-        test-portfolio-updates (atom [])
-
-        opts       {:level-timer-sec 5
-                    :accounts        (game.core/->game-user-accounts)}
-        game-level :game-level/one
-
-
-        ;; D Launch Game
-        {{game-id     :game/id
-          game-db-id :db/id
-          stocks     :game/stocks
-          :as        game} :game
-         :as        game-control} (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)
-
-
-        ;; E Buy Stock
-        {stock-id   :game.stock/id
-         stockName :game.stock/name} (first stocks)
-
-        opts {:conn    conn
-              :userId  userId
-              :gameId  game-id
-              :stockId stock-id
-              :game-control game-control}
-
-        ops-before-pause  [{:op :buy :stockAmount 100}
-                           {:op :buy :stockAmount 200}
-                           {:op :sell :stockAmount 200}]
-        ops-before-pause-count (count ops-before-pause)]
-
-    (is true)
-
-    ;; BEFORE :pause
-    (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
-
-                (let [stock-tick (util/narrow-stock-ticks stock-id stock-ticks)]
-                  (assoc v :local-transact-input (merge stock-tick op))))
-              (take ops-before-pause-count iterations)
-              (take ops-before-pause-count ops-before-pause))
-         (map #(local-transact-stock! opts %))
-         doall)
-
-    ;; :pause
-    (games.control/pause-game! conn game-id)
-
-    ;; B AFTER :pause
-    #_(util/pprint+identity
-        (persistence.core/entity-by-domain-id conn :game/id game-id))
-
-    ;; Resume game
-    (games.control/resume-game! conn user-db-id game-control)
-
-    ))
-
 (deftest resume-game-correctly-replays-ticks-AND-pipelines-from-the-correct-position-test
 
   (let [;; A
@@ -1358,7 +1287,8 @@
     ;; AFTER resume
     (println "\n")
     (println "RESUME Game!!")
-    (testing "On Resume, we are setting :game/status to :game-status/running"
+    (testing "On Resume, i. we are setting :game/status to :game-status/running.
+                         ii. replay reconstructs running profit loss test."
 
       (let [{iterations :iterations} (games.control/resume-workbench! conn game-id user-db-id game-control data-sequence-fn)
             game-status (-> (persistence.core/entity-by-domain-id conn :game/id game-id)
@@ -1407,5 +1337,7 @@
 
         ;; TODO Run the next :op, check P/L
         ;; (util/pprint+identity iterations)
+
+        ;; TODO check values are streamed to the correct client
 
         ))))
