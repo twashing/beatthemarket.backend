@@ -12,7 +12,7 @@
                           :datasource.oscillating/generate-oscillating-sequence]
         :levels                {;; thousands
                                 :game-level/one {:profit-threshold 100.0
-                                                 :lose-threshold 10000.0
+                                                 :lose-threshold 100.0
                                                  :order 1
 
                                                  ;; TODO stock behaviours for this level
@@ -20,34 +20,34 @@
                                                  :time-limit         1}
 
                                 :game-level/two {:profit-threshold 100.0
-                                                 :lose-threshold 2000.0
+                                                 :lose-threshold 200.0
                                                  :order 2}
-                                :game-level/three {:profit-threshold 100.0
+                                :game-level/three {:profit-threshold 50000.0
                                                    :lose-threshold 2000.0
                                                    :order 3}
-                                :game-level/four {:profit-threshold 100.0
+                                :game-level/four {:profit-threshold 100000.0
                                                   :lose-threshold 5000.0
                                                   :order 4}
-                                :game-level/five {:profit-threshold 100.0
+                                :game-level/five {:profit-threshold 1000000.0
                                                   :lose-threshold 10000.0
                                                   :order 5}
 
                                 ;; millions
-                                :game-level/six {:profit-threshold 100.0
+                                :game-level/six {:profit-threshold 10000000.0
                                                  :lose-threshold 500000.0
                                                  :order 6}
-                                :game-level/seven {:profit-threshold 100.0
+                                :game-level/seven {:profit-threshold 50000000.0
                                                    :lose-threshold 500000.0
                                                    :order 7}
-                                :game-level/eight {:profit-threshold 100.0
+                                :game-level/eight {:profit-threshold 100000000.0
                                                    :lose-threshold 500000.0
                                                    :order 8}
-                                :game-level/nine {:profit-threshold 100.0
+                                :game-level/nine {:profit-threshold 500000000.0
                                                   :lose-threshold 500000.0
                                                   :order 9}
 
                                 ;; billion
-                                :game-level/ten {:profit-threshold 100.0
+                                :game-level/ten {:profit-threshold 1000000000.0
                                                  :lose-threshold 1000000.0
                                                  :order 10}
 

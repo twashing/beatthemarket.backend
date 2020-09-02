@@ -145,8 +145,7 @@
       (log/debug :game.games (format ">> STREAM portfolio-update / " (pr-str profit-loss)))
       (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
 
-    (update data :profit-loss (constantly profit-loss)))
-  data)
+    (update data :profit-loss (constantly profit-loss))))
 
 
 (defn- level->source-and-destination* [level]
@@ -176,7 +175,7 @@
 
   ;; TODO same here
   (println (format ">> CHECK level-complete / " (pr-str data)))
-  ;; (util/pprint+identity data)
+  (util/pprint+identity profit-loss)
 
   (let [current-level (-> repl.state/system :game/games
                           deref
@@ -187,9 +186,12 @@
          lose-threshold :lose-threshold
          level :level} (deref current-level)
 
-        running-pl (->> profit-loss
-                        (filter #(= :running-profit-loss (:profit-loss-type %)))
-                        (reduce #(+ %1 (:profit-loss %2)) 0.0))
+        running-pl (if-let [pl (-> profit-loss first :profit-loss)]
+                     pl
+                     0.0)
+        #_(->> profit-loss
+               (filter #(= :running-profit-loss (:profit-loss-type %)))
+               (reduce #(+ %1 (:profit-loss %2)) 0.0))
 
         realized-pl (reduce (fn [ac {pl :profit-loss}]
                               (+ ac pl))
@@ -213,9 +215,11 @@
           lose-threshold-met? (assoc :event :lose
                                      :profit-loss running-pl))]
 
-    (util/pprint+identity game-event-message)
-    (when (:event game-event-message)
+    (util/pprint+identity [running-pl (* -1 lose-threshold) lose-threshold-met? (deref current-level)])
 
+
+    (when (:event game-event-message)
+      (util/pprint+identity game-event-message)
       (update-inmemory-game-level!* game-id level)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
