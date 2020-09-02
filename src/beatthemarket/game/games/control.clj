@@ -384,7 +384,7 @@
 
 (defn run-game! [conn
                  {{game-id :game/id} :game
-                  current-level :current-level
+                  ;; current-level :current-level
                   iterations :iterations
                   control-channel :control-channel
                   game-event-stream :game-event-stream}
@@ -425,7 +425,11 @@
 
                                [(_ :guard #{:exit :win :lose}) _] (handle-control-event conn game-event-stream controlv now end)
 
-                               [_ false] (let [controlv {:event   :continue
+                               [_ false] (let [{current-level :level} (-> repl.state/system :game/games
+                                                                          deref
+                                                                          (get game-id)
+                                                                          :current-level)
+                                               controlv {:event   :continue
                                                          :game-id game-id
                                                          :level   (:level @current-level)
                                                          :type :LevelTimer}]
