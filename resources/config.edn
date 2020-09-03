@@ -19,12 +19,14 @@
                                                  :beta-distributions 1
                                                  :time-limit         1}
 
-                                :game-level/two {:profit-threshold 100.0
+                                :game-level/two {:profit-threshold 200.0
                                                  :lose-threshold 100.0
                                                  :order 2}
-                                :game-level/three {:profit-threshold 50000.0
+                                :game-level/three {:profit-threshold 300.0
                                                    :lose-threshold 100.0
                                                    :order 3}
+
+
                                 :game-level/four {:profit-threshold 100000.0
                                                   :lose-threshold 100.0
                                                   :order 4}
