@@ -126,11 +126,13 @@
        (map input->stock-tick-struct)))
 
 (defn join-market-pipeline [conn user-db-id game-id {input-sequence :input-sequence
+                                                     process-transact! :process-transact!
                                                      stream-stock-tick :stream-stock-tick
                                                      group-stock-tick-pairs :group-stock-tick-pairs
                                                      :as game-control}]
 
-  (->> (map group-stock-tick-pairs input-sequence)
+  (->> (map process-transact! input-sequence)
+       (map group-stock-tick-pairs)
        (map stream-stock-tick)
        (map (partial games.processing/calculate-profit-loss :tick user-db-id game-id))
        (execution-pipeline game-control)

@@ -88,6 +88,7 @@
             :level-timer
             :tick-sleep-atom
 
+            :group-stock-tick-pairs
             :process-transact!
             :process-transact-profit-loss!
             :process-transact-level-update!
@@ -838,7 +839,8 @@
 
         ;; i.
         ops-before  [{:op :buy :stockAmount 100}
-                     {:op :sell :stockAmount 100}]
+                     {:op :sell :stockAmount 100}
+                     {:op :noop}]
         ops-before-count (count ops-before)]
 
     (testing "Testing the correct level win message is shown"
@@ -939,7 +941,7 @@
         userId         (:user/external-uid user)
 
         ;; B
-        data-sequence-fn (constantly [100.0 1500100.0])
+        data-sequence-fn (constantly [100.0 1500100.0 100.0])
         tick-length      (count (data-sequence-fn))
 
         ;; C
@@ -978,7 +980,8 @@
 
         ;; i.
         ops-before  [{:op :buy :stockAmount 1000}
-                     {:op :sell :stockAmount 1000}]
+                     {:op :sell :stockAmount 1000}
+                     {:op :noop}]
         ops-before-count (count ops-before)]
 
     (testing "Testing the correct game win message is shown"
@@ -986,6 +989,8 @@
       (with-redefs [state.subscriptions/margin-trading? (constantly true)]
 
         (run-trades! iterations stock-id opts ops-before ops-before-count)
+
+        (Thread/sleep 2000)
 
         (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
@@ -1000,8 +1005,6 @@
           (are [x y] (= x y)
             expected-game-event (core.async/<!! game-event-stream)
             expected-game-level level))))))
-
-
 
 
 ;; TODO
@@ -1324,10 +1327,9 @@
                                        :price (.floatValue 100.0)
                                        :pershare-purchase-ratio 1/9}}}}
 
-            profit-loss (util/pprint+identity
-                          (-> (games.control/get-inmemory-profit-loss game-id)
-                              (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
-                              (update-in [user-db-id stock-id] (fn [x] (into #{} x)))))]
+            profit-loss (-> (games.control/get-inmemory-profit-loss game-id)
+                            (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
+                            (update-in [user-db-id stock-id] (fn [x] (into #{} x))))]
 
         (are [x y] (= x y)
           expected-game-status game-status
@@ -1390,7 +1392,8 @@
                            {:op :noop}]
         ops-before-pause-count (count ops-before-pause)
 
-        ops-after-pause  [{:op :sell :stockAmount 100}]
+        ops-after-pause  [{:op :buy :stockAmount 100}
+                          {:op :sell :stockAmount 50}]
         ops-after-pause-count (count ops-after-pause)]
 
 
@@ -1407,7 +1410,22 @@
     (println "JOIN Game!!")
     (testing "After joining, getting correct status and P/L"
 
-      (let [{iterations-after-join :iterations} (games.control/join-game! conn user-db-id game-id game-control data-sequence-fn)
+      (let [local-stream-stock-tick (fn [stock-ticks]
+                                      (util/pprint+identity [:stock-ticks stock-ticks])
+                                      stock-ticks)
+
+            local-stream-portfolio-update! (fn [{:keys [profit-loss] :as data}]
+                                             (util/pprint+identity [:profit-loss profit-loss])
+                                             data)
+
+            {iterations-after-join :iterations} (games.control/join-game!
+                                                  conn user-db-id game-id
+                                                  ;; TODO test streaming later
+                                                  game-control
+                                                  #_(assoc game-control
+                                                         :stream-stock-tick local-stream-stock-tick
+                                                         :stream-portfolio-update! local-stream-portfolio-update!)
+                                                  data-sequence-fn)
             {{game-status :db/ident} :game/status
              game-users :game/users} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
@@ -1443,18 +1461,55 @@
                                  (map double))
 
                 expected-iteration-B '(112.0 125.0 130.0)
-                iteration-B (util/pprint+identity
-                              (->> (map :stock-ticks (util/pprint+identity (-> iterations-after-join first second)))
-                                   (map (comp :game.stock.tick/close first))
-                                   (map double)))]
+                iteration-B (->> (map :stock-ticks (-> iterations-after-join first second))
+                                 (map (comp :game.stock.tick/close first))
+                                 (map double))]
 
             (are [x y] (= x y)
               expected-iteration-A iteration-A
               expected-iteration-B iteration-B)))
 
-        ;; (run-trades! iterations stock-id opts ops-after-pause ops-after-pause-count)
+        (testing "Checking Running and Realized P/L, after a buy and sell"
 
-        ;; TODO Run the next :op, check P/L
+          (run-trades! iterations-after-join stock-id opts ops-after-pause ops-after-pause-count)
+
+          (let [expected-realized-profit-loss #{{:user-id user-db-id
+                                                 ;; :tick-id #uuid "c44626cf-b751-4fe1-9753-39abf7f1f966"
+                                                 :game-id game-id
+                                                 :stock-id stock-id
+                                                 :profit-loss-type :realized-profit-loss
+                                                 :profit-loss (.floatValue -800.0)}}
+
+                expected-running-profit-loss {user-db-id
+                                              {stock-id
+                                               #{{:amount 100
+                                                  :counter-balance-direction :buy
+                                                  :stock-account-amount 100
+                                                  ;; :stock-account-id #uuid "37306d98-2c57-4bf9-a5ff-45beef8ccc42"
+                                                  :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                                  :op :buy
+                                                  :shrinkage 1/2
+                                                  :latest-price->price [(.floatValue 112.0) (.floatValue 120.0)]
+                                                  :counter-balance-amount 50
+                                                  :pershare-gain-or-loss -8.0
+                                                  :running-profit-loss -200.0
+                                                  :price (.floatValue 120.0)
+                                                  :pershare-purchase-ratio 1/2}}}}
+
+                realized-profit-loss (->> (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id)
+                                          (map #(dissoc % :tick-id))
+                                          (into #{}))
+                running-profit-loss (-> (game.calculation/running-profit-loss-for-game game-id)
+                                        (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
+                                        (update-in [user-db-id stock-id] (fn [x] (into #{} x))))]
+
+            (def A realized-profit-loss)
+            (def B running-profit-loss)
+
+            (are [x y] (= x y)
+              expected-realized-profit-loss realized-profit-loss
+              expected-running-profit-loss running-profit-loss)))
+
         ;; TODO check values are streamed to the correct client
 
         ))))
@@ -1506,24 +1561,15 @@
         ops-before-pause  [{:op :buy :stockAmount 100}
                            {:op :buy :stockAmount 200}
                            {:op :sell :stockAmount 200}]
-        ops-before-pause-count (count ops-before-pause)
-
-        ops-after-pause  [{:op :sell :stockAmount 100}]
-        ops-after-pause-count (count ops-after-pause)]
+        ops-before-pause-count (count ops-before-pause)]
 
 
     ;; BEFORE :pause
     (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
 
 
-    ;; (println "A /")
-    ;; (-> (games.control/->game-with-decorated-price-history conn game-id) util/pprint+identity)
-
     ;; :Pause
     (games.control/pause-game! conn game-id)
-
-    ;; (println "B /")
-    ;; (-> (games.control/->game-with-decorated-price-history conn game-id) util/pprint+identity)
 
 
     ;; AFTER join
@@ -1542,25 +1588,26 @@
                                    #{{:amount 200
                                       :counter-balance-direction :buy
                                       :stock-account-amount 300
-                                      :stock-account-name "STOCK.Empty Script"
+                                      :stock-account-name (bookkeeping.core/->stock-account-name stockName)
                                       :op :buy
                                       :shrinkage 1/3
-                                      :latest-price->price [130.0 110.0]
+                                      :latest-price->price [(.floatValue 130.0) (.floatValue 110.0)]
                                       :counter-balance-amount 100
                                       :pershare-gain-or-loss 20.0
                                       :running-profit-loss 1333.3333333333335
-                                      :price 110.0 :pershare-purchase-ratio 2/9}
+                                      :price (.floatValue 110.0)
+                                      :pershare-purchase-ratio 2/9}
                                      {:amount 100
                                       :counter-balance-direction :buy
                                       :stock-account-amount 100
-                                      :stock-account-name "STOCK.Empty Script"
+                                      :stock-account-name (bookkeeping.core/->stock-account-name stockName)
                                       :op :buy
                                       :shrinkage 1/3
-                                      :latest-price->price [130.0 100.0]
+                                      :latest-price->price [(.floatValue 130.0) (.floatValue 100.0)]
                                       :counter-balance-amount 100
                                       :pershare-gain-or-loss 30.0
                                       :running-profit-loss 333.3333333333333
-                                      :price 100.0
+                                      :price (.floatValue 100.0)
                                       :pershare-purchase-ratio 1/9}}}}
 
             profit-loss (-> (games.control/get-inmemory-profit-loss game-id)
@@ -1569,13 +1616,4 @@
 
         (are [x y] (= x y)
           expected-game-status game-status
-          expected-profit-loss profit-loss)
-
-
-        ;; TODO Run the next :op, check P/L
-        (util/pprint+identity (take 1 iterations-after-join))
-        ;; (run-trades! iterations stock-id opts ops-after-pause ops-after-pause-count)
-
-        ;; TODO check values are streamed to the correct client
-
-        ))))
+          expected-profit-loss profit-loss)))))

@@ -27,6 +27,7 @@
     (rop/fail (ex-info "Game isn't current or doesn't belong to user" inputs))))
 
 (defn- submitted-price-matches-tick? [{:keys [conn tickId tickPrice] :as inputs}]
+
   (let [{tick-price :game.stock.tick/close :as tick}
         (ffirst
           (d/q '[:find (pull ?e [*])

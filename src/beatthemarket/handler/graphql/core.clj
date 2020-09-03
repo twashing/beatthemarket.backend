@@ -426,7 +426,7 @@
 
 
         ;; Join Game
-        (games.control/join-game! conn game-id user-db-id game-control)
+        (games.control/join-game! conn user-db-id game-id game-control)
 
 
         ;; Response

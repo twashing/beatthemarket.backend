@@ -292,8 +292,8 @@
           data [[:db/retract  game-db-id :game/level source-level-name]
                 [:db/add      game-db-id :game/level dest-level-name]]
 
-          _ (println "Site A: Transacting new level")
-          {db-after :db-after} (persistence.datomic/transact-entities! conn (util/pprint+identity data))]
+          ;; _ (println "Site A: Transacting new level")
+          {db-after :db-after} (persistence.datomic/transact-entities! conn data)]
 
       (if-not db-after
         (throw (Exception. (format "Couldn't level up from to [%s %s]" source dest)))))))
@@ -313,7 +313,7 @@
 
   (let [source-and-destination (games.core/level->source-and-destination level)]
 
-    ;; (conditionally-level-up! conn game-id source-and-destination)
+    (conditionally-level-up! conn game-id source-and-destination)
     (conditionally-reset-level-time! conn game-id source-and-destination)))
 
 
@@ -595,7 +595,8 @@
 
 
          ;; Game Control
-         game-control-replay (update-level!-then->game-control-replay conn game game-control data-sequence-fn)
+         game-control-replay (-> (update-level!-then->game-control-replay conn game game-control data-sequence-fn)
+                                 (assoc :user {:db/id user-db-id}))
 
 
          ;; Re-play game
@@ -764,8 +765,8 @@
 
       ;; Join
       (->> (game.core/conditionally-add-game-users game
-                                                   {:user        {:db/id user-db-id}
-                                                    :accounts    (game.core/->game-user-accounts)})
+                                                   {:user     {:db/id user-db-id}
+                                                    :accounts (game.core/->game-user-accounts)})
            (persistence.datomic/transact-entities! conn)))
 
     (set-game-status! conn game-id :game-status/running)
@@ -786,8 +787,7 @@
     (let [data-generators (-> integrant.repl.state/config :game/game :data-generators)
           tick-index      (-> (->game-with-decorated-price-history conn game-id) ffirst
                               :game/stocks first
-                              :game.stock/price-history count
-                              )
+                              :game.stock/price-history count)
 
           ;; game-control market
           {input-sequence :input-sequence :as game-control-market}

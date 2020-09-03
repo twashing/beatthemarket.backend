@@ -140,6 +140,7 @@
   (-> repl.state/system :game/games deref (get game-id) :profit-loss))
 
 (defn realized-profit-loss-for-game [conn user-id game-id]
+
   (->> (d/q '[:find (pull ?pls [*])
               :in $ ?gameId ?user-id
               :where

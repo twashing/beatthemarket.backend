@@ -114,7 +114,6 @@
 ;; B.ii
 (defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
 
-  ;; TODO ensure we are filtering on nested user P/Ls
   (println (format ">> TRANSACT :profit-loss / " (pr-str data)))
   ;; (util/pprint+identity data)
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
@@ -129,14 +128,13 @@
 ;; B.iii
 (defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as data}]
 
-  ;; TODO same here
   (println (format ">> STREAM portfolio-update / " (pr-str data)))
   (let [profit-loss (->> data
                          :profit-loss
                          flatten
                          (map #(dissoc % :user-id :tick-id)))]
 
-    (util/pprint+identity profit-loss)
+    ;; (util/pprint+identity profit-loss)
 
     (when (not (empty? profit-loss))
 
@@ -160,7 +158,7 @@
   (let [[[source-level-name _ :as source]
          [dest-level-name dest-level-config :as dest]] (level->source-and-destination* level)]
 
-    (println "Site B: Updating new level in memory / " dest-level-name)
+    ;; (println "Site B: Updating new level in memory / " dest-level-name)
     (swap! (:game/games repl.state/system)
            (fn [gs]
              (update-in gs [game-id :current-level] (-> dest-level-config
@@ -171,9 +169,9 @@
 
 (defn check-level-complete [conn user-db-id game-id control-channel {:keys [profit-loss] :as data}]
 
-  ;; TODO same here
   (println (format ">> CHECK level-complete / " (pr-str data)))
-  (util/pprint+identity profit-loss)
+  ;; (println [:check-level-complete user-db-id game-id control-channel data])
+  ;; (util/pprint+identity profit-loss)
 
   (let [current-level (-> repl.state/system :game/games
                           deref
@@ -203,11 +201,13 @@
                              lose-threshold-met? (assoc :event :lose
                                                         :profit-loss running-pl))]
 
-    (util/pprint+identity [running-pl (* -1 lose-threshold) lose-threshold-met? (deref current-level)])
+    #_(util/pprint+identity [:running running-pl (* -1 lose-threshold) lose-threshold-met?
+                           :realized realized-pl (> realized-pl profit-threshold)
+                           :current-level (deref current-level)])
 
 
     (when (:event game-event-message)
-      (util/pprint+identity game-event-message)
+      ;; (util/pprint+identity game-event-message)
       (update-inmemory-game-level!* game-id level)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
