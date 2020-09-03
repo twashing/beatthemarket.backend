@@ -23,33 +23,38 @@
                                          (-> % :game.user/user :db/id)))]
               game))
 
-(defn ->game
+(defn conditionally-add-game-users [game {client-id   :client-id
+                                          user        :user
+                                          accounts    :accounts :as opts}]
 
-  ([game-level stocks user accounts]
-   (->game game-level stocks user accounts {:game-id (UUID/randomUUID)
-                                            :game-status :game-status/created}))
+  (if-not (and user accounts)
 
-  ([game-level stocks user accounts {game-id :game-id
-                                     game-status :game-status
-                                     client-id :client-id}]
+    game
 
-   (let [portfolio-with-journal (bookkeeping/->portfolio
-                                  (bookkeeping/->journal))
+    (->> (cond-> (hash-map
+                   :game.user/user        user
+                   :game.user/accounts    accounts
+                   :game.user/portfolio   (bookkeeping/->portfolio (bookkeeping/->journal)))
+           client-id           (assoc :game.user/user-client client-id))
+         persistence.core/bind-temporary-id
+         list
+         (assoc game :game/users))))
 
-         game-user (cond-> (hash-map
-                             :game.user/user user
-                             :game.user/accounts accounts
-                             :game.user/portfolio portfolio-with-journal)
-                     client-id (assoc :game.user/user-client client-id))
-         game-users (list (persistence.core/bind-temporary-id game-user))]
+(defn ->game [{game-id     :game-id
+               game-status :game-status
+               game-level  :game-level
+               stocks      :stocks
+               :or         {game-id     (UUID/randomUUID)
+                            game-status :game-status/created}
+               :as         opts}]
 
-     (hash-map
-       :game/id (or game-id (UUID/randomUUID))
-       :game/start-time (c/to-date (t/now))
-       :game/level game-level
-       :game/stocks stocks
-       :game/users game-users
-       :game/status game-status))))
+  (-> (hash-map
+        :game/id (or game-id (UUID/randomUUID))
+        :game/start-time (c/to-date (t/now))
+        :game/level game-level
+        :game/status game-status
+        :game/stocks stocks)
+      (conditionally-add-game-users opts)))
 
 (defn ->stock
 
@@ -81,23 +86,23 @@
 
 (defn initialize-game!
 
-  ([conn user-entity]
-   (initialize-game! conn user-entity (->game-user-accounts)))
+  ([conn]
 
-  ([conn user-entity accounts]
-   (initialize-game! conn user-entity accounts :game-level/one))
+   (let [stocks (->> (name-generator/generate-names 4)
+                     (map (juxt :stock-name :stock-symbol))
+                     (map #(apply ->stock %))
+                     (map persistence.core/bind-temporary-id))]
 
-  ([conn user-entity accounts game-level]
-   (initialize-game! conn user-entity accounts game-level (->> (name-generator/generate-names 4)
-                                                               (map (juxt :stock-name :stock-symbol))
-                                                               (map #(apply ->stock %))
-                                                               (map persistence.core/bind-temporary-id))))
+     (initialize-game! conn {:stocks      stocks
+                             :game-level  :game-level/one
+                             :game-status :game-status/created})))
 
-  ([conn user-entity accounts game-level stocks]
-   (initialize-game! conn user-entity accounts game-level stocks {:game-status :game-status/created}))
+  ([conn {user       :user
+          accounts   :accounts
+          stocks     :stocks
+          game-level :game-level :as opts}]
 
-  ([conn user-entity accounts game-level stocks opts]
-   (let [game (->game game-level stocks user-entity accounts opts)]
+   (let [game (->game opts)]
 
      (as-> game gm
        (persistence.datomic/transact-entities! conn gm)

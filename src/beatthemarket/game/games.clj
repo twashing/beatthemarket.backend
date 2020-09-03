@@ -60,35 +60,44 @@
 ;; CREATE
 (defn initialize-game!
 
-  ([conn user-entity accounts sink-fn]
+  ([conn sink-fn]
 
-   (initialize-game! conn user-entity accounts sink-fn :game-level/one games.control/->data-sequence {}))
+   (initialize-game! conn sink-fn games.control/->data-sequence {:game-level :game-level/one}))
 
-  ([conn user-entity accounts sink-fn game-level data-sequence-fn {:keys [client-id
-                                                                          level-timer-sec tick-sleep-ms game-id
-                                                                          input-sequence profit-loss
+  ([conn sink-fn data-sequence-fn {:keys [client-id game-id
 
-                                                                          process-transact!
+                                          stocks-in-game
+                                          level-timer-sec tick-sleep-ms
+                                          input-sequence profit-loss
 
-                                                                          control-channel
-                                                                          stock-tick-stream
-                                                                          portfolio-update-stream
-                                                                          game-event-stream
+                                          process-transact!
 
-                                                                          stream-stock-tick
-                                                                          calculate-profit-loss stream-portfolio-update!
-                                                                          check-level-complete stream-level-update!]}]
+                                          control-channel
+                                          stock-tick-stream
+                                          portfolio-update-stream
+                                          game-event-stream
 
-   (let [stocks               (game.core/generate-stocks! 4)
-         data-generators      (-> integrant.repl.state/config :game/game :data-generators)
-         initialize-game-opts {:client-id   client-id
-                               :game-id     (or game-id (UUID/randomUUID))
-                               :game-status :game-status/created}
+                                          stream-stock-tick
+                                          calculate-profit-loss stream-portfolio-update!
+                                          check-level-complete stream-level-update!
+
+                                          user ;; PASSED in as options
+                                          accounts
+                                          game-level]
+                                   :or {game-id        (UUID/randomUUID)
+                                        stocks-in-game 4}
+                                   :as opts}]
+
+   (let [data-generators      (-> integrant.repl.state/config :game/game :data-generators)
+         initialize-game-opts (merge opts
+                                     {:game-id     game-id
+                                      :game-status :game-status/created
+                                      :stocks      (game.core/generate-stocks! stocks-in-game)})
 
          {game-id                      :game/id
           stocks                       :game/stocks
           {saved-game-level :db/ident} :game/level :as game}
-         (game.core/initialize-game! conn user-entity accounts game-level stocks initialize-game-opts)
+         (game.core/initialize-game! conn initialize-game-opts)
 
          stocks-with-tick-data   (games.control/stocks->stocks-with-tick-data stocks data-sequence-fn data-generators)
          input-sequence-local    (games.control/stocks->stock-sequences stocks-with-tick-data)
@@ -100,8 +109,8 @@
                               :lose-threshold   lose-threshold})
 
          game-control (merge-with #(if %2 %2 %1)
-                                  (games.core/default-game-control conn (:db/id user-entity) game-id
-                                                                   {:current-level current-level})
+                                  (games.core/default-game-control conn game-id
+                                                                   (assoc opts :current-level current-level))
                                   {:game                  game                  ;; TODO load
                                    :profit-loss           (or profit-loss {})   ;; TODO replay
                                    :stocks-with-tick-data stocks-with-tick-data ;; TODO load + seek to index
@@ -136,15 +145,18 @@
 
 (defn create-game!
 
-  ([conn user-id sink-fn]
-   (create-game! conn user-id sink-fn :game-level/one))
+  ([conn sink-fn]
+   (create-game! conn sink-fn games.control/->data-sequence {}))
 
-  ([conn user-id sink-fn game-level]
-   (create-game! conn user-id sink-fn game-level games.control/->data-sequence {:accounts (game.core/->game-user-accounts)}))
+  ([conn sink-fn data-sequence-fn {game-level :game-level
+                                   accounts   :accounts
+                                   :or        {game-level :game-level/one
+                                               accounts   (game.core/->game-user-accounts)}
+                                   :as        opts}]
 
-  ([conn user-id sink-fn game-level data-sequence-fn {accounts :accounts :as opts}]
-   (let [user-entity (hash-map :db/id user-id)]
-     (initialize-game! conn user-entity accounts sink-fn game-level data-sequence-fn opts))))
+   (initialize-game! conn sink-fn data-sequence-fn (assoc opts
+                                                          :game-level game-level
+                                                          :accounts accounts))))
 
 
 ;; START
@@ -200,44 +212,6 @@
        (map stream-portfolio-update!)
        (map check-level-complete)))
 
-(defn update-start-position! [conn game-id start-position]
-
-  ;; (util/pprint+identity [game-id start-position])
-
-  (let [{game-db-id :db/id
-         old-start-position :game/start-position} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
-
-        data (cond-> []
-               old-start-position (conj [:db/retract game-db-id :game/start-position old-start-position])
-               true (conj [:db/add game-db-id :game/start-position start-position]))]
-
-    (persistence.datomic/transact-entities! conn data)))
-
-(defn start-game!
-
-  ([conn user-db-id game-control]
-   (start-game! conn user-db-id game-control 0))
-
-  ([conn user-db-id {{game-id :game/id} :game :as game-control} start-position]
-
-   ;; A
-   (update-start-position! conn game-id start-position)
-
-   ;; B
-   (let [{:keys [control-channel
-                 tick-sleep-atom
-                 level-timer]} game-control
-
-         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control)
-                                                   (games.control/seek-to-position start-position))]
-
-     (as-> inputs-at-position v
-       (games.control/run-iteration v)
-       (assoc game-control :iterations v)
-       (games.control/run-game! conn v tick-sleep-atom level-timer))
-
-     historical-data)))
-
 #_(defn inputs->processing-pipeline [conn {:keys [game input-sequence
 
                                                   control-channel
@@ -264,25 +238,46 @@
       (map check-level-complete)
       (map stream-level-update!)))
 
-(defn start-workbench!
+(defn update-start-position! [conn game-id start-position]
 
-  ([conn user-db-id game-control]
-   (start-workbench! conn user-db-id game-control 0))
+  ;; (util/pprint+identity [game-id start-position])
 
-  ([conn user-db-id
-    {{game-id :game/id} :game
-     level-timer :level-timer
-     tick-sleep-atom :tick-sleep-atom
-     game-event-stream :game-event-stream
-     control-channel :control-channel
-     :as game-control}
-    start-position]
+  (let [{game-db-id :db/id
+         old-start-position :game/start-position} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
-   ;; (util/pprint+identity start-position)
-   ;; (util/pprint+identity (:game game-control))
+        data (cond-> []
+               old-start-position (conj [:db/retract game-db-id :game/start-position old-start-position])
+               true (conj [:db/add game-db-id :game/start-position start-position]))]
+
+    (persistence.datomic/transact-entities! conn data)))
+
+(defn start-game!
+
+  ([conn game-control]
+   (start-game! conn game-control 0))
+
+  ([conn {{game-id :game/id} :game :as game-control} start-position]
 
    ;; A
    (update-start-position! conn game-id start-position)
+
+   ;; B
+   (let [{:keys [control-channel
+                 tick-sleep-atom
+                 level-timer]} game-control
+
+         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
+                                                   (games.control/seek-to-position start-position))]
+
+     (as-> inputs-at-position v
+       (games.control/run-iteration v)
+       (assoc game-control :iterations v)
+       (games.control/run-game! conn v tick-sleep-atom level-timer))
+
+     historical-data)))
+
+(defn game-workbench-loop [conn {:keys [control-channel game-event-stream]}
+                           tick-sleep-atom level-timer]
 
    (core.async/go-loop [now (t/now)
                         end (t/plus now (t/seconds @level-timer))]
@@ -298,10 +293,73 @@
                               [_ true] (games.control/handle-control-event conn game-event-stream {:event :timeout} now end))]
 
        (when (and nowA endA)
-         (recur nowA endA))))
+         (recur nowA endA)))))
+
+(defn start-game!-workbench
+
+  ([conn game-control]
+   (start-game!-workbench conn game-control 0))
+
+  ([conn
+    {{game-id :game/id} :game
+     level-timer :level-timer
+     tick-sleep-atom :tick-sleep-atom
+     game-event-stream :game-event-stream
+     control-channel :control-channel
+     :as game-control}
+    start-position]
+
+   ;; A
+   (update-start-position! conn game-id start-position)
+   (game-workbench-loop conn game-control tick-sleep-atom level-timer)
 
    ;; B
-   (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline user-db-id game-control)
+   (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
+                                                   (games.control/seek-to-position start-position))]
+
+       [historical-data (games.control/run-iteration inputs-at-position)])))
+
+(defn start-market!
+
+  ([conn game-control]
+   (start-market! conn game-control 0))
+
+  ([conn {{game-id :game/id} :game :as game-control} start-position]
+
+   ;; A
+   (update-start-position! conn game-id start-position)
+
+   ;; B
+   (let [{:keys [control-channel
+                 tick-sleep-atom
+                 level-timer]} game-control
+
+         [historical-data inputs-at-position] (->> (games.pipeline/market-stock-tick-pipeline game-control)
+                                                   (games.control/seek-to-position start-position))]
+
+     (as-> inputs-at-position v
+       (games.control/run-iteration v)
+       (assoc game-control :iterations v)
+       (games.control/run-game! conn v tick-sleep-atom level-timer))
+
+     historical-data)))
+
+(defn start-market!-workbench
+
+  ([conn game-control]
+   (start-market!-workbench conn game-control 0))
+
+  ([conn {{game-id :game/id} :game :as game-control} start-position]
+
+   ;; A
+   (update-start-position! conn game-id start-position)
+
+   ;; B
+   (let [{:keys [control-channel
+                 tick-sleep-atom
+                 level-timer]} game-control
+
+         [historical-data inputs-at-position] (->> (games.pipeline/market-stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
 
      [historical-data (games.control/run-iteration inputs-at-position)])))

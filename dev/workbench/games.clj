@@ -10,9 +10,11 @@
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games :as game.games]
-            [beatthemarket.game.games.processing :as game.games.processing]
+            [beatthemarket.game.games.processing :as games.processing]
+            [beatthemarket.game.games.control :as games.control]
             [beatthemarket.util :as util]
-            [beatthemarket.test-util :as test-util]))
+            [beatthemarket.test-util :as test-util]
+            [beatthemarket.iam.persistence :as iam.persistence]))
 
 
 (comment
@@ -35,12 +37,12 @@
     ;; A
     (def conn (-> repl.state/system :persistence/datomic :opts :conn))
     (def user (test-util/generate-user! conn))
-    (def result-user-id (:db/id user))
+    (def user-db-id (:db/id user))
     (def userId         (:user/external-uid user))
 
     ;; B
     ;; (def data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0]))
-    (def data-sequence-fn game.games/->data-sequence)
+    (def data-sequence-fn games.control/->data-sequence)
     (def tick-length      7)
 
 
@@ -62,12 +64,12 @@
 
 
       ;; i.
-      (def start-results (game.games/start-workbench! conn result-user-id game-control))
+      (def start-results (game.games/start-game!-workbench conn user-db-id game-control))
       (def iterations (second start-results))
 
 
       ;; ii.
-      (def data-sequence-fn game.games/->data-sequence)
+      (def data-sequence-fn games.control/->data-sequence)
       (def input-sequence
         (-> (map #(game.games/bind-data-sequence (data-sequence-fn) %) stocks)
             game.games/stocks->stock-sequences))
@@ -106,7 +108,7 @@
                      :accounts        (game.core/->game-user-accounts)})
     (def game-level :game-level/one)
 
-    (def game-control (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)))
+    (def game-control (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)))
 
 
   (do
@@ -119,7 +121,7 @@
 
 
     ;; i.
-    ;; (def start-results (game.games/start-workbench! conn result-user-id game-control))
+    ;; (def start-results (game.games/start-game!-workbench conn user-db-id game-control))
     ;; (def iterations (second start-results))
     )
 
@@ -145,10 +147,10 @@
   (def stock-tick-pipeline (game.games/stock-tick-pipeline game-control))
 
   ;; >
-  (game.games/buy-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice])
+  (game.games/buy-stock-pipeline game-control conn user-db-id gameId [stockId stockAmount tickId tickPrice])
 
   ;; >
-  (game.games/sell-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice validate?]))
+  (game.games/sell-stock-pipeline game-control conn user-db-id gameId [stockId stockAmount tickId tickPrice validate?]))
 
 
 ;; REPLAY
@@ -165,7 +167,7 @@
                      :stream-level-update!     identity})
     (def game-level :game-level/one)
 
-    (def game-control (game.games/create-game! conn result-user-id sink-fn game-level data-sequence-fn opts)))
+    (def game-control (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)))
 
 
   (do
@@ -178,7 +180,7 @@
 
 
     ;; i.
-    ;; (def start-results (game.games/start-workbench! conn result-user-id game-control))
+    ;; (def start-results (game.games/start-game!-workbench conn user-db-id game-control))
     ;; (def iterations (second start-results))
     )
 
@@ -188,10 +190,57 @@
 
 
   ;; >
-  (game.games/buy-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice])
+  (game.games/buy-stock-pipeline game-control conn user-db-id gameId [stockId stockAmount tickId tickPrice])
 
 
   ;; >
-  (game.games/sell-stock-pipeline game-control conn result-user-id gameId [stockId stockAmount tickId tickPrice validate?])
+  (game.games/sell-stock-pipeline game-control conn user-db-id gameId [stockId stockAmount tickId tickPrice validate?])
 
   )
+
+
+;; MARKET
+(comment
+
+
+  ;; WITH User
+  (do
+
+    (def opts       {:level-timer-sec 5
+                     :user            {:db/id user-db-id}
+                     :accounts        (game.core/->game-user-accounts)
+                     :game-level      :game-level/one})
+
+    (def game-control (game.games/create-game! conn sink-fn data-sequence-fn opts)))
+
+
+  ;; WITHOUT User
+  (do
+
+    (def opts       {:level-timer-sec 5
+                     :stocks-in-game  10
+                     :game-level      :game-level/market})
+
+    (def game-control (game.games/create-game! conn sink-fn data-sequence-fn opts)))
+
+
+  (pprint (dissoc game-control :input-sequence :stocks-with-tick-data))
+
+
+  (let [{{game-id :game/id} :game} game-control]
+
+    (games.control/join-game conn game-id user-db-id game-control))
+
+  (pprint (persistence.core/entity-by-domain-id conn :game/id (-> game-control :game :game/id)))
+
+  #_(pprint
+
+    (->> (iam.persistence/game-user-by-user conn user-db-id '[{:game.user/_user
+                                                                   [:game/status]}])
+         flatten
+         (map (comp :db/ident :game/status :game.user/_user))
+         (into #{})
+         (some #{:game-status/running})))
+
+  )
+

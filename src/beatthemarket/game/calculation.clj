@@ -71,19 +71,19 @@
   ([conn user-id game-id group-by-stock?]
 
    (let [result (->> (d/q '[:find (pull ?pls [*])
-                             :in $ ?gameId ?user-id
-                             :where
-                             [?g :game/id ?gameId]
-                             [?g :game/users ?gus]
-                             [?gus :game.user/user ?user-id]
-                             [?gus :game.user/profit-loss ?pls]]
-                           (d/db conn)
-                           game-id user-id)
-                      (map first)
-                      (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
-                                {stock-id :game.stock/id} :game.user.profit-loss/stock
-                                amount :game.user.profit-loss/amount}]
-                             (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount))))]
+                            :in $ ?gameId ?user-id
+                            :where
+                            [?g :game/id ?gameId]
+                            [?g :game/users ?gus]
+                            [?gus :game.user/user ?user-id]
+                            [?gus :game.user/profit-loss ?pls]]
+                          (d/db conn)
+                          game-id user-id)
+                     (map first)
+                     (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
+                               {stock-id :game.stock/id} :game.user.profit-loss/stock
+                               amount :game.user.profit-loss/amount}]
+                            (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount))))]
 
      (if (not group-by-stock?)
 
@@ -105,14 +105,16 @@
 
   ([game-id profit-loss]
 
+   #_(util/pprint+identity [game-id profit-loss])
    (let [profit-loss-type :running-profit-loss]
-
-     (for [[stock-id vs] profit-loss
-           :let [profit-loss-amount (->> (filter profit-loss-type vs)
-                                         (reduce (fn [ac {pl profit-loss-type}]
+     (for [[user-db-id pls] profit-loss
+           [stock-id vs] pls
+           :let [profit-loss-amount (->> (reduce (fn [ac {pl profit-loss-type}]
                                                    (+ ac pl))
-                                                 0.0)
-                                         (format "%.2f") (Float.))]]
+                                                 0.0
+                                                 vs)
+                                         (format "%.2f")
+                                         (Float.))]]
 
        (->profit-loss-event nil nil game-id stock-id profit-loss-type profit-loss-amount)))))
 
@@ -138,6 +140,7 @@
   (-> repl.state/system :game/games deref (get game-id) :profit-loss))
 
 (defn realized-profit-loss-for-game [conn user-id game-id]
+
   (->> (d/q '[:find (pull ?pls [*])
               :in $ ?gameId ?user-id
               :where
@@ -149,40 +152,33 @@
             game-id user-id)
        (map first)
        (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
-                  {stock-id :game.stock/id} :game.user.profit-loss/stock
-                  amount :game.user.profit-loss/amount}]
+                 {stock-id :game.stock/id} :game.user.profit-loss/stock
+                 amount :game.user.profit-loss/amount}]
               (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount)))))
 
-(defn game->profit-losses [game-id]
+(defn user-stock->profit-loss [user-id game-id game-stock-id]
+  (-> repl.state/system :game/games deref (get game-id) :profit-loss (get user-id) (get game-stock-id [])))
 
-  (as-> (deref (:game/games repl.state/system)) gs
-    (get gs game-id)
-    (:profit-loss gs)))
-
-(defn stock->profit-loss [game-id game-stock-id]
-  (-> (game->profit-losses game-id)
-      (get game-stock-id [])))
-
-(defn update-trade-state-for-stock! [game-id stock-id profit-loss profit-loss-calculation]
+(defn update-trade-state-for-user-stock! [user-id game-id stock-id profit-loss profit-loss-calculation]
 
   (swap! (:game/games repl.state/system)
          (fn [gs]
-           (update-in gs [game-id :profit-loss]
+           (update-in gs [game-id :profit-loss user-id]
                       (fn [pl] (assoc pl stock-id (conj profit-loss profit-loss-calculation)))))))
 
-(defn replace-trade-state-for-stock! [game-id stock-id profit-loss]
+(defn replace-trade-state-for-stock! [user-id game-id stock-id profit-loss]
 
   (swap! (:game/games repl.state/system)
          (fn [gs]
-           (update-in gs [game-id :profit-loss]
+           (update-in gs [game-id :profit-loss user-id]
                       (fn [pl] (assoc pl stock-id profit-loss))))))
 
-(defn create-trade-history! [op game-id stock-id profit-loss profit-loss-calculation]
+(defn create-trade-history! [op user-id game-id stock-id profit-loss profit-loss-calculation]
 
   (->> (assoc profit-loss-calculation
               :counter-balance-amount (:stock-account-amount profit-loss-calculation) ;; (fluctuates on trade)
               :counter-balance-direction op)
-       (update-trade-state-for-stock! game-id stock-id profit-loss))
+       (update-trade-state-for-user-stock! user-id game-id stock-id profit-loss))
 
   ;; [profit-loss-calculation]
 
@@ -234,7 +230,7 @@
 
   (let [{updated-stock-account-amount :stock-account-amount
          latest-price                 :price} profit-loss-calculation
-        trade-history (stock->profit-loss game-id game-stock-id)]
+        trade-history (user-stock->profit-loss user-id game-id game-stock-id)]
 
     (->> (map (partial calculate-resolved-PL-mappingfn latest-price) trade-history)
          (reduce (fn [ac {a :realized-profit-loss}]
@@ -258,7 +254,7 @@
 
   (let [{updated-stock-account-amount :stock-account-amount
          latest-price                 :price} profit-loss-calculation
-        trade-history (stock->profit-loss game-id game-stock-id)]
+        trade-history (user-stock->profit-loss user-id game-id game-stock-id)]
 
     (->> (map (partial calculate-realized-PL-mappingfn latest-price) trade-history)
          (reduce (fn [ac {a :realized-profit-loss}]
@@ -272,12 +268,13 @@
                                                     pershare-purchase-ratio] :as calculation}]
 
   (let [updated-stock-account-amount (Math/abs updated-stock-account-amount)
-        old-account-amount (Math/abs counter-balance-amount)
+        old-account-amount           (Math/abs counter-balance-amount)
 
         shrinkage                       (/ updated-stock-account-amount old-account-amount)
         updated-pershare-purchase-ratio (* shrinkage pershare-purchase-ratio)
         pershare-gain-or-loss           (- latest-price price)
-        running-profit-loss             (* pershare-gain-or-loss updated-pershare-purchase-ratio)]
+        A                               (* pershare-gain-or-loss updated-pershare-purchase-ratio)
+        running-profit-loss             (* A updated-stock-account-amount)]
 
     (assoc calculation
            :latest-price->price     [latest-price price]
@@ -288,20 +285,20 @@
            :counter-balance-amount  updated-stock-account-amount
            :running-profit-loss     running-profit-loss)))
 
-(defn update-trade-history-on-running-pl! [op game-id stock-id profit-loss profit-loss-calculation]
+(defn update-trade-history-on-running-pl! [op user-id game-id stock-id profit-loss profit-loss-calculation]
 
   (let [{updated-stock-account-amount :stock-account-amount
          latest-price                 :price} profit-loss-calculation
 
         ;; profit-loss-calculation-with-direction (assoc profit-loss-calculation :counter-balance-direction op)
-        updated-trade-history                  (-> (stock->profit-loss game-id stock-id)
+        updated-trade-history                  (-> (user-stock->profit-loss user-id game-id stock-id)
                                                    (conj profit-loss-calculation))
 
         updated-profit-loss (map (partial recalculate-PL-on-increase-mappingfn op updated-stock-account-amount latest-price)
                                  updated-trade-history)
         running-profit-loss (collect-running-profit-loss game-id)]
 
-    (replace-trade-state-for-stock! game-id stock-id updated-profit-loss)
+    (replace-trade-state-for-stock! user-id game-id stock-id updated-profit-loss)
 
     [running-profit-loss]))
 
@@ -310,8 +307,9 @@
   (let [{updated-stock-account-amount :stock-account-amount
          latest-price                 :price} profit-loss-calculation
 
-        updated-trade-history                  (-> (stock->profit-loss game-id stock-id)
-                                                   (conj (assoc profit-loss-calculation :counter-balance-amount updated-stock-account-amount)))
+        updated-trade-history (user-stock->profit-loss user-id game-id stock-id)
+        #_(-> (user-stock->profit-loss user-id game-id stock-id)
+              (conj (assoc profit-loss-calculation :counter-balance-amount updated-stock-account-amount)))
 
         updated-profit-loss (map (partial recalculate-PL-on-decrease-mappingfn updated-stock-account-amount latest-price)
                                  updated-trade-history)
@@ -319,7 +317,7 @@
         realized-profit-loss (calculate-realized-PL op user-id tick-id game-id stock-id profit-loss profit-loss-calculation)
         running-profit-loss (collect-running-profit-loss game-id)]
 
-    (replace-trade-state-for-stock! game-id stock-id updated-profit-loss)
+    (replace-trade-state-for-stock! user-id game-id stock-id updated-profit-loss)
 
     [running-profit-loss realized-profit-loss]))
 
@@ -335,7 +333,7 @@
     ;; (util/pprint+identity profit-loss-calculation)
 
 
-    (replace-trade-state-for-stock! game-id game-stock-id [])
+    (replace-trade-state-for-stock! user-id game-id game-stock-id [])
 
     [realized-profit-loss]))
 
@@ -355,7 +353,7 @@
     #_(util/pprint+identity profit-loss)
     #_(util/pprint+identity profit-loss-calculation)
 
-    (replace-trade-state-for-stock! game-id game-stock-id running-profit-loss-calculations)
+    (replace-trade-state-for-stock! user-id game-id game-stock-id running-profit-loss-calculations)
 
     [running-profit-loss realized-profit-loss]))
 
@@ -366,7 +364,7 @@
   (let [direction (-> profit-loss last :counter-balance-direction)]
 
     #_(util/pprint+identity [:trade-opposite-of-counter-balance-direction? [op profit-loss]
-                           (and direction (not (= op direction)))])
+                             (and direction (not (= op direction)))])
 
     (and direction (not (= op direction)))))
 
@@ -414,7 +412,7 @@
 
 (defn calculate-profit-loss-common! [op user-id tick-id game-id stock-id profit-loss-calculation]
 
-  (let [profit-loss (stock->profit-loss game-id stock-id)
+  (let [profit-loss (user-stock->profit-loss user-id game-id stock-id)
 
         ;; i.
         profit-loss-empty? (empty? profit-loss)
@@ -429,14 +427,14 @@
         crossing-counter-balance-threshold? (crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
 
 
-    ;; (util/pprint+identity [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
+    (util/pprint+identity [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
 
     (match [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?]
 
            ;; SET :counter-balance-amount :counter-balance-direction
            ;; ADD TO in-memory trades
            ;; RETURN :running-profit-loss
-           [true _ _ _] (create-trade-history! op game-id stock-id profit-loss profit-loss-calculation)
+           [true _ _ _] (create-trade-history! op user-id game-id stock-id profit-loss profit-loss-calculation)
 
            ;; > should only happen on opposite :counter-balance-direction direction
            ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
@@ -458,7 +456,7 @@
            ;; UPDATE :counter-balance-amount :pershare-purchase-ratio :pershare-gain-or-loss :running-profit-loss
            ;; ADD TO in-memory trades
            ;; RETURN :running-profit-loss
-           [false false _ _] (update-trade-history-on-running-pl! op game-id stock-id profit-loss profit-loss-calculation))))
+           [false false _ _] (update-trade-history-on-running-pl! op user-id game-id stock-id profit-loss profit-loss-calculation))))
 
 (defmulti calculate-profit-loss! (fn [op _ _] op))
 

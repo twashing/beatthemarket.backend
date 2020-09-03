@@ -27,6 +27,7 @@
     (rop/fail (ex-info "Game isn't current or doesn't belong to user" inputs))))
 
 (defn- submitted-price-matches-tick? [{:keys [conn tickId tickPrice] :as inputs}]
+
   (let [{tick-price :game.stock.tick/close :as tick}
         (ffirst
           (d/q '[:find (pull ?e [*])
@@ -68,12 +69,12 @@
 
 (defn buy-stock!
 
-  ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice]
-   (buy-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice true))
+  ([conn user-db-id user-external-id gameId stockId stockAmount tickId tickPrice]
+   (buy-stock! conn user-db-id user-external-id gameId stockId stockAmount tickId tickPrice true))
 
-  ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?]
+  ([conn user-db-id user-external-id gameId stockId stockAmount tickId tickPrice validate?]
    (let [validation-inputs {:conn        conn
-                            :userId      userId
+                            :userId      user-external-id
                             :gameId      gameId
                             :stockId     stockId
                             :stockAmount stockAmount
@@ -94,13 +95,13 @@
 
 (defn sell-stock!
 
-  ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice]
-   (sell-stock! conn user-db-id userId gameId stockId stockAmount tickId tickPrice true))
+  ([conn user-db-id user-external-id gameId stockId stockAmount tickId tickPrice]
+   (sell-stock! conn user-db-id user-external-id gameId stockId stockAmount tickId tickPrice true))
 
-  ([conn user-db-id userId gameId stockId stockAmount tickId tickPrice validate?]
+  ([conn user-db-id user-external-id gameId stockId stockAmount tickId tickPrice validate?]
 
    (let [validation-inputs {:conn conn
-                            :userId userId
+                            :userId user-external-id
                             :gameId gameId
                             :stockId stockId
                             :stockAmount stockAmount

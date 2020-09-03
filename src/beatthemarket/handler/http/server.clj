@@ -37,7 +37,9 @@
              C. If not provided, will default to `%s`."
             default-environment)
     :parse-fn keyword
-    :validate [#{:development :production}]]])
+    :validate [#{:development :production}]]
+
+   ["-m" "--market-trading" "Run with Market Trading mode enabled"]])
 
 (defn- get-env-variable [name default-val]
   (or (System/getenv name) default-val))
@@ -56,7 +58,8 @@
   [& args]
 
   (let [{:keys [options _summary _errors]} (tools.cli/parse-opts args cli-options)
-        {profile :profile} (process-parsed-options options)]
+        {profile         :profile
+         market-trading? :market-trading} (process-parsed-options options)]
 
     (println "\nCreating your server...")
 

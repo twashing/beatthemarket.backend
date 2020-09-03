@@ -9,7 +9,6 @@
             [clojure.data.json :as json]
             [datomic.client.api :as d]
             [io.pedestal.http :as server]
-            [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [integrant.repl.state :as repl.state]
 
             [beatthemarket.game.games :as game.games]

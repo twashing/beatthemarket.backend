@@ -118,7 +118,8 @@
 
 (defn check-client-id-exists [context]
 
-  (when-not (-> context :com.walmartlabs.lacinia/connection-params :client-id)
+  #_(if-let [client-id (-> context :request :headers (get "client-id"))]
+    (UUID/fromString client-id)
     (throw (Exception. "Missing :client-id in your connection_init"))))
 
 
@@ -126,49 +127,51 @@
 (defn resolve-login
   [context _ _]
 
-  (let [{{{email :email :as checked-authentication} :checked-authentication}
-         :request}                                   context
-        conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
-        {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)
+  (try
 
-        rename-user-key-map {:user/email :userEmail
-                             :user/name :userName
-                             :user/external-uid :userExternalUid
-                             :user/accounts :userAccounts}
+    (let [{{{email :email :as checked-authentication} :checked-authentication}
+           :request}                                   context
+          conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
+          {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)
 
-        rename-user-accounts-key-map {:bookkeeping.account/id :accountId
-                                      :bookkeeping.account/name :accountName
-                                      :bookkeeping.account/balance :accountBalance
-                                      :bookkeeping.account/amount :accountAmount}
+          rename-user-key-map {:user/email :userEmail
+                               :user/name :userName
+                               :user/external-uid :userExternalUid
+                               :user/accounts :userAccounts}
 
-        base-response {:user (->> [:user/email
-                                    :user/name
-                                    :user/external-uid
-                                    {:user/accounts [:bookkeeping.account/id
-                                                     :bookkeeping.account/name
-                                                     :bookkeeping.account/balance
-                                                     :bookkeeping.account/amount]}]
-                                 (persistence.core/entity-by-domain-id
-                                   conn :user/email email)
-                                 ffirst
-                                 (transform identity #(clojure.set/rename-keys % rename-user-key-map))
-                                 (transform [:userAccounts ALL] #(clojure.set/rename-keys % rename-user-accounts-key-map))
-                                 (#(json/write-str % :value-fn coerce-uuid->str)))}]
+          rename-user-accounts-key-map {:bookkeeping.account/id :accountId
+                                        :bookkeeping.account/name :accountName
+                                        :bookkeeping.account/balance :accountBalance
+                                        :bookkeeping.account/amount :accountAmount}
 
-    (if (util/truthy? (and db-before db-after tx-data tempids))
-      (assoc base-response :message :useradded)
-      (assoc base-response :message :userexists))))
+          base-response {:user (->> [:user/email
+                                     :user/name
+                                     :user/external-uid
+                                     {:user/accounts [:bookkeeping.account/id
+                                                      :bookkeeping.account/name
+                                                      :bookkeeping.account/balance
+                                                      :bookkeeping.account/amount]}]
+                                    (persistence.core/entity-by-domain-id
+                                      conn :user/email email)
+                                    ffirst
+                                    (transform identity #(clojure.set/rename-keys % rename-user-key-map))
+                                    (transform [:userAccounts ALL] #(clojure.set/rename-keys % rename-user-accounts-key-map))
+                                    (#(json/write-str % :value-fn coerce-uuid->str)))}]
+
+      (if (util/truthy? (and db-before db-after tx-data tempids))
+        (assoc base-response :message :useradded)
+        (assoc base-response :message :userexists)))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
 
   (try
 
-    ;; (check-client-id-exists context)
-
-    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-          {{{email :email} :checked-authentication} :request} context
-          ;; client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))
-          ]
+    (let [client-id (check-client-id-exists context)
+          conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context]
 
       ;; (check-user-device-doesnt-have-running-game? conn email client-id)
 
@@ -182,11 +185,11 @@
             ;; NOTE sink-fn updates once we start to stream a game
             sink-fn                identity
             {{game-id :game/id
-              :as     game} :game} (game.games/create-game! conn user-db-id sink-fn mapped-game-level
-                                                            combined-data-sequence-fn
-                                                            {:accounts (game.core/->game-user-accounts)
-                                                             ;; :client-id client-id
-                                                             })]
+              :as     game} :game} (game.games/create-game! conn sink-fn combined-data-sequence-fn
+                                                            {:user (hash-map :db/id user-db-id)
+                                                             :accounts (game.core/->game-user-accounts)
+                                                             :game-level mapped-game-level
+                                                             :client-id client-id})]
 
         (->> (game.games/game->new-game-message game user-db-id)
              (transform [:stocks ALL] #(dissoc % :db/id))
@@ -199,20 +202,17 @@
 
   (try
 
-    ;; (check-client-id-exists context)
+    (let [client-id (check-client-id-exists context)
+          conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context]
 
-    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-          {{{email :email} :checked-authentication} :request} context
-          ;; client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))
-          ]
+      ;; (check-user-device-doesnt-have-running-game? conn email client-id)
 
-      ;; (check-user-device-has-created-game? conn email client-id)
-
-      (let [user-db-id                                          (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+      (let [user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
             gameId (UUID/fromString game-id)
             game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
 
-        (->> (game.games/start-game! conn user-db-id game-control (get args :startPosition 0))
+        (->> (game.games/start-game! conn game-control (get args :startPosition 0))
              (map :stock-ticks)
              (map #(map graphql.encoder/stock-tick->graphql %)))))
 
@@ -235,11 +235,13 @@
         tickPrice (Float. tickPrice)]
 
     (try
+
       (if ((comp :bookkeeping.tentry/id :tentry first)
            (games.pipeline/buy-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false))
 
         {:message "Ack"}
         (resolve-as nil {:message "Error / resolve-buy-stock / INCOMPLETE /"}))
+
       (catch Throwable e
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
@@ -258,11 +260,13 @@
         tickPrice (Float. tickPrice)]
 
     (try
+
       (if ((comp :bookkeeping.tentry/id :tentry first)
            (games.pipeline/sell-stock-pipeline game-control conn userId gameId stockId stockAmount tickId (Float. tickPrice) false))
 
         {:message "Ack"}
         (resolve-as nil {:message "Error / resolve-sell-stock / INCOMPLETE /"}))
+
       (catch Throwable e
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
@@ -339,34 +343,20 @@
 
 (defn resolve-account-balances [context {gameId :gameId email :email} _]
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)]
+  (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
+        game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id (UUID/fromString gameId)))
+        user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))]
 
-    (->> (d/q '[:find (pull ?uas [:db/id])
-                          :in $ ?gameId ?email
-                          :where
-                          [?g :game/id ?gameId]
-                          [?g :game/users ?gus]
-                          [?gus :game.user/user ?gu]
-                          [?gu :user/email ?email]
-                          [?gus :game.user/accounts ?uas]]
-                        (d/db conn)
-                        (UUID/fromString gameId) email)
-                   (map first)
-                   (transform [ALL identity] #(dissoc % :db/id))
-                   (transform [ALL identity] #(clojure.set/rename-keys % {:bookkeeping.account/id :id
-                                                                          :bookkeeping.account/name :name
-                                                                          :bookkeeping.account/balance :balance
-                                                                          :bookkeeping.account/amount :amount
-                                                                          :bookkeeping.account/counter-party :counterParty})))))
+    (->> (game.calculation/collect-account-balances conn game-db-id user-db-id)
+         (map graphql.encoder/portfolio-update->graphql))))
 
 (defn resolve-pause-game [context {gameId :gameId} _]
 
-  ;; TODO
-  ;; [ok] save ticks
-  ;; save P/Ls
-  ;; save game-status
-  ;; ? save tick index (check if we can count the number of ticks that have been saved)
-  ;; ? Can we replay stock-ticks + buys + sells
+  ;; NOTE
+  ;; ticks saved
+  ;; P/Ls saved (realized)
+  ;; game-status saved
+  ;; tick index stored as no. of ticks saved
 
   (let [game-id (UUID/fromString gameId)
         event {:type :ControlEvent
@@ -378,28 +368,68 @@
 
 (defn resolve-resume-game [context {gameId :gameId} _]
 
-  ;; TODO
+  ;; NOTE
   ;; load ticks
   ;; load P/Ls
   ;; load game-status
   ;; seek to tick index
+  ;; ! replay stock-ticks + buys + sells
 
   (try
 
-    ;; (check-client-id-exists context)
-
-    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-          {{{email :email} :checked-authentication} :request} context
-          ;; client-id (-> context :com.walmartlabs.lacinia/connection-params :client-id (#(UUID/fromString %)))
-          ]
+    (let [client-id (check-client-id-exists context)
+          conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context]
 
       ;; (check-user-device-has-paused-game? conn email client-id)
 
-      (let [game-id (UUID/fromString gameId)
+      (let [data-sequence-fn games.control/->data-sequence
+            user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+            game-id (UUID/fromString gameId)
+            game-control (->> repl.state/system :game/games deref (#(get % game-id)))
+
             event {:type :ControlEvent
                    :event :resume
                    :game-id game-id}]
 
+
+        ;; Resume Game
+        (games.control/resume-game! conn game-id user-db-id game-control data-sequence-fn)
+
+
+        ;; Response
+        (-> (game.games/send-control-event! game-id event)
+            (assoc :gameId gameId)))
+      )
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defn resolve-join-game [context {gameId :gameId} _]
+
+  (try
+
+    (let [client-id (check-client-id-exists context)
+          conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context]
+
+      ;; (check-user-device-not-already-joined? conn email client-id)
+
+      (let [data-sequence-fn games.control/->data-sequence
+            user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+            game-id (UUID/fromString gameId)
+            game-control (->> repl.state/system :game/games deref (#(get % game-id)))
+
+            event {:type :ControlEvent
+                   :event :join
+                   :game-id game-id}]
+
+
+        ;; Join Game
+        (games.control/join-game! conn user-db-id game-id game-control)
+
+
+        ;; Response
         (-> (game.games/send-control-event! game-id event)
             (assoc :gameId gameId))))
 
@@ -431,6 +461,12 @@
 
 ;; https://lacinia-pedestal.readthedocs.io/en/latest/subscriptions.html#overview
 ;; When a streamer passes nil to the callback, a clean shutdown of the subscription occurs; the client is sent a completion message. The completion message informs the client that the stream of events has completed, and that it should not attempt to reconnect.
+
+
+;; TODO Connect to streams on a peruser basis
+;; stock-tick-stream
+;; portfolio-update-stream
+;; game-event-stream
 (defn stream-stock-ticks [context {id :gameId :as args} source-stream]
 
   (println "stream-stock-ticks CALLED")

@@ -26,3 +26,16 @@
        external-uid))
 
 (defn user-by-id [conn id] (persistence.core/pull-entity conn id))
+
+(defn game-user-by-user
+
+  ([conn user-id]
+   (game-user-by-user conn user-id '[{:game.user/_user [*]}]))
+
+  ([conn user-id pexpr]
+   (d/q '[:find (pull ?u pexpr)
+          :in $ ?u pexpr
+          :where
+          [?u]]
+        (d/db conn)
+        user-id pexpr)))
