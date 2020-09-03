@@ -68,18 +68,16 @@
   (persistence.datomic/transact-entities! conn data)
   data)
 
-(defn stream-stock-tick [stock-tick-stream stock-tick-pairs]
+(defn stream-stock-tick [stock-tick-stream stock-ticks]
 
-  (let [stock-ticks (group-stock-tick-pairs stock-tick-pairs)]
+  (log/debug :game.games (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
+  (println (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
+  ;; (util/pprint+identity stock-tick-stream)
+  ;; (util/pprint+identity stock-ticks)
+  (core.async/go (core.async/>! stock-tick-stream stock-ticks))
+  ;; (core.async/go (core.async/>! stock-tick-stream wtf))
 
-    (log/debug :game.games (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
-    (println (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
-    ;; (util/pprint+identity stock-tick-stream)
-    ;; (util/pprint+identity stock-ticks)
-    (core.async/go (core.async/>! stock-tick-stream stock-ticks))
-    ;; (core.async/go (core.async/>! stock-tick-stream wtf))
-
-    stock-ticks))
+  stock-ticks)
 
 
 ;; B.i

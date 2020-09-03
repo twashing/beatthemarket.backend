@@ -347,7 +347,7 @@
 (defn start-market!-workbench
 
   ([conn game-control]
-   (start-market! conn game-control 0))
+   (start-market!-workbench conn game-control 0))
 
   ([conn {{game-id :game/id} :game :as game-control} start-position]
 

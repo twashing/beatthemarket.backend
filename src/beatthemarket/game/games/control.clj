@@ -212,24 +212,33 @@
   (and (= 0 remaining-in-minutes) (< remaining-in-seconds 1)))
 
 
+(defn set-game-status! [conn game-id game-status-dest]
+
+  (let [{game-db-id :db/id
+         {game-status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+
+        data [[:db/retract  game-db-id :game/status game-status]
+              [:db/add      game-db-id :game/status game-status-dest]]]
+
+    (persistence.datomic/transact-entities! conn data)))
 
 (defn pause-game! [conn game-id]
 
   ;; A. Update :game/status :game/level-timer
+
+  (set-game-status! conn game-id :game-status/paused)
+
   (let [level-timer (-> repl.state/system
                         :game/games deref (get game-id)
                         :level-timer deref)
 
         ;; Store :game/status and :game/timer
         {game-db-id :db/id
-         {game-status :db/ident} :game/status
          game-level-timer :game/level-timer} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
-        data (cond-> [[:db/retract  game-db-id :game/status game-status]
-                      [:db/add      game-db-id :game/status :game-status/paused]]
-
+        data (cond-> []
                game-level-timer (conj [:db/retract game-db-id :game/level-timer game-level-timer])
-               true (conj [:db/add game-db-id :game/level-timer level-timer]))]
+               true             (conj [:db/add game-db-id :game/level-timer level-timer]))]
 
     (persistence.datomic/transact-entities! conn data))
 
@@ -742,76 +751,57 @@
                                  (= uid user-db-id))]
                   game-user)))
 
-(defn conditionally-resume-game [conn game]
 
-  ;; TODO
-  ;; (-> user-game :game.user/_user :game/_users :game/id)
-  ;; created or paused
-
-  ;; (beatthemarket.game.games/start-game! conn user-db-id game-control)
-  ;; (resume-game! conn user-db-id game-control)
-
-  ;; Set game status
-  (let [{game-db-id              :db/id
-         {game-status :db/ident} :game/status} game
-
-        data [[:db/retract  game-db-id :game/status game-status]
-              [:db/add      game-db-id :game/status :game-status/running]]]
-
-    (persistence.datomic/transact-entities! conn data)))
-
-;; (create game.core/->game-user-accounts)
-;; (Cannot have another "running" game)
 (defn join-game! [conn user-db-id game-id
                   {{game-stocks :game/stocks :as game} :game :as game-control}
                   data-sequence-fn]
 
-  (util/pprint+identity "join-game! / A check-user-does-not-have-running-game /")
-  (let [user-games (util/pprint+identity (check-user-does-not-have-running-game conn user-db-id))]
+  ;; (util/pprint+identity "join-game! / A check-user-does-not-have-running-game /")
+  (let [user-games (check-user-does-not-have-running-game conn user-db-id)]
 
-    (util/pprint+identity "join-game! / B user-joined-game? /")
-    (when-not (util/pprint+identity (user-joined-game? user-games game-id user-db-id))
+    ;; (util/pprint+identity "join-game! / B user-joined-game? /")
+    (when-not (user-joined-game? user-games game-id user-db-id)
 
       ;; Join
       (->> (game.core/conditionally-add-game-users game
                                                    {:user        {:db/id user-db-id}
                                                     :accounts    (game.core/->game-user-accounts)})
-           (persistence.datomic/transact-entities! conn))
+           (persistence.datomic/transact-entities! conn)))
 
-      (conditionally-resume-game conn game)
+    (set-game-status! conn game-id :game-status/running)
 
 
-      ;; TODO
-      ;; Stream
-      ;; No explicit connect-to-game (if already joined)
-      ;; ... just start and stop a GQL subscription
+    ;; TODO
+    ;; Stream
+    ;; No explicit connect-to-game (if already joined)
+    ;; ... just start and stop a GQL subscription
 
-      ;; stream-stock-ticks
-      ;; stream-portfolio-updates
-      ;; stream-game-events
+    ;; stream-stock-ticks
+    ;; stream-portfolio-updates
+    ;; stream-game-events
 
-      ;; ! Can stream (connect-to-game) only if they've joined game
-      ;; ! disconnect-from-game just stops subscription; noop if already disconnected
+    ;; ! Can stream (connect-to-game) only if they've joined game
+    ;; ! disconnect-from-game just stops subscription; noop if already disconnected
 
-      (let [data-generators (-> integrant.repl.state/config :game/game :data-generators)
-            tick-index      (-> (->game-with-decorated-price-history conn game-id) ffirst
-                                :game/stocks first
-                                :game.stock/price-history count)
+    (let [data-generators (-> integrant.repl.state/config :game/game :data-generators)
+          tick-index      (-> (->game-with-decorated-price-history conn game-id) ffirst
+                              :game/stocks first
+                              :game.stock/price-history count
+                              )
 
-            ;; game-control market
-            {input-sequence :input-sequence :as game-control-market}
-            (as-> (games.core/default-game-control conn game-id (assoc game-control :user {:db/id user-db-id})) v
-              (merge-with #(if %2 %2 %1) game-control v)
-              (update-in v
-                         [:input-sequence]
-                         (fn [_]
-                           (->> (stocks->stocks-with-tick-data game-stocks data-sequence-fn data-generators)
-                                stocks->stock-sequences
-                                (seek-to-position tick-index)
-                                ;; util/pprint+identity
-                                second))))
+          ;; game-control market
+          {input-sequence :input-sequence :as game-control-market}
+          (as-> (games.core/default-game-control conn game-id (assoc game-control :user {:db/id user-db-id})) v
+            (merge-with #(if %2 %2 %1) game-control v)
+            (update-in v
+                       [:input-sequence]
+                       (fn [_]
+                         (->> (stocks->stocks-with-tick-data game-stocks data-sequence-fn data-generators)
+                              stocks->stock-sequences
+                              (seek-to-position tick-index)
+                              second))))
 
-            inputs-at-position (games.pipeline/join-market-pipeline conn user-db-id game-id game-control-market)]
+          inputs-at-position (games.pipeline/join-market-pipeline conn user-db-id game-id game-control-market)]
 
-        (->> (run-iteration inputs-at-position)
-             (assoc game-control-market :iterations))))))
+      (->> (run-iteration inputs-at-position)
+           (assoc game-control-market :iterations)))))

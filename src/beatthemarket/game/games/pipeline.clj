@@ -41,10 +41,12 @@
 
 (defn stock-tick-and-stream-pipeline [{{game-id :game/id} :game
                                        process-transact! :process-transact!
+                                       group-stock-tick-pairs :group-stock-tick-pairs
                                        stream-stock-tick :stream-stock-tick}
                                       input]
 
   (->> (map process-transact! input)
+       (map group-stock-tick-pairs)
        (map stream-stock-tick)
        (map (partial games.processing/calculate-profit-loss :tick nil game-id))))
 
@@ -113,15 +115,23 @@
 
 
 ;; E
-(defn market-stock-tick-pipeline [{input-sequence :input-sequence
-                                   process-transact! :process-transact!}]
+(defn input->stock-tick-struct [data] {:stock-ticks data})
 
-  (map process-transact! input-sequence))
+(defn market-stock-tick-pipeline [{input-sequence :input-sequence
+                                   process-transact! :process-transact!
+                                   group-stock-tick-pairs :group-stock-tick-pairs}]
+
+  (->> (map process-transact! input-sequence)
+       (map group-stock-tick-pairs)
+       (map input->stock-tick-struct)))
 
 (defn join-market-pipeline [conn user-db-id game-id {input-sequence :input-sequence
-                                                     stream-stock-tick :stream-stock-tick :as game-control}]
+                                                     stream-stock-tick :stream-stock-tick
+                                                     group-stock-tick-pairs :group-stock-tick-pairs
+                                                     :as game-control}]
 
-  (->> (map stream-stock-tick input-sequence)
+  (->> (map group-stock-tick-pairs input-sequence)
+       (map stream-stock-tick)
        (map (partial games.processing/calculate-profit-loss :tick user-db-id game-id))
        (execution-pipeline game-control)
        doall))

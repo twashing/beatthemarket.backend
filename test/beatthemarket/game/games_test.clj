@@ -1361,6 +1361,124 @@
 
 
         opts {:level-timer-sec 5
+              ;; :user            {:db/id user-db-id}
+              ;; :accounts        (game.core/->game-user-accounts)
+              :game-level      :game-level/one}
+
+
+        ;; D Launch Game
+        {{game-id     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations]                   (game.games/start-market!-workbench conn game-control)
+
+
+        ;; E Buy Stock
+        {stock-id   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  game-id
+              :stockId stock-id
+              :game-control game-control}
+
+        ops-before-pause  [{:op :noop}
+                           {:op :noop}
+                           {:op :noop}]
+        ops-before-pause-count (count ops-before-pause)
+
+        ops-after-pause  [{:op :sell :stockAmount 100}]
+        ops-after-pause-count (count ops-after-pause)]
+
+
+    ;; BEFORE :pause
+    (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
+
+
+    ;; :Pause
+    (games.control/pause-game! conn game-id)
+
+
+    ;; AFTER join
+    (println "\n")
+    (println "JOIN Game!!")
+    (testing "After joining, getting correct status and P/L"
+
+      (let [{iterations-after-join :iterations} (games.control/join-game! conn user-db-id game-id game-control data-sequence-fn)
+            {{game-status :db/ident} :game/status
+             game-users :game/users} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+
+            expected-game-status :game-status/running
+            expected-profit-loss {user-db-id {stock-id #{}}}
+
+            profit-loss (-> (games.control/get-inmemory-profit-loss game-id)
+                            (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
+                            (update-in [user-db-id stock-id] (fn [x] (into #{} x))))]
+
+        (are [x y] (= x y)
+          expected-game-status game-status
+          expected-profit-loss profit-loss)
+
+
+        (testing "User was added to game"
+          (let [[{{user-db-id-added :db/id
+                   user-external-id-added :user/external-uid} :game.user/user}]
+                (:game/users (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id)))]
+
+            (are [x y] (= x y)
+              user-db-id user-db-id-added
+              userId user-external-id-added)))
+
+
+        (testing "We are getting the correct next iterations"
+
+          (let [expected-iteration-A '(120.0 120.0 120.0 120.0)
+                iteration-A (->> iterations-after-join
+                                 ffirst
+                                 :stock-ticks
+                                 (map :game.stock.tick/close)
+                                 (map double))
+
+                expected-iteration-B '(112.0 125.0 130.0)
+                iteration-B (util/pprint+identity
+                              (->> (map :stock-ticks (util/pprint+identity (-> iterations-after-join first second)))
+                                   (map (comp :game.stock.tick/close first))
+                                   (map double)))]
+
+            (are [x y] (= x y)
+              expected-iteration-A iteration-A
+              expected-iteration-B iteration-B)))
+
+        ;; (run-trades! iterations stock-id opts ops-after-pause ops-after-pause-count)
+
+        ;; TODO Run the next :op, check P/L
+        ;; TODO check values are streamed to the correct client
+
+        ))))
+
+(deftest attempt-join-game-already-member-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        user-db-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 112.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+
+        opts {:level-timer-sec 5
               :user            {:db/id user-db-id}
               :accounts        (game.core/->game-user-accounts)
               :game-level      :game-level/one}
@@ -1398,27 +1516,56 @@
     (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
 
 
+    ;; (println "A /")
+    ;; (-> (games.control/->game-with-decorated-price-history conn game-id) util/pprint+identity)
+
     ;; :Pause
     (games.control/pause-game! conn game-id)
+
+    ;; (println "B /")
+    ;; (-> (games.control/->game-with-decorated-price-history conn game-id) util/pprint+identity)
 
 
     ;; AFTER join
     (println "\n")
     (println "JOIN Game!!")
-    (testing "Foobar"
+    (testing "After joining, getting correct status and P/L"
 
       ;; (games.control/join-game! conn user-db-id game-id game-control data-sequence-fn)
-      (let [{iterations :iterations} (games.control/join-game! conn user-db-id game-id game-control data-sequence-fn)
+      (let [{iterations-after-join :iterations} (games.control/join-game! conn user-db-id game-id game-control data-sequence-fn)
             {{game-status :db/ident} :game/status
              game-users :game/users} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
             expected-game-status :game-status/running
-            expected-profit-loss {user-db-id {stock-id #{}}}
+            expected-profit-loss {user-db-id
+                                  {stock-id
+                                   #{{:amount 200
+                                      :counter-balance-direction :buy
+                                      :stock-account-amount 300
+                                      :stock-account-name "STOCK.Empty Script"
+                                      :op :buy
+                                      :shrinkage 1/3
+                                      :latest-price->price [130.0 110.0]
+                                      :counter-balance-amount 100
+                                      :pershare-gain-or-loss 20.0
+                                      :running-profit-loss 1333.3333333333335
+                                      :price 110.0 :pershare-purchase-ratio 2/9}
+                                     {:amount 100
+                                      :counter-balance-direction :buy
+                                      :stock-account-amount 100
+                                      :stock-account-name "STOCK.Empty Script"
+                                      :op :buy
+                                      :shrinkage 1/3
+                                      :latest-price->price [130.0 100.0]
+                                      :counter-balance-amount 100
+                                      :pershare-gain-or-loss 30.0
+                                      :running-profit-loss 333.3333333333333
+                                      :price 100.0
+                                      :pershare-purchase-ratio 1/9}}}}
 
-            profit-loss (util/pprint+identity
-                          (-> (games.control/get-inmemory-profit-loss game-id)
-                              (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
-                              (update-in [user-db-id stock-id] (fn [x] (into #{} x)))))]
+            profit-loss (-> (games.control/get-inmemory-profit-loss game-id)
+                            (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
+                            (update-in [user-db-id stock-id] (fn [x] (into #{} x))))]
 
         (are [x y] (= x y)
           expected-game-status game-status
@@ -1426,7 +1573,8 @@
 
 
         ;; TODO Run the next :op, check P/L
-        ;; (util/pprint+identity iterations)
+        (util/pprint+identity (take 1 iterations-after-join))
+        ;; (run-trades! iterations stock-id opts ops-after-pause ops-after-pause-count)
 
         ;; TODO check values are streamed to the correct client
 

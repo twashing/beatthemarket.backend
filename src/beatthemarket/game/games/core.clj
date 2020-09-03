@@ -60,6 +60,7 @@
      :game-event-stream       game-event-stream
 
      :process-transact!             (partial games.processing/process-transact! conn)
+     :group-stock-tick-pairs        games.processing/group-stock-tick-pairs
      :stream-stock-tick             (partial games.processing/stream-stock-tick stock-tick-stream)
      :process-transact-profit-loss! (partial games.processing/process-transact-profit-loss! conn)
      :stream-portfolio-update!      (partial games.processing/stream-portfolio-update! portfolio-update-stream)
