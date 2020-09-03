@@ -64,7 +64,7 @@
 
 
       ;; i.
-      (def start-results (game.games/start-workbench! conn user-db-id game-control))
+      (def start-results (game.games/start-game!-workbench conn user-db-id game-control))
       (def iterations (second start-results))
 
 
@@ -121,7 +121,7 @@
 
 
     ;; i.
-    ;; (def start-results (game.games/start-workbench! conn user-db-id game-control))
+    ;; (def start-results (game.games/start-game!-workbench conn user-db-id game-control))
     ;; (def iterations (second start-results))
     )
 
@@ -180,7 +180,7 @@
 
 
     ;; i.
-    ;; (def start-results (game.games/start-workbench! conn user-db-id game-control))
+    ;; (def start-results (game.games/start-game!-workbench conn user-db-id game-control))
     ;; (def iterations (second start-results))
     )
 

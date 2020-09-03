@@ -48,12 +48,13 @@
        (map stream-stock-tick)
        (map (partial games.processing/calculate-profit-loss :tick nil game-id))))
 
+;; A
 (defn stock-tick-pipeline [{input-sequence :input-sequence :as game-control}]
 
-  ;; (util/pprint+identity [:stock-tick-pipeline :input-sequence input-sequence])
   (->> (stock-tick-and-stream-pipeline game-control input-sequence)
        (execution-pipeline game-control)))
 
+;; B
 (defn buy-stock-pipeline
 
   ([game-control conn user-external-id game-id stockId stockAmount tickId tickPrice]
@@ -94,6 +95,7 @@
           (execution-pipeline game-control-without-check-level)
           doall))))
 
+;; D
 (defn replay-stock-pipeline [user-db-id {{game-id :game/id} :game :as game-control} maybe-tentries]
 
   (map (fn [{buy-or-sell :op :as maybe-tentry}]
@@ -108,3 +110,18 @@
                 doall)
            maybe-tentry))
        maybe-tentries))
+
+
+;; E
+(defn market-stock-tick-pipeline [{input-sequence :input-sequence
+                                   process-transact! :process-transact!}]
+
+  (map process-transact! input-sequence))
+
+(defn join-market-pipeline [conn user-db-id game-id {input-sequence :input-sequence
+                                                     stream-stock-tick :stream-stock-tick :as game-control}]
+
+  (->> (map stream-stock-tick input-sequence)
+       (map (partial games.processing/calculate-profit-loss :tick user-db-id game-id))
+       (execution-pipeline game-control)
+       doall))

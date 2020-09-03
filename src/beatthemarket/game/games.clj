@@ -276,22 +276,8 @@
 
      historical-data)))
 
-(defn start-workbench!
-
-  ([conn game-control]
-   (start-workbench! conn game-control 0))
-
-  ([conn
-    {{game-id :game/id} :game
-     level-timer :level-timer
-     tick-sleep-atom :tick-sleep-atom
-     game-event-stream :game-event-stream
-     control-channel :control-channel
-     :as game-control}
-    start-position]
-
-   ;; A
-   (update-start-position! conn game-id start-position)
+(defn game-workbench-loop [conn {:keys [control-channel game-event-stream]}
+                           tick-sleep-atom level-timer]
 
    (core.async/go-loop [now (t/now)
                         end (t/plus now (t/seconds @level-timer))]
@@ -307,10 +293,73 @@
                               [_ true] (games.control/handle-control-event conn game-event-stream {:event :timeout} now end))]
 
        (when (and nowA endA)
-         (recur nowA endA))))
+         (recur nowA endA)))))
+
+(defn start-game!-workbench
+
+  ([conn game-control]
+   (start-game!-workbench conn game-control 0))
+
+  ([conn
+    {{game-id :game/id} :game
+     level-timer :level-timer
+     tick-sleep-atom :tick-sleep-atom
+     game-event-stream :game-event-stream
+     control-channel :control-channel
+     :as game-control}
+    start-position]
+
+   ;; A
+   (update-start-position! conn game-id start-position)
+   (game-workbench-loop conn game-control tick-sleep-atom level-timer)
 
    ;; B
    (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
 
        [historical-data (games.control/run-iteration inputs-at-position)])))
+
+(defn start-market!
+
+  ([conn game-control]
+   (start-market! conn game-control 0))
+
+  ([conn {{game-id :game/id} :game :as game-control} start-position]
+
+   ;; A
+   (update-start-position! conn game-id start-position)
+
+   ;; B
+   (let [{:keys [control-channel
+                 tick-sleep-atom
+                 level-timer]} game-control
+
+         [historical-data inputs-at-position] (->> (games.pipeline/market-stock-tick-pipeline game-control)
+                                                   (games.control/seek-to-position start-position))]
+
+     (as-> inputs-at-position v
+       (games.control/run-iteration v)
+       (assoc game-control :iterations v)
+       (games.control/run-game! conn v tick-sleep-atom level-timer))
+
+     historical-data)))
+
+(defn start-market!-workbench
+
+  ([conn game-control]
+   (start-market! conn game-control 0))
+
+  ([conn {{game-id :game/id} :game :as game-control} start-position]
+
+   ;; A
+   (update-start-position! conn game-id start-position)
+
+   ;; B
+   (let [{:keys [control-channel
+                 tick-sleep-atom
+                 level-timer]} game-control
+
+         [historical-data inputs-at-position] (->> (games.pipeline/market-stock-tick-pipeline game-control)
+                                                   (games.control/seek-to-position start-position))]
+
+     [historical-data (games.control/run-iteration inputs-at-position)])))

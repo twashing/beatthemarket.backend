@@ -146,7 +146,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-workbench! conn game-control)
+        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
 
         container (atom [])
         tick-amount 2
@@ -194,7 +194,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-workbench! conn game-control)
+        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -288,7 +288,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn game-control)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -370,7 +370,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn game-control)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -470,7 +470,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn game-control)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -545,7 +545,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn game-control)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -683,7 +683,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn game-control)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -823,7 +823,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn game-control)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -892,7 +892,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn game-control)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -963,7 +963,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-workbench! conn game-control)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -1048,7 +1048,7 @@
          :as                          game-control}
         (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
-        [_ iterations] (game.games/start-workbench! conn user-db-id game-control)]
+        [_ iterations] (game.games/start-game!-workbench conn user-db-id game-control)]
 
     (testing "Running game has correct settings"
 
@@ -1106,7 +1106,7 @@
         (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
 
         start-position               3
-        [historical-data iterations] (game.games/start-workbench! conn user-db-id game-control start-position)]
+        [historical-data iterations] (game.games/start-game!-workbench conn user-db-id game-control start-position)]
 
 
     (testing "Game's startPosition is seeking to the correct location"
@@ -1133,7 +1133,6 @@
                                 a)) %))
              (every? true?)
              is)))))
-
 
 
 (deftest pausing-game-stores-expected-data-test
@@ -1166,7 +1165,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-workbench! conn game-control)
+        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -1243,7 +1242,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-workbench! conn game-control)
+        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
@@ -1324,6 +1323,97 @@
                                        :running-profit-loss 222.22222222222223
                                        :price (.floatValue 100.0)
                                        :pershare-purchase-ratio 1/9}}}}
+
+            profit-loss (util/pprint+identity
+                          (-> (games.control/get-inmemory-profit-loss game-id)
+                              (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
+                              (update-in [user-db-id stock-id] (fn [x] (into #{} x)))))]
+
+        (are [x y] (= x y)
+          expected-game-status game-status
+          expected-profit-loss profit-loss)
+
+
+        ;; TODO Run the next :op, check P/L
+        ;; (util/pprint+identity iterations)
+
+        ;; TODO check values are streamed to the correct client
+
+        ))))
+
+(deftest join-game-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        user-db-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 112.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+
+        opts {:level-timer-sec 5
+              :user            {:db/id user-db-id}
+              :accounts        (game.core/->game-user-accounts)
+              :game-level      :game-level/one}
+
+
+        ;; D Launch Game
+        {{game-id     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations]                   (game.games/start-market!-workbench conn game-control)
+
+
+        ;; E Buy Stock
+        {stock-id   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  game-id
+              :stockId stock-id
+              :game-control game-control}
+
+        ops-before-pause  [{:op :buy :stockAmount 100}
+                           {:op :buy :stockAmount 200}
+                           {:op :sell :stockAmount 200}]
+        ops-before-pause-count (count ops-before-pause)
+
+        ops-after-pause  [{:op :sell :stockAmount 100}]
+        ops-after-pause-count (count ops-after-pause)]
+
+
+    ;; BEFORE :pause
+    (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
+
+
+    ;; :Pause
+    (games.control/pause-game! conn game-id)
+
+
+    ;; AFTER join
+    (println "\n")
+    (println "JOIN Game!!")
+    (testing "Foobar"
+
+      ;; (games.control/join-game! conn user-db-id game-id game-control data-sequence-fn)
+      (let [{iterations :iterations} (games.control/join-game! conn user-db-id game-id game-control data-sequence-fn)
+            {{game-status :db/ident} :game/status
+             game-users :game/users} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+
+            expected-game-status :game-status/running
+            expected-profit-loss {user-db-id {stock-id #{}}}
 
             profit-loss (util/pprint+identity
                           (-> (games.control/get-inmemory-profit-loss game-id)

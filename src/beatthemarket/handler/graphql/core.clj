@@ -349,25 +349,12 @@
 
 (defn resolve-account-balances [context {gameId :gameId email :email} _]
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)]
+  (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
+        game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id (UUID/fromString gameId)))
+        user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))]
 
-    (->> (d/q '[:find (pull ?uas [:db/id])
-                          :in $ ?gameId ?email
-                          :where
-                          [?g :game/id ?gameId]
-                          [?g :game/users ?gus]
-                          [?gus :game.user/user ?gu]
-                          [?gu :user/email ?email]
-                          [?gus :game.user/accounts ?uas]]
-                        (d/db conn)
-                        (UUID/fromString gameId) email)
-                   (map first)
-                   (transform [ALL identity] #(dissoc % :db/id))
-                   (transform [ALL identity] #(clojure.set/rename-keys % {:bookkeeping.account/id :id
-                                                                          :bookkeeping.account/name :name
-                                                                          :bookkeeping.account/balance :balance
-                                                                          :bookkeeping.account/amount :amount
-                                                                          :bookkeeping.account/counter-party :counterParty})))))
+    (->> (game.calculation/collect-account-balances conn game-db-id user-db-id)
+         (map graphql.encoder/portfolio-update->graphql))))
 
 (defn resolve-pause-game [context {gameId :gameId} _]
 

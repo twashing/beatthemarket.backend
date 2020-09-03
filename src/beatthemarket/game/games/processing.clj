@@ -148,6 +148,7 @@
     (update data :profit-loss (constantly profit-loss))))
 
 
+;; C
 (defn- level->source-and-destination* [level]
 
   (->> repl.state/config :game/game :levels seq
@@ -170,7 +171,6 @@
                                                         atom
                                                         constantly))))))
 
-;; C
 (defn check-level-complete [conn user-db-id game-id control-channel {:keys [profit-loss] :as data}]
 
   ;; TODO same here
@@ -189,31 +189,21 @@
         running-pl (if-let [pl (-> profit-loss first :profit-loss)]
                      pl
                      0.0)
-        #_(->> profit-loss
-               (filter #(= :running-profit-loss (:profit-loss-type %)))
-               (reduce #(+ %1 (:profit-loss %2)) 0.0))
 
         realized-pl (reduce (fn [ac {pl :profit-loss}]
                               (+ ac pl))
                             0.0
                             (game.calculation/realized-profit-loss-for-game conn user-db-id game-id))
 
-        #_(->> profit-loss
-                         (filter #(= :realized-profit-loss (:profit-loss-type %)))
-                         (reduce #(+ %1 (:profit-loss %2)) 0.0))
-
-        ;; running+realized-pl (+ running-pl realized-pl)
-
         profit-threshold-met? (> realized-pl profit-threshold)
         lose-threshold-met? (< running-pl (* -1 lose-threshold))
 
-        game-event-message
-        (cond-> {:game-id game-id
-                 :level level}
-          profit-threshold-met? (assoc :event :win
-                                       :profit-loss realized-pl)
-          lose-threshold-met? (assoc :event :lose
-                                     :profit-loss running-pl))]
+        game-event-message (cond-> {:game-id game-id
+                                    :level level}
+                             profit-threshold-met? (assoc :event :win
+                                                          :profit-loss realized-pl)
+                             lose-threshold-met? (assoc :event :lose
+                                                        :profit-loss running-pl))]
 
     (util/pprint+identity [running-pl (* -1 lose-threshold) lose-threshold-met? (deref current-level)])
 
