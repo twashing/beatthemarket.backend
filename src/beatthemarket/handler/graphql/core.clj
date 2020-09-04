@@ -54,30 +54,22 @@
 
 (defn check-user-device-doesnt-have-running-game? [conn email client-id]
 
-  ;; GAME STATUSes
-  {:db/ident :game-status/created}
-  {:db/ident :game-status/running}
-  {:db/ident :game-status/paused}
-  {:db/ident :game-status/won}
-  {:db/ident :game-status/lost}
-  {:db/ident :game-status/exited}
-
   (when (ffirst
-          (d/q '[:find ?g
-                 :in $ ?email ?client-id
-                 :where
-                 [?g :game/start-time]
-                 [(missing? $ ?g :game/end-time)] ;; game still active?
-                 (not (or [?g :game/status :game-status/won]
-                          [?g :game/status :game-status/lost]
-                          [?g :game/status :game-status/exited])) ;; game not exited?
-                 [?g :game/users ?us]
-                 [?us :game.user/user-client ?client-id]  ;; For a Device
-                 [?us :game.user/user ?u]
-                 [?u :user/email ?email] ;; For a User
-                 ]
-               (d/db conn)
-               email client-id))
+          (util/pprint+identity
+            (d/q '[:find (pull ?g [*])
+                   :in $ ?email ?client-id
+                   :where
+                   [?g :game/start-time]
+                   [(missing? $ ?g :game/end-time)] ;; game still active?
+                   (or [?g :game/status :game-status/running]
+                       [?g :game/status :game-status/paused]) ;; game not exited?
+                   [?g :game/users ?us]
+                   [?us :game.user/user-client ?client-id]  ;; For a Device
+                   [?us :game.user/user ?u]
+                   [?u :user/email ?email] ;; For a User
+                   ]
+                 (d/db conn)
+                 email client-id)))
     (throw (Exception. (format "User device has a running game / email %s / client-id %s" email client-id)))))
 
 (defn check-user-device-has-created-game? [conn email client-id]
@@ -116,9 +108,30 @@
                    email client-id))
     (throw (Exception. (format "User device doesn't have a paused game / email %s / client-id %s" email client-id)))))
 
+(defn check-user-device-not-already-joined? [conn email client-id game-id]
+
+  (when (ffirst
+          (d/q '[:find ?g
+                 :in $ ?email ?client-id ?game-id
+                 :where
+                 [?g :game/id ?game-id]
+                 [?g :game/start-time]
+                 [(missing? $ ?g :game/end-time)] ;; game still active?
+                 (not (or [?g :game/status :game-status/won]
+                          [?g :game/status :game-status/lost]
+                          [?g :game/status :game-status/exited])) ;; game not exited?
+                 [?g :game/users ?us]
+                 [?us :game.user/user-client ?client-id]  ;; For a Device
+                 [?us :game.user/user ?u]
+                 [?u :user/email ?email] ;; For a User
+                 ]
+               (d/db conn)
+               email client-id game-id))
+    (throw (Exception. (format "User device has already joined this game / email %s / client-id %s" email client-id)))))
+
 (defn check-client-id-exists [context]
 
-  #_(if-let [client-id (-> context :request :headers (get "client-id"))]
+  (if-let [client-id (-> context :request :headers (get "client-id"))]
     (UUID/fromString client-id)
     (throw (Exception. "Missing :client-id in your connection_init"))))
 
@@ -173,7 +186,7 @@
           conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context]
 
-      ;; (check-user-device-doesnt-have-running-game? conn email client-id)
+      (check-user-device-doesnt-have-running-game? conn email client-id)
 
       (let [user-db-id        (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
             mapped-game-level (get graphql.encoder/game-level-map gameLevel)
@@ -206,7 +219,7 @@
           conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context]
 
-      ;; (check-user-device-doesnt-have-running-game? conn email client-id)
+      (check-user-device-doesnt-have-running-game? conn email client-id)
 
       (let [user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
             gameId (UUID/fromString game-id)
@@ -381,7 +394,7 @@
           conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context]
 
-      ;; (check-user-device-has-paused-game? conn email client-id)
+      (check-user-device-has-paused-game? conn email client-id)
 
       (let [data-sequence-fn games.control/->data-sequence
             user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
@@ -410,10 +423,11 @@
   (try
 
     (let [client-id (check-client-id-exists context)
+          game-id (UUID/fromString gameId)
           conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context]
 
-      ;; (check-user-device-not-already-joined? conn email client-id)
+      (check-user-device-not-already-joined? conn email client-id)
 
       (let [data-sequence-fn games.control/->data-sequence
             user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
