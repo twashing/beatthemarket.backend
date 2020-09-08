@@ -55,21 +55,20 @@
 (defn check-user-device-doesnt-have-running-game? [conn email client-id]
 
   (when (ffirst
-          (util/pprint+identity
-            (d/q '[:find (pull ?g [*])
-                   :in $ ?email ?client-id
-                   :where
-                   [?g :game/start-time]
-                   [(missing? $ ?g :game/end-time)] ;; game still active?
-                   (or [?g :game/status :game-status/running]
-                       [?g :game/status :game-status/paused]) ;; game not exited?
-                   [?g :game/users ?us]
-                   [?us :game.user/user-client ?client-id]  ;; For a Device
-                   [?us :game.user/user ?u]
-                   [?u :user/email ?email] ;; For a User
-                   ]
-                 (d/db conn)
-                 email client-id)))
+          (d/q '[:find (pull ?g [*])
+                 :in $ ?email ?client-id
+                 :where
+                 [?g :game/start-time]
+                 [(missing? $ ?g :game/end-time)] ;; game still active?
+                 (or [?g :game/status :game-status/running]
+                     [?g :game/status :game-status/paused]) ;; game not exited?
+                 [?g :game/users ?us]
+                 [?us :game.user/user-client ?client-id]  ;; For a Device
+                 [?us :game.user/user ?u]
+                 [?u :user/email ?email] ;; For a User
+                 ]
+               (d/db conn)
+               email client-id))
     (throw (Exception. (format "User device has a running game / email %s / client-id %s" email client-id)))))
 
 (defn check-user-device-has-created-game? [conn email client-id]
@@ -303,7 +302,7 @@
 (defn resolve-users [context args _]
 
   (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        users (d/q '[:find (pull ?e [:db/id])
+        users (d/q '[:find (pull ?e [*])
                      :in $
                      :where
                      [?e :user/email]]
@@ -455,7 +454,7 @@
   (let [game-id (UUID/fromString gameId)
         event {:type :ControlEvent
                :event  :exit
-               :gameId game-id}]
+               :game-id game-id}]
 
     (-> (game.games/send-control-event! game-id event)
         (assoc :gameId gameId))))
