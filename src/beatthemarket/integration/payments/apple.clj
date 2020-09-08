@@ -57,7 +57,6 @@
 
     ;; GOOD Response - :body "status" 0
     (def response-sand
-
       (-> (client/post "https://sandbox.itunes.apple.com/verifyReceipt" {:body (json/write-str request-body)})
            util/pprint+identity
            :body
@@ -104,29 +103,52 @@
 
   ;; >> GQL <<
   ;;
+  ;; > User, subscriptions (incl. payment provider) (GET)
+  ;; check DB
+  ;;
   ;; > Verify (One time) Purchase (POST)
   ;; store product, provider, token
   ;;
   ;; > Verify Subscription (POST)
   ;; store product, provider, token
   ;;
-  ;; > User, subscriptions (incl. payment provider) (GET)
-  ;; check DB
-  ;;
   ;; Update subscription (Webhook - POST)
+
+
+  ;; > Create Customer (Stripe)
+
+  ;; > Create Subscription (Stripe)
+  ;; this executes payment
+
+
 
 
   ;; [APPLE]
   ;; product-id
   ;; provider
+
   ;; token (Product Receipt)
 
 
   ;; [GOOGLE]
   ;; product-id
   ;; provider
+
   ;; token (Purchase tokens - generated only when a user completes a purchase flow)
   ;; order-id (Order ID - created every time a financial transaction occurs)
+
+  ;; Webhook to detect subscription changes
+
+
+  ;; [STRIPE]
+  ;; product-id
+  ;; provider
+
+  ;; customer-id
+  ;; payment-method-id
+  ;; price-id
+
+  ;; Webhook to detect i. payment success | failure ii. subscription changes
 
 
   ;; ? Error Handling & Retries

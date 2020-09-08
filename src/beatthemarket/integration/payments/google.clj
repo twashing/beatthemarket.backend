@@ -83,7 +83,7 @@
   ;; {
   ;;  "access_token": "ya29.a0AfH6SMC0x5njFXxJB0odXgY-D6dVrALQjYioCbW1bxPMPW6jbr-5-iG8FHnOaoGAM8Kp_UDigasUr6d4ylG_L6zBBZRp2PreJ28VCwGiUJSXl7XVoH1krr2e4oTGq3wTB0RuRtz_-hII0NlGM9ywj_fGcEi6VNApzE8",
   ;;  "expires_in": 3599,
-  ;;  "refresh_token": 
+  ;;  "refresh_token": "1//05uaJkTCWegauCgYIARAAGAUSNwF-L9IrvzRvrDy5WzTAWvN6PJi78-V1xiCrh7HAFDVkpHv3sViTGGItBl3tKKki6JPBfPvETWM",
   ;;  "scope": "https://www.googleapis.com/auth/androidpublisher",
   ;;  "token_type": "Bearer"
   ;;  }
@@ -120,7 +120,7 @@
   (def credential (doto (GoogleCredential/fromStream
                           (-> (Thread/currentThread)
                               (.getContextClassLoader)
-                              (.getResourceAsStream )))
+                              (.getResourceAsStream "api-8038496863446330572-265555-671e2c17a86e.json")))
                     (.createScoped (Collections/singleton AndroidPublisherScopes/ANDROIDPUBLISHER))))
 
   (def publisher (doto (AndroidPublisher$Builder. httpTransport jsonFactory credential)
