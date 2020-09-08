@@ -369,9 +369,21 @@
 
 (defmethod handle-control-event :timeout [conn game-event-stream {game-id :game-id :as control} now end]
 
-  (let [remaining (calculate-remaining-time now end)]
+  (let [remaining (calculate-remaining-time now end)
+        current-level (-> repl.state/system :game/games deref
+                          (get game-id)
+                          :current-level deref)
+        timeout-timer-event {:event   :continue
+                             :game-id game-id
+                             :level   (:level current-level)
+                             :minutesRemaining 0
+                             :secondsRemaining 0
+                             :type :LevelTimer}]
+
     (lose-game! conn game-id)
-    (log/info :game.games (format "Running %s / TIME'S UP!!" (format-remaining-time remaining))))
+    (log/info :game.games (format "Running %s / TIME'S UP!!" (format-remaining-time remaining)))
+
+    (core.async/>!! game-event-stream timeout-timer-event))
   [])
 
 (defn update-inmemory-game-timer! [game-id time-in-seconds]
@@ -439,11 +451,9 @@
 
                                [(_ :guard #{:exit :win :lose}) _] (handle-control-event conn game-event-stream controlv now end)
 
-                               [_ false] (let [current-level (-> repl.state/system :game/games
-                                                                 deref
+                               [_ false] (let [current-level (-> repl.state/system :game/games deref
                                                                  (get game-id)
-                                                                 :current-level
-                                                                 deref)
+                                                                 :current-level deref)
                                                controlv {:event   :continue
                                                          :game-id game-id
                                                          :level   (:level current-level)
@@ -451,7 +461,9 @@
 
                                            (handle-control-event conn game-event-stream controlv now end))
 
-                               [_ true] (handle-control-event conn game-event-stream {:event :timeout} now end))]
+                               [_ true] (handle-control-event conn game-event-stream (assoc controlv
+                                                                                            :event :timeout
+                                                                                            :game-id game-id) now end))]
 
         (when (and nowA endA)
           (recur nowA endA (next iters)))))))
