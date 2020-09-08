@@ -266,7 +266,7 @@
 (defn win-game! [conn game-id]
 
   (let [{game-db-id :db/id
-         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+         {game-status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
         data [[:db/retract  game-db-id :game/status game-status]
               [:db/add      game-db-id :game/status :game-status/won]]]
 
@@ -275,7 +275,7 @@
 (defn lose-game! [conn game-id]
 
   (let [{game-db-id :db/id
-         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+         {game-status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
         data [[:db/retract  game-db-id :game/status game-status]
               [:db/add      game-db-id :game/status :game-status/lost]]]
 
@@ -331,13 +331,14 @@
 
   [])
 
-(defmethod handle-control-event :exit [_ game-event-stream {m :message :as control} now end]
+(defmethod handle-control-event :exit [conn game-event-stream {:keys [game-id message] :as control} now end]
 
   (let [remaining (calculate-remaining-time now end)]
 
-    (log/info :game.games (format "%sExiting / Time Remaining / %s" (if m m "") (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream
-                    (assoc control :type :ControlEvent)))
+    (exit-game! conn game-id)
+
+    (log/info :game.games (format "%sExiting / Time Remaining / %s" (if message message "") (format-remaining-time remaining)))
+    (core.async/>!! game-event-stream (assoc control :type :ControlEvent)))
   [])
 
 (defmethod handle-control-event :win [conn game-event-stream {:keys [game-id level] :as control} now end]
@@ -348,23 +349,28 @@
         remaining (calculate-remaining-time now end)]
 
     (transition-level! conn game-id level)
+    (win-game! conn game-id)
+
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
     (println (format "Win %s" (format-remaining-time remaining)))
     (core.async/>!! game-event-stream (assoc control :type :LevelStatus))
 
     [now end]))
 
-(defmethod handle-control-event :lose [conn game-event-stream control now end]
+(defmethod handle-control-event :lose [conn game-event-stream {game-id :game-id :as control} now end]
 
   (let [remaining (calculate-remaining-time now end)]
+
+    (lose-game! conn game-id)
     (log/info :game.games (format "Lose %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream
-                    (assoc control :type :LevelStatus))
-    (handle-control-event conn game-event-stream {:event :exit :game-id (:game-id control)} now end)))
+    (core.async/>!! game-event-stream (assoc control :type :LevelStatus))
 
-(defmethod handle-control-event :timeout [_ game-event-stream control now end]
+    []))
+
+(defmethod handle-control-event :timeout [conn game-event-stream {game-id :game-id :as control} now end]
 
   (let [remaining (calculate-remaining-time now end)]
+    (lose-game! conn game-id)
     (log/info :game.games (format "Running %s / TIME'S UP!!" (format-remaining-time remaining))))
   [])
 
@@ -417,7 +423,6 @@
             :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])]
 
       ;; TODO i. If this is a market, and ii. there are no players, :pause
-
       (log/debug :game.games (format "game-loop %s:%s / %s"
                                        (:remaining-in-minutes remaining)
                                        (:remaining-in-seconds remaining)

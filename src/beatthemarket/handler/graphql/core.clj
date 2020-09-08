@@ -303,13 +303,14 @@
 (defn resolve-users [context args _]
 
   (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        users (d/q '[:find (pull ?e [:db/id])
+        users (d/q '[:find (pull ?e [*])
                      :in $
                      :where
                      [?e :user/email]]
                    (d/db conn))]
 
     (->> (map first users)
+         util/pprint+identity
          (transform [ALL identity] #(dissoc % :db/id))
          (transform [ALL identity] #(clojure.set/rename-keys % {:user/email :userEmail
                                                                 :user/name :userName
@@ -455,7 +456,7 @@
   (let [game-id (UUID/fromString gameId)
         event {:type :ControlEvent
                :event  :exit
-               :gameId game-id}]
+               :game-id game-id}]
 
     (-> (game.games/send-control-event! game-id event)
         (assoc :gameId gameId))))
