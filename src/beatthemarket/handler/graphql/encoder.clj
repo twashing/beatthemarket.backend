@@ -16,6 +16,11 @@
    10 :game-level/ten
    100 :game-level/market})
 
+(def payment-provider-map
+  {:payment.provider/apple "apple"
+   :payment.provider/google "google"
+   :payment.provider/stripe "stripe"})
+
 (defn stock-tick->graphql [data]
   (clojure.set/rename-keys
     data {:game.stock.tick/id         :stockTickId
@@ -117,3 +122,13 @@
                                   :profit-loss :profitLoss})
         (update :gameId str)
         tag-with-type-wrapped)))
+
+
+
+(defn payment-purchase->graphql [{payment-id                :payment/id
+                                  product-id                :payment/product-id
+                                  {provider-type :db/ident} :payment/provider-type
+                                  :as                       payment}]
+  {:paymentId (str payment-id)
+   :productId product-id
+   :provider (get payment-provider-map provider-type)})

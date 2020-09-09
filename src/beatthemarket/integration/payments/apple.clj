@@ -6,12 +6,15 @@
             [datomic.client.api :as d]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [integrant.repl.state :as repl.state]
+            [integrant.core :as ig]
 
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.integration.payments.apple.persistence :as apple.persistence]
             [beatthemarket.util :as util]))
 
 
+(defmethod ig/init-key :payments/apple [_ {_verify-receipt-endpoint :verify-receipt-endpoint
+                                           _primary-shared-secret :primary-shared-secret}])
 
 ;; Validating locally
 ;;
@@ -81,6 +84,14 @@
        group-and-sort-verify-response
        (transform [MAP-VALS] first)))
 
+(defn user-payments [db]
+
+  (->> (d/q '[:find (pull ?e [*
+                              {:payment/provider [*]}
+                              {:payment/provider-type [*]}])
+              :where [?e :payment/id]] db)
+       (map first)))
+
 (defn verify-payment [verify-endpoint primary-shared-secret apple-hash]
 
   (let [request-body {:receipt-data (:transactionReceipt apple-hash)
@@ -93,21 +104,24 @@
 
     (verify-response->latest-receipt response)))
 
+(defn- conditionally-transact-payment-receipt [conn apple-hash latest-receipts]
 
-(def payment-provider-map
-  {:payment.provider/apple "apple"
-   :payment.provider/google "google"
-   :payment.provider/stripe "stripe"})
+  ;; TODO conditionally, if receipt has not been stored
+  (->> (apple.persistence/latest-receipts->entity apple-hash latest-receipts)
+       (persistence.datomic/transact-entities! conn)))
 
+(defn verify-payment-workflow [conn verify-receipt-endpoint primary-shared-secret apple-hash]
 
-(defn payment-purchase->graphql [{payment-id                :payment/id
-                                  product-id                :payment/product-id
-                                  {provider-type :db/ident} :payment/provider-type
-                                  :as                       payment}]
-  {:paymentId (str payment-id)
-   :productId product-id
-   :provider (get payment-provider-map provider-type)})
+  (->> (verify-payment verify-receipt-endpoint primary-shared-secret apple-hash)
+       (conditionally-transact-payment-receipt conn apple-hash)
 
+       ;; TODO check for error
+       :db-after
+       (d/q '[:find (pull ?e [*
+                              {:payment/provider [*]}
+                              {:payment/provider-type [*]}])
+              :where [?e :payment/id]])
+       (map first)))
 
 (comment
 
@@ -144,7 +158,7 @@
 
   )
 
-  ;; Response keys: (:receipt :environment :latest_receipt_info :latest_receipt :status)
+;; Response keys: (:receipt :environment :latest_receipt_info :latest_receipt :status)
 
 
   ;; > :receipt :in_app

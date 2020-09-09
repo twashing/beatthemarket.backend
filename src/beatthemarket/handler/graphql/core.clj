@@ -20,6 +20,8 @@
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.bookkeeping.core :as bookkeeping]
+            [beatthemarket.integration.payments.apple :as payments.apple]
+            [beatthemarket.integration.payments.apple.persistence :as payments.apple.persistence]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
@@ -472,8 +474,32 @@
 ;; > Verify Subscription (POST)
 ;; store product, provider, token
 
-(defn verify-payment-purchase [context args _]
-  )
+(defn user-payments [context args _]
+
+  (try
+
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context]
+
+      (->> (payments.apple/user-payments (d/db conn))
+           (map graphql.encoder/payment-purchase->graphql)))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defn verify-payment [context {token :token} _]
+
+  (try
+
+    (let [{:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
+          apple-hash (json/read-str token :key-fn keyword)]
+
+      (->> (payments.apple/verify-payment-workflow verify-receipt-endpoint primary-shared-secret apple-hash)
+           (payments.apple.persistence/latest-receipts->entity apple-hash)
+           (map graphql.encoder/payment-purchase->graphql)))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 
 ; STREAMERS

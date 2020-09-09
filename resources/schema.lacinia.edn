@@ -89,9 +89,10 @@
     :profitLoss {:type (non-null Float)}}}
 
 
-  :PaymentPurchase
+  :Payment
   {:fields
-   {:productId {:type (non-null String)}
+   {:paymentId {:type (non-null String)}
+    :productId {:type (non-null String)}
     :provider {:type (non-null String)}}}}
 
 
@@ -181,7 +182,11 @@
   :listGames
   {:type (list :GameStatus)
    :resolve :resolve-list-games
-   :description "Lists out a User's open, running and finished games, per device"}}
+   :description "Lists out a User's open, running and finished games, per device"}
+
+  :userPayments
+  {:type (list :Payment)
+   :resolve :user-payments}}
 
 
  ;; //
@@ -238,17 +243,17 @@
    {:gameId {:type (non-null String)}}}
 
 
-  :verifyPaymentPurchase
-  {:type    (list :PaymentPurchase)
-   :resolve :verify-payment-purchase
+  :verifyPayment
+  {:type    (list :Payment)
+   :resolve :verify-payment
    :args
    {:productId {:type (non-null String)}
     :provider {:type (non-null String)}
     :token {:type (non-null String)}}}
 
-  #_:verifyPaymentPurchase
-  #_{:type    :PaymentPurchase
-   :resolve :verify-payment-purchase
+  #_:verifyPayment
+  #_{:type    :Payment
+   :resolve :verify-payment
    :args
    {:productId {:type (non-null String)}
     :provider {:type (non-null String)}

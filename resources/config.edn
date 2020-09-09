@@ -85,7 +85,9 @@
                :server/server                 {:service #ig/ref :service/service}
                :firebase/firebase             #ref [:secrets :firebase]
                :persistence/datomic           {:datomic         #ref [:secrets :production :persistence/datomic]}
+
                :magnet.payments/stripe        #ref [:secrets :stripe]
+               :payments/apple                #ref [:secrets :production :payments/apple]
                :game/games                    {:datomic #ig/ref :persistence/datomic }
                :game/game                     #ref[:game]
                :nrepl/nrepl                   {:port 7000}
@@ -102,6 +104,7 @@
                 :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                                   :config  {}}}
                 :magnet.payments/stripe        #ref [:secrets :stripe]
+                :payments/apple                #ref [:secrets :development :payments/apple]
                 :game/games                    {:datomic #ig/ref :persistence/datomic}
                 :game/game                     #ref[:game]
                 :nrepl/nrepl                   {:port 7000}
@@ -118,6 +121,7 @@
          :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                            :config  {}}}
          :magnet.payments/stripe        #ref [:secrets :stripe]
+         :payments/apple                #ref [:secrets :development :payments/apple]
          :game/games                    {:datomic #ig/ref :persistence/datomic}
          :game/game                     #ref[:game]
          :nrepl/nrepl                   {:port 7001}
