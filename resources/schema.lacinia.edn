@@ -26,7 +26,6 @@
     :gameId {:type (non-null String)}}}
 
 
-
   :User
   {:fields
    {:userEmail {:type String}
@@ -37,9 +36,7 @@
   {:fields
    {:id     {:type (non-null String)}
     :name   {:type (non-null String)}
-    :symbol {:type (non-null String)}
-    ;; logo {:type (non-null String)} ;; URL where we can get image
-    }}
+    :symbol {:type (non-null String)}}}
 
   :StockTick
   {:fields
@@ -84,13 +81,18 @@
     :secondsRemaining {:type (non-null Int)}}}
 
 
-
   :GameStatus
   {:description "The status of a user's game, in the system"
    :fields
    {:gameId {:type (non-null String)}
     :status {:type (non-null :GameStatusType)}
-    :profitLoss {:type (non-null Float)}}}}
+    :profitLoss {:type (non-null Float)}}}
+
+
+  :PaymentPurchase
+  {:fields
+   {:productId {:type (non-null String)}
+    :provider {:type (non-null String)}}}}
 
 
  ;; //
@@ -233,7 +235,24 @@
   {:type :ControlEvent
    :resolve :resolve-exit-game
    :args
-   {:gameId {:type (non-null String)}}}}
+   {:gameId {:type (non-null String)}}}
+
+
+  :verifyPaymentPurchase
+  {:type    (list :PaymentPurchase)
+   :resolve :verify-payment-purchase
+   :args
+   {:productId {:type (non-null String)}
+    :provider {:type (non-null String)}
+    :token {:type (non-null String)}}}
+
+  #_:verifyPaymentPurchase
+  #_{:type    :PaymentPurchase
+   :resolve :verify-payment-purchase
+   :args
+   {:productId {:type (non-null String)}
+    :provider {:type (non-null String)}
+    :token {:type (non-null String)}}}}
 
 
  ;; //

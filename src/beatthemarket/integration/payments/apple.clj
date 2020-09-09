@@ -3,6 +3,12 @@
             [clj-http.client :as client]
             [clojure.data.json :as json]
             [clojure.edn :refer [read-string]]
+            [datomic.client.api :as d]
+            [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [integrant.repl.state :as repl.state]
+
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.integration.payments.apple.persistence :as apple.persistence]
             [beatthemarket.util :as util]))
 
 
@@ -60,8 +66,83 @@
       (-> (client/post "https://sandbox.itunes.apple.com/verifyReceipt" {:body (json/write-str request-body)})
            util/pprint+identity
            :body
-           (json/read-str :key-fn keyword))))
+           (json/read-str :key-fn keyword)))
 
+    ))
+
+
+(defn group-and-sort-verify-response [latest-receipt-info]
+  (->> (group-by :product_id latest-receipt-info)
+       (transform [MAP-VALS ALL :original_purchase_date_ms] #(Long/parseLong %))
+       (transform [MAP-VALS] #(sort-by :original_purchase_date_ms > %))))
+
+(defn verify-response->latest-receipt [verify-response]
+  (->> (:latest_receipt_info verify-response)
+       group-and-sort-verify-response
+       (transform [MAP-VALS] first)))
+
+(defn verify-payment [verify-endpoint primary-shared-secret apple-hash]
+
+  (let [request-body {:receipt-data (:transactionReceipt apple-hash)
+                      :password primary-shared-secret ;; (if the receipt contains an auto-renewable subscription)
+                      :exclude-old-transactions false}
+
+        response (-> (client/post verify-endpoint {:body (json/write-str request-body)})
+                     :body
+                     (json/read-str :key-fn keyword))]
+
+    (verify-response->latest-receipt response)))
+
+
+(def payment-provider-map
+  {:payment.provider/apple "apple"
+   :payment.provider/google "google"
+   :payment.provider/stripe "stripe"})
+
+
+(defn payment-purchase->graphql [{payment-id                :payment/id
+                                  product-id                :payment/product-id
+                                  {provider-type :db/ident} :payment/provider-type
+                                  :as                       payment}]
+  {:paymentId (str payment-id)
+   :productId product-id
+   :provider (get payment-provider-map provider-type)})
+
+
+(comment
+
+
+  ;; A.
+  (def A (let [verify-endpoint "https://sandbox.itunes.apple.com/verifyReceipt"
+
+               apple-hash (-> "example-hash-apple.json"
+                              resource
+                              slurp
+                              (json/read-str :key-fn keyword))
+
+               primary-shared-secret "d552367242fb40d9a2aee861031922ee"]
+
+           (verify-payment verify-endpoint primary-shared-secret apple-hash)))
+
+
+  ;; B. transact
+  (def B (apple.persistence/latest-receipts->entity apple-hash A))
+  (def conn (-> repl.state/system :persistence/datomic :opts :conn))
+
+
+  ;; C. GQL response
+  (def Z (persistence.datomic/transact-entities! conn B))
+  (def C (->> Z #_(persistence.datomic/transact-entities! conn B)
+              :db-after
+              (d/q '[:find (pull ?e [*
+                                     {:payment/provider [*]}
+                                     {:payment/provider-type [*]}])
+                     :where [?e :payment/id]])
+              util/pprint+identity
+              (map first)
+              (map payment-purchase->graphql)))
+
+  )
 
   ;; Response keys: (:receipt :environment :latest_receipt_info :latest_receipt :status)
 
@@ -82,15 +163,14 @@
   ;; ! Example verify
 
 
-  ;; X. Parse Apple response body
+  ;; [ok] Parse Apple response body
   ;; > :latest_receipt_info - has the latest receipt
   ;; > :latest_receipt_info - contains all the transactions for the subscription, including the initial purchase and subsequent renewals
   ;; Group by :product_id
   ;; Sort by :original_purchase_date (Get most recent)
 
 
-
-  ;; X.
+  ;; [ok]
   ;; DB Schema
   ;; User => [Active Product Subscriptions]
   ;; User => Payment Provider (Apple, Google, Stripe)
@@ -98,7 +178,6 @@
 
   ;; X.
   ;; Webhook to update User Subscription status
-
 
 
   ;; >> GQL <<
@@ -154,6 +233,3 @@
   ;; ? Error Handling & Retries
   ;; ? Tie purchases or subscriptions to App Version
   ;; ! A cancelled one-time purchase retracts any new monies that were applied to a User's account
-
-
-  )

@@ -191,7 +191,8 @@
                                       :resolve-pause-game                graphql.core/resolve-pause-game
                                       :resolve-resume-game               graphql.core/resolve-resume-game
                                       :resolve-exit-game                 graphql.core/resolve-exit-game
-                                      :resolve-list-games                graphql.core/resolve-list-games})
+                                      :resolve-list-games                graphql.core/resolve-list-games
+                                      :verify-payment-purchase           graphql.core/verify-payment-purchase})
       (lacinia.util/attach-streamers {:stream-stock-ticks       graphql.core/stream-stock-ticks
                                       :stream-portfolio-updates graphql.core/stream-portfolio-updates
                                       :stream-game-events       graphql.core/stream-game-events})

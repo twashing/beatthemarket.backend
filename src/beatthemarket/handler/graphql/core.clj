@@ -469,6 +469,12 @@
       :status :running
       :profitLoss 0.0}]))
 
+;; > Verify Subscription (POST)
+;; store product, provider, token
+
+(defn verify-payment-purchase [context args _]
+  )
+
 
 ; STREAMERS
 

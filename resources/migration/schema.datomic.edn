@@ -20,21 +20,76 @@
 
  ;; PAYMENT
 
+ {:db/ident :payment.provider/apple}
+ {:db/ident :payment.provider/google}
+ {:db/ident :payment.provider/stripe}
+
+
+ {:db/ident       :payment/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value}
+
  {:db/ident       :payment/product-id
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/unique      :db.unique/value}
 
+ {:db/ident       :payment/provider-type
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one}
+
  {:db/ident       :payment/provider
   :db/valueType   :db.type/ref
-  :db/cardinality :db.cardinality/one
-  :db/unique      :db.unique/value}
+  :db/cardinality :db.cardinality/one}
 
- {:db/ident       :payment.apple/token
+ #_{:db/ident       :payment/verify-attempt-dates
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/unique      :db.unique/value}
 
+
+ ;; Apple
+ {:db/ident       :payment.apple/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value}
+
+ {:db/ident       :payment.apple/token
+  :db/valueType   :db.type/bytes
+  :db/cardinality :db.cardinality/one}
+
+ {:db/ident       :payment.apple/receipts
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/many
+  :db/unique      :db.unique/value}
+
+ {:db/ident       :payment.apple.receipt/transactionId
+  :db/valueType   :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value}
+
+ {:db/ident       :payment.apple.receipt/transactionDate
+  :db/valueType   :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value}
+
+ {:db/ident       :payment.apple.receipt/transactionReceipt
+  :db/valueType   :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value}
+
+ {:db/ident       :payment.apple.receipt/productId
+  :db/valueType   :db.type/string
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value}
+
+
+ ;; Google
+ {:db/ident       :payment.google/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value}
 
  {:db/ident       :payment.google/token
   :db/valueType   :db.type/string
@@ -46,6 +101,12 @@
   :db/cardinality :db.cardinality/one
   :db/unique      :db.unique/value}
 
+
+ ;; Stripe
+ {:db/ident       :payment.stripe/id
+  :db/valueType   :db.type/uuid
+  :db/cardinality :db.cardinality/one
+  :db/unique      :db.unique/value}
 
  {:db/ident       :payment.stripe/customer-id
   :db/valueType   :db.type/string
