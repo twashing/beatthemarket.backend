@@ -263,14 +263,16 @@
 
     (persistence.datomic/transact-entities! conn data)))
 
-(defn win-game! [conn game-id]
+(defn conditionally-win-game! [conn game-id]
 
   (let [{game-db-id :db/id
+         {game-level :db/ident} :game/level
          {game-status :db/ident} :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
         data [[:db/retract  game-db-id :game/status game-status]
               [:db/add      game-db-id :game/status :game-status/won]]]
 
-    (persistence.datomic/transact-entities! conn data)))
+    (when (= :game-level/ten game-level)
+      (persistence.datomic/transact-entities! conn data))))
 
 (defn lose-game! [conn game-id]
 
@@ -349,7 +351,7 @@
         remaining (calculate-remaining-time now end)]
 
     (transition-level! conn game-id level)
-    (win-game! conn game-id)
+    (conditionally-win-game! conn game-id)
 
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
     (println (format "Win %s" (format-remaining-time remaining)))
