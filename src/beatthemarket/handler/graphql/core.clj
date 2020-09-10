@@ -318,8 +318,6 @@
 
 (defn resolve-user-personal-profit-loss [context {:keys [email gameId groupByStock] :as args} _]
 
-  ;; (util/pprint+identity args)
-
   (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
         user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
         group-by-stock? (if groupByStock groupByStock false)]
@@ -491,11 +489,11 @@
 
   (try
 
-    (let [{:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
           apple-hash (json/read-str token :key-fn keyword)]
 
-      (->> (payments.apple/verify-payment-workflow verify-receipt-endpoint primary-shared-secret apple-hash)
-           (payments.apple.persistence/latest-receipts->entity apple-hash)
+      (->> (payments.apple/verify-payment-workflow conn verify-receipt-endpoint primary-shared-secret apple-hash)
            (map graphql.encoder/payment-purchase->graphql)))
 
     (catch Exception e
@@ -523,9 +521,7 @@
                                                                 :game/games
                                                                 deref
                                                                 (get (UUID/fromString id))
-                                                                :stock-tick-stream
-                                                                ;; util/pprint+identity
-                                                                )
+                                                                :stock-tick-stream)
         cleanup-fn                                          (constantly
                                                               (do
                                                                 (println "stream-stock-ticks CLEANUP")

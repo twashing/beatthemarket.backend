@@ -1,5 +1,6 @@
 (ns beatthemarket.handler.http.integration.payments-test
   (:require [clojure.test :refer :all]
+            [clojure.java.io :refer [resource]]
             [integrant.repl.state :as repl.state]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.util :as util])
@@ -28,7 +29,6 @@
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
-        ;; gameLevel 1
         client-id (UUID/randomUUID)]
 
     (test-util/send-init {:client-id (str client-id)})
@@ -40,13 +40,91 @@
                           {:query "query UserPayments {
                                        userPayments {
                                          paymentId
-productId
-provider
+                                         productId
+                                         provider
                                        }
                                      }"}})
 
-    (util/pprint+identity (test-util/<message!! 1000))
-    (util/pprint+identity (test-util/<message!! 1000))
+    (test-util/<message!! 1000)
 
-    (is true)
-    ))
+    (testing "Returning an empty set of user payments"
+
+      (let [empty-user-payments (-> (test-util/<message!! 1000) :payload :data :userPayments)
+            expected-user-payments []]
+
+        (is (= expected-user-payments empty-user-payments))))))
+
+(deftest verify-payment-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "additional_balance_100k"
+        provider "apple"
+        token (-> "example-hash-apple.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                           :variables {:productId product-id
+                                       :provider provider
+                                       :token token}}})
+
+    (test-util/<message!! 1000)
+
+    (testing "Basic verify payment"
+
+      (let [verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
+
+            expected-verify-keys #{:paymentId :productId :provider}
+            expected-verify-payment-response [{:productId product-id
+                                               :provider provider}]]
+
+        (->> verify-payment-response
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= expected-verify-keys %))
+             is)
+
+        (is (= expected-verify-payment-response
+               (map #(select-keys % [:productId :provider]) verify-payment-response)))))
+
+    (testing "Subsequent call to list payments, includes the most recent"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "query UserPayments {
+                                       userPayments {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"}})
+
+      (test-util/<message!! 1000)
+
+      (let [user-payments-response (-> (test-util/<message!! 1000) :payload :data :userPayments)
+            expected-user-payment-keys #{:paymentId :productId :provider}
+            expected-user-payments-response [{:productId product-id
+                                              :provider provider}]]
+
+        (->> user-payments-response
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= expected-user-payment-keys %))
+             is)
+
+        (is (= expected-user-payments-response
+               (map #(select-keys % [:productId :provider]) user-payments-response)))))))
