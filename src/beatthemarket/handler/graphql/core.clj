@@ -469,9 +469,6 @@
       :status :running
       :profitLoss 0.0}]))
 
-;; > Verify Subscription (POST)
-;; store product, provider, token
-
 (defn user-payments [context args _]
 
   (try

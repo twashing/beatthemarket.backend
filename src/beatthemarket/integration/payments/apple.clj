@@ -85,7 +85,6 @@
        (transform [MAP-VALS] first)))
 
 (defn user-payments [db]
-
   (->> (d/q '[:find (pull ?e [*
                               {:payment/provider [*]}
                               {:payment/provider-type [*]}])
@@ -161,89 +160,74 @@
 ;; Response keys: (:receipt :environment :latest_receipt_info :latest_receipt :status)
 
 
-  ;; > :receipt :in_app
-  ;; > :latest_receipt_info
+;; > :receipt :in_app - purchase information for this receipt
+;; Group by :product_id
+;; Sort by :original_purchase_date (Get most recent)
 
 
-  ;; > :receipt :in_app - purchase information for this receipt
-  ;; Group by :product_id
-  ;; Sort by :original_purchase_date (Get most recent)
+;; TODO
 
 
-  ;; TODO
+;; ! Example Google Play purchase token
+;; ! Example verify
 
 
-  ;; ! Example Google Play purchase token
-  ;; ! Example verify
+
+;; > :latest_receipt_info - has the latest receipt
+;; > :latest_receipt_info - contains all the transactions for the subscription, including the initial purchase and subsequent renewals
 
 
-  ;; [ok] Parse Apple response body
-  ;; > :latest_receipt_info - has the latest receipt
-  ;; > :latest_receipt_info - contains all the transactions for the subscription, including the initial purchase and subsequent renewals
-  ;; Group by :product_id
-  ;; Sort by :original_purchase_date (Get most recent)
+
+;; >> GQL <<
+;;
+;; > User, subscriptions (incl. payment provider) (GET)
+;; check DB
+;;
+;; > Verify (One time) Purchase (POST)
+;; store product, provider, token
+;;
+;; > Verify Subscription (POST)
+;; store product, provider, token
+;;
+;; Update subscription (Webhook - POST)
 
 
-  ;; [ok]
-  ;; DB Schema
-  ;; User => [Active Product Subscriptions]
-  ;; User => Payment Provider (Apple, Google, Stripe)
+;; > Create Customer (Stripe)
 
-
-  ;; X.
-  ;; Webhook to update User Subscription status
-
-
-  ;; >> GQL <<
-  ;;
-  ;; > User, subscriptions (incl. payment provider) (GET)
-  ;; check DB
-  ;;
-  ;; > Verify (One time) Purchase (POST)
-  ;; store product, provider, token
-  ;;
-  ;; > Verify Subscription (POST)
-  ;; store product, provider, token
-  ;;
-  ;; Update subscription (Webhook - POST)
-
-
-  ;; > Create Customer (Stripe)
-
-  ;; > Create Subscription (Stripe)
-  ;; this executes payment
+;; > Create Subscription (Stripe)
+;; this executes payment
 
 
 
 
-  ;; [APPLE]
-  ;; product-id
-  ;; provider
+;; [APPLE]
+;; product-id
+;; provider
 
-  ;; token (Product Receipt)
-
-
-  ;; [GOOGLE]
-  ;; product-id
-  ;; provider
-
-  ;; token (Purchase tokens - generated only when a user completes a purchase flow)
-  ;; order-id (Order ID - created every time a financial transaction occurs)
-
-  ;; Webhook to detect subscription changes
+;; token (Product Receipt)
 
 
-  ;; [STRIPE]
-  ;; product-id
-  ;; provider
+;; [GOOGLE]
+;; product-id
+;; provider
 
-  ;; customer-id
-  ;; payment-method-id
-  ;; price-id
+;; token (Purchase tokens - generated only when a user completes a purchase flow)
+;; order-id (Order ID - created every time a financial transaction occurs)
 
-  ;; Webhook to detect i. payment success | failure ii. subscription changes
+;; Webhook to detect subscription changes
 
 
-  ;; ? Error Handling & Retries
-  ;; ? Tie purchases or subscriptions to App Version
-  ;; ! A cancelled one-time purchase retracts any new monies that were applied to a User's account
+;; [STRIPE]
+;; product-id
+;; provider
+
+;; customer-id
+;; payment-method-id
+;; price-id
+
+;; Webhook to detect i. payment success | failure ii. subscription changes
+
+
+;; ? Error Handling & Retries
+;; ? Tie purchases or subscriptions to App Version
+;; ! A cancelled one-time purchase retracts any new monies that were applied to a User's account
