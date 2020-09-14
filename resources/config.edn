@@ -86,8 +86,9 @@
                :firebase/firebase             #ref [:secrets :firebase]
                :persistence/datomic           {:datomic         #ref [:secrets :production :persistence/datomic]}
 
-               :magnet.payments/stripe        #ref [:secrets :stripe]
                :payments/apple                #ref [:secrets :production :payments/apple]
+               :payments/google                #ref [:secrets :production :payments/google]
+               :magnet.payments/stripe        #ref [:secrets :production :payments/stripe]
                :game/games                    {:datomic #ig/ref :persistence/datomic }
                :game/game                     #ref[:game]
                :nrepl/nrepl                   {:port 7000}
@@ -103,8 +104,9 @@
                 :firebase/firebase             #ref [:secrets :firebase]
                 :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                                   :config  {}}}
-                :magnet.payments/stripe        #ref [:secrets :stripe]
                 :payments/apple                #ref [:secrets :development :payments/apple]
+                :payments/google                #ref [:secrets :development :payments/google]
+                :magnet.payments/stripe        #ref [:secrets :development :payments/stripe]
                 :game/games                    {:datomic #ig/ref :persistence/datomic}
                 :game/game                     #ref[:game]
                 :nrepl/nrepl                   {:port 7000}
@@ -120,8 +122,9 @@
          :firebase/firebase             #ref [:secrets :firebase]
          :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                            :config  {}}}
-         :magnet.payments/stripe        #ref [:secrets :stripe]
-         :payments/apple                #ref [:secrets :development :payments/apple]
+         :payments/apple                #ref [:secrets :test :payments/apple]
+         :payments/google                #ref [:secrets :test :payments/google]
+         :magnet.payments/stripe        #ref [:secrets :test :payments/stripe]
          :game/games                    {:datomic #ig/ref :persistence/datomic}
          :game/game                     #ref[:game]
          :nrepl/nrepl                   {:port 7001}

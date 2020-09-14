@@ -20,8 +20,11 @@
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.bookkeeping.core :as bookkeeping]
+            [beatthemarket.integration.payments.persistence :as payments.persistence]
             [beatthemarket.integration.payments.apple :as payments.apple]
             [beatthemarket.integration.payments.apple.persistence :as payments.apple.persistence]
+            [beatthemarket.integration.payments.google :as payments.google]
+            [beatthemarket.integration.payments.stripe :as payments.stripe]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
@@ -476,22 +479,58 @@
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context]
 
-      (->> (payments.apple/user-payments (d/db conn))
+      (->> (payments.persistence/user-payments (d/db conn))
            (map graphql.encoder/payment-purchase->graphql)))
 
     (catch Exception e
       (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
-(defn verify-payment [context {token :token} _]
+(defmulti verify-payment-handler (fn [_ {provider :provider} _] provider))
+
+(defmethod verify-payment-handler "apple" [context {productId :productId
+                                                    provider :provider
+                                                    token :token} _]
+
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+        {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
+        apple-hash (json/read-str token :key-fn keyword)]
+
+    (->> (payments.apple/verify-payment-workflow conn verify-receipt-endpoint primary-shared-secret apple-hash)
+         (map graphql.encoder/payment-purchase->graphql))))
+
+(defmethod verify-payment-handler "google" [context {productId :productId
+                                                     provider :provider
+                                                     token :token :as args} _]
+
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+        payment-config (-> repl.state/config :payments/google)]
+
+    ;; (util/pprint+identity ["Sanity 2" payment-config args])
+    (->> (payments.google/verify-payment-workflow conn payment-config args)
+         (map graphql.encoder/payment-purchase->graphql))
+
+    []))
+
+(defmethod verify-payment-handler "stripe" [context {productId :productId
+                                                     provider :provider
+                                                     token :token :as args} _]
+
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+        payment-config (-> repl.state/config :magnet.payments/stripe)]
+
+    (util/pprint+identity ["Sanity Stripe" payment-config args])
+    (->> (payments.stripe/verify-payment-workflow conn payment-config args)
+         (map graphql.encoder/payment-purchase->graphql))
+
+    []))
+
+(defn verify-payment [context args parent]
+
+  ;; (util/pprint+identity ["Sanity 1" args])
 
   (try
 
-    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-          {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
-          apple-hash (json/read-str token :key-fn keyword)]
-
-      (->> (payments.apple/verify-payment-workflow conn verify-receipt-endpoint primary-shared-secret apple-hash)
-           (map graphql.encoder/payment-purchase->graphql)))
+    (verify-payment-handler context args parent)
 
     (catch Exception e
       (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))

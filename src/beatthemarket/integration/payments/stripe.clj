@@ -7,6 +7,9 @@
             [beatthemarket.util :as util]))
 
 
+(defn verify-payment-workflow [conn payment-config args]
+  )
+
 (comment
 
 
@@ -44,8 +47,18 @@
       (payments.core/create-customer stripe-client create-customer-body)))
 
   ;; TODO
-  ;; make sure customer has a default payment method
+  ;; Make sure customer has a default payment method
 
+
+  ;; TODO
+  ;; X. Create payment method from Stripe token / card information (customer, payment method, and price IDs)
+  ;; https://stripe.com/docs/billing/subscriptions/fixed-price#collect-payment
+
+  ;; createSubscription({
+  ;;   customerId: customerId,
+  ;;   paymentMethodId: result.paymentMethod.id,
+  ;;   priceId: priceId,
+  ;; });
 
   ;; X. Create a subscription
   (def margin_trading_1month {:amount (* 5 100)

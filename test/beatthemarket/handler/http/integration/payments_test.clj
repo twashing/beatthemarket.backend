@@ -54,7 +54,7 @@
 
         (is (= expected-user-payments empty-user-payments))))))
 
-(deftest verify-payment-test
+(deftest verify-payment-apple-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -128,3 +128,196 @@
 
         (is (= expected-user-payments-response
                (map #(select-keys % [:productId :provider]) user-payments-response)))))))
+
+(deftest verify-payment-apple2-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "additional_balance_100k"
+        provider "apple"
+        token (-> "example-hash-apple.2.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                           :variables {:productId product-id
+                                       :provider provider
+                                       :token token}}})
+
+    (test-util/<message!! 1000)
+
+    (testing "Basic verify payment"
+
+      (let [verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
+
+            expected-verify-keys #{:paymentId :productId :provider}
+            expected-verify-payment-response [{:productId product-id
+                                               :provider provider}]]
+
+        (->> verify-payment-response
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= expected-verify-keys %))
+             is)
+
+        (is (= expected-verify-payment-response
+               (map #(select-keys % [:productId :provider]) verify-payment-response)))))
+
+    (testing "Subsequent call to list payments, includes the most recent"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "query UserPayments {
+                                       userPayments {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"}})
+
+      (test-util/<message!! 1000)
+
+      (let [user-payments-response (-> (test-util/<message!! 1000) :payload :data :userPayments)
+            expected-user-payment-keys #{:paymentId :productId :provider}
+            expected-user-payments-response [{:productId product-id
+                                              :provider provider}]]
+
+        (->> user-payments-response
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= expected-user-payment-keys %))
+             is)
+
+        (is (= expected-user-payments-response
+               (map #(select-keys % [:productId :provider]) user-payments-response)))))))
+
+(deftest verify-payment-google-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "margin_trading_1month"
+        provider "google"
+        token (-> "example-hash-apple.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                           :variables {:productId product-id
+                                       :provider provider
+                                       :token token}}})
+
+     (util/pprint+identity (test-util/<message!! 1000))
+     (util/pprint+identity (test-util/<message!! 1000))
+
+     ;; (test-util/<message!! 1000)
+     ;; (test-util/<message!! 1000)
+
+    ))
+
+(deftest X-test
+
+    #_(testing "Basic verify payment"
+
+      (let [verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
+
+            expected-verify-keys #{:paymentId :productId :provider}
+            expected-verify-payment-response [{:productId product-id
+                                               :provider provider}]]
+
+        (->> verify-payment-response
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= expected-verify-keys %))
+             is)
+
+        (is (= expected-verify-payment-response
+               (map #(select-keys % [:productId :provider]) verify-payment-response)))))
+
+    #_(testing "Subsequent call to list payments, includes the most recent"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "query UserPayments {
+                                       userPayments {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"}})
+
+      (test-util/<message!! 1000)
+
+      (let [user-payments-response (-> (test-util/<message!! 1000) :payload :data :userPayments)
+            expected-user-payment-keys #{:paymentId :productId :provider}
+            expected-user-payments-response [{:productId product-id
+                                              :provider provider}]]
+
+        (->> user-payments-response
+             (map keys)
+             (map #(into #{} %))
+             (every? #(= expected-user-payment-keys %))
+             is)
+
+        (is (= expected-user-payments-response
+               (map #(select-keys % [:productId :provider]) user-payments-response))))))
+
+(deftest verify-payment-stripe-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1RCtpy369Bu4g" ;; Additional $100k
+        provider "stripe"
+        token (-> "example-payload-stripe.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                           :variables {:productId product-id
+                                       :provider provider
+                                       :token token}}})
+
+     (util/pprint+identity (test-util/<message!! 1000))
+     (util/pprint+identity (test-util/<message!! 1000))
+
+     ;; (test-util/<message!! 1000)
+     ;; (test-util/<message!! 1000)
+
+    ))

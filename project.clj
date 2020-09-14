@@ -125,7 +125,9 @@
                  [clj-http "3.10.1"]
                  [com.google.api-client/google-api-client "1.30.10"]
                  [com.google.apis/google-api-services-androidpublisher "v3-rev20200817-1.30.10"]
-                 [magnet/payments.stripe "0.3.4"]]
+                 [magnet/payments.stripe "0.3.4"]
+                 ;; [http.async.client "1.3.1"]
+                 ]
 
   :min-lein-version "2.0.0"
   :resource-paths ["config", "resources"]

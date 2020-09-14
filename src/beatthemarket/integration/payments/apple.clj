@@ -4,6 +4,7 @@
             [clojure.data.json :as json]
             [clojure.edn :refer [read-string]]
             [datomic.client.api :as d]
+            [beatthemarket.integration.payments.persistence :as payments.persistence]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [integrant.repl.state :as repl.state]
             [integrant.core :as ig]
@@ -84,13 +85,6 @@
        group-and-sort-verify-response
        (transform [MAP-VALS] first)))
 
-(defn user-payments [db]
-  (->> (d/q '[:find (pull ?e [*
-                              {:payment/provider [*]}
-                              {:payment/provider-type [*]}])
-              :where [?e :payment/id]] db)
-       (map first)))
-
 (defn verify-payment [verify-endpoint primary-shared-secret apple-hash]
 
   (let [request-body {:receipt-data (:transactionReceipt apple-hash)
@@ -116,11 +110,7 @@
 
        ;; TODO check for error
        :db-after
-       (d/q '[:find (pull ?e [*
-                              {:payment/provider [*]}
-                              {:payment/provider-type [*]}])
-              :where [?e :payment/id]])
-       (map first)))
+       payments.persistence/user-payments))
 
 (comment
 
