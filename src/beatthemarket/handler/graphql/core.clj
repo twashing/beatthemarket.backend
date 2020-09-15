@@ -516,22 +516,42 @@
                                                      provider :provider
                                                      token :token :as args} _]
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        payment-config (-> repl.state/config :payments/stripe :service)]
+  (let [{{{conn :conn} :opts} :persistence/datomic
+         component :payments/stripe} repl.state/system]
 
-    (util/pprint+identity ["Sanity Stripe" payment-config args])
-    (->> (payments.stripe/verify-payment-workflow conn payment-config args)
+    (->> (update args :token #(json/read-str % :key-fn keyword))
+         (payments.stripe/verify-payment-workflow conn component)
          (map graphql.encoder/payment-purchase->graphql))
 
     []))
 
 (defn verify-payment [context args parent]
 
-  ;; (util/pprint+identity ["Sanity 1" args])
-
   (try
 
     (verify-payment-handler context args parent)
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defn create-stripe-customer [context {email :email} parent]
+
+  (try
+
+    (let [{{client :client} :payments/stripe} repl.state/system]
+      (->> (payments.stripe/conditionally-create-customer! client email)
+           :customers
+           (map graphql.encoder/stripe-customer->graphql)))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defn delete-stripe-customer [context {id :id} parent]
+
+  (try
+
+    (let [{{client :client} :payments/stripe} repl.state/system]
+      {:message (:success? (payments.stripe/delete-customer! client id))})
 
     (catch Exception e
       (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))

@@ -124,7 +124,6 @@
         tag-with-type-wrapped)))
 
 
-
 (defn payment-purchase->graphql [{payment-id                :payment/id
                                   product-id                :payment/product-id
                                   {provider-type :db/ident} :payment/provider-type
@@ -132,3 +131,52 @@
   {:paymentId (str payment-id)
    :productId product-id
    :provider (get payment-provider-map provider-type)})
+
+(defn stripe-customer->graphql [customer]
+  (select-keys customer [:id :email]))
+
+#_{:success? true
+ :customer
+ {:default_source nil
+  :description nil
+  :address nil
+  :email "swashing@gmail.com"
+  :delinquent false
+  :invoice_prefix "B6AB8014"
+  :tax_ids
+  {:object "list"
+   :data []
+   :has_more false
+   :total_count 0
+   :url "/v1/customers/cus_I1nbWhcKTW7wl2/tax_ids"}
+  :phone nil
+  :account_balance 0
+  :sources
+  {:object "list"
+   :data []
+   :has_more false
+   :total_count 0
+   :url "/v1/customers/cus_I1nbWhcKTW7wl2/sources"}
+  :name nil
+  :tax_exempt "none"
+  :created 1600198814
+  :invoice_settings
+  {:custom_fields nil :default_payment_method nil :footer nil}
+  :subscriptions
+  {:object "list"
+   :data []
+   :has_more false
+   :total_count 0
+   :url "/v1/customers/cus_I1nbWhcKTW7wl2/subscriptions"}
+  :currency nil
+  :balance 0
+  :preferred_locales []
+  :id "cus_I1nbWhcKTW7wl2"
+  :tax_info_verification nil
+  :livemode false
+  :shipping nil
+  :tax_info nil
+  :discount nil
+  :next_invoice_sequence 1
+  :metadata {}
+  :object "customer"}}

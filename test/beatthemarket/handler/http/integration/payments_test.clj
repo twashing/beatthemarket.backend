@@ -287,6 +287,76 @@
         (is (= expected-user-payments-response
                (map #(select-keys % [:productId :provider]) user-payments-response))))))
 
+(defn delete-test-customer! [id]
+
+  (test-util/send-data {:id   987
+                        :type :start
+                        :payload
+                        {:query "mutation DeleteStripeCustomer($id: String!) {
+                                           deleteStripeCustomer(id: $id) {
+                                             message
+                                           }
+                                         }"
+                         :variables {:id id}}})
+
+  (test-util/<message!! 1000))
+
+(deftest create-stripe-customer-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        email "foo@bar.com"]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+
+    (testing "Create customer if Stripe doesn't have it"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateStripeCustomer($email: String!) {
+                                       createStripeCustomer(email: $email) {
+                                         id
+                                         email
+                                       }
+                                     }"
+                             :variables {:email email}}})
+
+      (test-util/<message!! 1000)
+      (let [[{result-id :id
+              result-email :email}] (-> (test-util/<message!! 1000) :payload :data :createStripeCustomer)]
+
+        (is (= email result-email))
+        (is (not (nil? result-id)))
+
+        (testing "Calling createStripeCustomer when customer exists, returns that customer"
+
+          (test-util/send-data {:id   988
+                                :type :start
+                                :payload
+                                {:query "mutation CreateStripeCustomer($email: String!) {
+                                           createStripeCustomer(email: $email) {
+                                             id
+                                             email
+                                           }
+                                         }"
+                                 :variables {:email email}}})
+
+          (test-util/<message!! 1000)
+          (let [[{result-id2 :id
+                  result-email2 :email}] (-> (test-util/<message!! 1000) util/pprint+identity :payload :data :createStripeCustomer)]
+
+            (are [x y] (= x y)
+              email result-email2
+              result-id result-id2)))
+
+        (testing "DELETEING test customer"
+          (delete-test-customer! result-id))))))
+
 (deftest verify-payment-stripe-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)

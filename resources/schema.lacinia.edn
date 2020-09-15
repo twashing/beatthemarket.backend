@@ -6,7 +6,7 @@
    {:message {:type (non-null :LoginAckMessage)}
     :user    {:type (non-null String)}}}
 
-  :CreateGamekAck
+  :CreateGameAck
   {:fields
    {:id     {:type (non-null String)}
     :stocks {:type (list (non-null :Stock))}}}
@@ -93,7 +93,16 @@
   {:fields
    {:paymentId {:type (non-null String)}
     :productId {:type (non-null String)}
-    :provider {:type (non-null String)}}}}
+    :provider {:type (non-null String)}}}
+
+  :StripeCustomer
+  {:fields
+   {:id {:type (non-null String)}
+    :email {:type (non-null String)}}}
+
+  :DeleteStripeCustomerAck
+  {:fields
+   {:message {:type (non-null String)}}}}
 
 
  ;; //
@@ -197,7 +206,7 @@
    :resolve     :resolve-login}
 
   :createGame
-  {:type        :CreateGamekAck
+  {:type        :CreateGameAck
    :description "Creates a new game"
    :resolve     :resolve-create-game
    :args
@@ -257,7 +266,19 @@
    :args
    {:productId {:type (non-null String)}
     :provider {:type (non-null String)}
-    :token {:type (non-null String)}}}}
+    :token {:type (non-null String)}}}
+
+  :createStripeCustomer
+  {:type (list :StripeCustomer)
+   :resolve :create-stripe-customer
+   :args
+   {:email {:type (non-null String)}}}
+
+  :deleteStripeCustomer
+  {:type :DeleteStripeCustomerAck
+   :resolve :delete-stripe-customer
+   :args
+   {:id {:type (non-null String)}}}}
 
 
  ;; //

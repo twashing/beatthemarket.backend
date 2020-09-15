@@ -194,7 +194,9 @@
                                       :resolve-list-games                graphql.core/resolve-list-games
 
                                       :user-payments            graphql.core/user-payments
-                                      :verify-payment           graphql.core/verify-payment})
+                                      :verify-payment           graphql.core/verify-payment
+                                      :create-stripe-customer   graphql.core/create-stripe-customer
+                                      :delete-stripe-customer   graphql.core/delete-stripe-customer})
       (lacinia.util/attach-streamers {:stream-stock-ticks       graphql.core/stream-stock-ticks
                                       :stream-portfolio-updates graphql.core/stream-portfolio-updates
                                       :stream-game-events       graphql.core/stream-game-events})
