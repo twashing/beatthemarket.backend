@@ -193,7 +193,7 @@
                                       :resolve-exit-game                 graphql.core/resolve-exit-game
                                       :resolve-list-games                graphql.core/resolve-list-games
 
-                                      :user-payments       graphql.core/user-payments
+                                      :user-payments            graphql.core/user-payments
                                       :verify-payment           graphql.core/verify-payment})
       (lacinia.util/attach-streamers {:stream-stock-ticks       graphql.core/stream-stock-ticks
                                       :stream-portfolio-updates graphql.core/stream-portfolio-updates

@@ -491,6 +491,7 @@
                                                     provider :provider
                                                     token :token} _]
 
+  (util/pprint+identity token)
   (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
         {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
         apple-hash (json/read-str token :key-fn keyword)]

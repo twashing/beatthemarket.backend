@@ -46,6 +46,9 @@
     (let [create-customer-body {:email "swashing@gmail.com"}]
       (payments.core/create-customer stripe-client create-customer-body)))
 
+  ;; TODO Overview
+  ;; https://www.youtube.com/playlist?list=PLz-qdc-PbYk7m063n00p-USU9dIBKAwJx
+  
   ;; TODO
   ;; Make sure customer has a default payment method
 

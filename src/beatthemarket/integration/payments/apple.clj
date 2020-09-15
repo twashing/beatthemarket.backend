@@ -36,6 +36,11 @@
                         slurp
                         (json/read-str :key-fn keyword)))
 
+    (def apple-hash (-> "example-hash-apple.3.json"
+                        resource
+                        slurp
+                        (json/read-str :key-fn keyword)))
+
     (def primary-shared-secret "d552367242fb40d9a2aee861031922ee"))
 
 
