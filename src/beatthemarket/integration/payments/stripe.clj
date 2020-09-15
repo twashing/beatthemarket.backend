@@ -7,8 +7,25 @@
             [beatthemarket.util :as util]))
 
 
-(defn verify-payment-workflow [conn payment-config args]
-  )
+;; TODO GQL Subscription "Payments"
+;; payment.success payment.fail
+
+;; [ok] Binding for Stripe productId => local productId
+
+;; Conditionally create a Stripe customer
+
+;; Set the payment method as the default payment method for the subscription invoices
+
+;; Create subscription
+
+;; Enable features, based on purchases ..products
+
+
+(defmethod ig/init-key :payments/stripe [_ {opts :service :as config}]
+  (assoc config :client (ig/init-key :magnet.payments/stripe opts)))
+
+
+(defn verify-payment-workflow [conn payment-config args])
 
 (comment
 
@@ -46,12 +63,12 @@
     (let [create-customer-body {:email "swashing@gmail.com"}]
       (payments.core/create-customer stripe-client create-customer-body)))
 
+
   ;; TODO Overview
   ;; https://www.youtube.com/playlist?list=PLz-qdc-PbYk7m063n00p-USU9dIBKAwJx
-  
+
   ;; TODO
   ;; Make sure customer has a default payment method
-
 
   ;; TODO
   ;; X. Create payment method from Stripe token / card information (customer, payment method, and price IDs)

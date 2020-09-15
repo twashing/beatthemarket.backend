@@ -491,7 +491,7 @@
                                                     provider :provider
                                                     token :token} _]
 
-  (util/pprint+identity token)
+  ;;  (util/pprint+identity token)
   (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
         {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
         apple-hash (json/read-str token :key-fn keyword)]
@@ -517,7 +517,7 @@
                                                      token :token :as args} _]
 
   (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        payment-config (-> repl.state/config :magnet.payments/stripe)]
+        payment-config (-> repl.state/config :payments/stripe :service)]
 
     (util/pprint+identity ["Sanity Stripe" payment-config args])
     (->> (payments.stripe/verify-payment-workflow conn payment-config args)

@@ -40,6 +40,8 @@
   (pprint integrant.repl.state/config)
   (pprint integrant.repl.state/system)
 
+  (-> integrant.repl.state/system :payments/stripe pprint)
+
 
   ;; Individual
   (prep)

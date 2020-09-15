@@ -86,9 +86,27 @@
                :firebase/firebase             #ref [:secrets :firebase]
                :persistence/datomic           {:datomic         #ref [:secrets :production :persistence/datomic]}
 
-               :payments/apple                #ref [:secrets :production :payments/apple]
-               :payments/google                #ref [:secrets :production :payments/google]
-               :magnet.payments/stripe        #ref [:secrets :production :payments/stripe]
+               :payments/apple                {:service #ref [:secrets :production :payments/apple]
+                                               :products {:margin_trading_1month "margin_trading_1month.1"
+                                                          :additional_balance_100k "additional_balance_100k"
+                                                          :additional_balance_200k "additional_balance_200k"
+                                                          :additional_balance_300k "additional_balance_300k"
+                                                          :additional_balance_400k "additional_balance_400k"
+                                                          :additional_5_minutes "additional_5_minutes"}}
+               :payments/google               {:service #ref [:secrets :production :payments/google]
+                                               :products {:margin_trading_1month "margin_trading_1month"
+                                                          :additional_balance_100k "additional_balance_100k"
+                                                          :additional_balance_200k "additional_balance_200k"
+                                                          :additional_balance_300k "additional_balance_300k"
+                                                          :additional_balance_400k "additional_balance_400k"
+                                                          :additional_5_minutes "additional_5_minutes"}}
+               :payments/stripe        {:service #ref [:secrets :production :payments/stripe]
+                                        :products {:margin_trading_1month "prod_I1RAoB8UK5GDab"
+                                                   :additional_balance_100k "prod_I1RCtpy369Bu4g"
+                                                   :additional_balance_200k "prod_I1RC5THYQrZdYO"
+                                                   :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
+                                                   :additional_balance_400k "prod_I1RDqXXxLnMXdb"
+                                                   :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
                :game/games                    {:datomic #ig/ref :persistence/datomic }
                :game/game                     #ref[:game]
                :nrepl/nrepl                   {:port 7000}
@@ -104,9 +122,27 @@
                 :firebase/firebase             #ref [:secrets :firebase]
                 :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                                   :config  {}}}
-                :payments/apple                #ref [:secrets :development :payments/apple]
-                :payments/google                #ref [:secrets :development :payments/google]
-                :magnet.payments/stripe        #ref [:secrets :development :payments/stripe]
+                :payments/apple                {:service #ref [:secrets :development :payments/apple]
+                                                :products {:margin_trading_1month "margin_trading_1month.1"
+                                                           :additional_balance_100k "additional_balance_100k"
+                                                           :additional_balance_200k "additional_balance_200k"
+                                                           :additional_balance_300k "additional_balance_300k"
+                                                           :additional_balance_400k "additional_balance_400k"
+                                                           :additional_5_minutes "additional_5_minutes"}}
+                :payments/google               {:service #ref [:secrets :development :payments/google]
+                                                :products {:margin_trading_1month "margin_trading_1month"
+                                                           :additional_balance_100k "additional_balance_100k"
+                                                           :additional_balance_200k "additional_balance_200k"
+                                                           :additional_balance_300k "additional_balance_300k"
+                                                           :additional_balance_400k "additional_balance_400k"
+                                                           :additional_5_minutes "additional_5_minutes"}}
+                :payments/stripe        {:service #ref [:secrets :development :payments/stripe]
+                                         :products {:margin_trading_1month "prod_I1RAoB8UK5GDab"
+                                                    :additional_balance_100k "prod_I1RCtpy369Bu4g"
+                                                    :additional_balance_200k "prod_I1RC5THYQrZdYO"
+                                                    :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
+                                                    :additional_balance_400k "prod_I1RDqXXxLnMXdb"
+                                                    :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
                 :game/games                    {:datomic #ig/ref :persistence/datomic}
                 :game/game                     #ref[:game]
                 :nrepl/nrepl                   {:port 7000}
@@ -122,9 +158,27 @@
          :firebase/firebase             #ref [:secrets :firebase]
          :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                            :config  {}}}
-         :payments/apple                #ref [:secrets :test :payments/apple]
-         :payments/google                #ref [:secrets :test :payments/google]
-         :magnet.payments/stripe        #ref [:secrets :test :payments/stripe]
+         :payments/apple                {:service #ref [:secrets :test :payments/apple]
+                                         :products {:margin_trading_1month "margin_trading_1month.1"
+                                                    :additional_balance_100k "additional_balance_100k"
+                                                    :additional_balance_200k "additional_balance_200k"
+                                                    :additional_balance_300k "additional_balance_300k"
+                                                    :additional_balance_400k "additional_balance_400k"
+                                                    :additional_5_minutes "additional_5_minutes"}}
+         :payments/google               {:service #ref [:secrets :test :payments/google]
+                                         :products {:margin_trading_1month "margin_trading_1month"
+                                                    :additional_balance_100k "additional_balance_100k"
+                                                    :additional_balance_200k "additional_balance_200k"
+                                                    :additional_balance_300k "additional_balance_300k"
+                                                    :additional_balance_400k "additional_balance_400k"
+                                                    :additional_5_minutes "additional_5_minutes"}}
+         :payments/stripe        {:service #ref [:secrets :test :payments/stripe]
+                                  :products {:margin_trading_1month "prod_I1RAoB8UK5GDab"
+                                             :additional_balance_100k "prod_I1RCtpy369Bu4g"
+                                             :additional_balance_200k "prod_I1RC5THYQrZdYO"
+                                             :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
+                                             :additional_balance_400k "prod_I1RDqXXxLnMXdb"
+                                             :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
          :game/games                    {:datomic #ig/ref :persistence/datomic}
          :game/game                     #ref[:game]
          :nrepl/nrepl                   {:port 7001}
