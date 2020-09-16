@@ -357,7 +357,71 @@
         (testing "DELETEING test customer"
           (delete-test-customer! result-id))))))
 
-(deftest verify-payment-stripe-test
+(deftest verify-subscription-stripe-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1RAoB8UK5GDab" ;; Margin Trading
+        ;; product-id "prod_I1RCtpy369Bu4g" ;; Additional $100k
+        provider "stripe"
+        token (-> "example-payload-stripe-subscription-expired-card-error.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (testing "Subscription error with an invalid card"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                             :variables {:productId product-id
+                                         :provider provider
+                                         :token token}}})
+
+      (test-util/<message!! 5000)
+      (let [error-message (-> (test-util/<message!! 5000) util/pprint+identity :payload :errors first :message)
+            expected-error-message "Your card has expired."]
+
+        (is (= expected-error-message error-message))))
+
+    (testing "Subsciption with a valid card"
+
+      (let [token (-> "example-payload-stripe-subscription-valid.json" resource slurp)]
+
+        (test-util/send-data {:id   987
+                              :type :start
+                              :payload
+                              {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                               :variables {:productId product-id
+                                           :provider provider
+                                           :token token}}})
+
+        (util/ppi (test-util/<message!! 1000))
+        (util/ppi (test-util/<message!! 1000))
+
+        #_(let [error-message (-> (test-util/<message!! 5000) util/pprint+identity :payload :errors first :message)
+              expected-error-message "Your card has expired."]
+
+          (is (= expected-error-message error-message)))
+        ))
+    ))
+
+(deftest verify-charge-stripe-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -365,29 +429,59 @@
 
         product-id "prod_I1RCtpy369Bu4g" ;; Additional $100k
         provider "stripe"
-        token (-> "example-payload-stripe.json" resource slurp)]
+        token (-> "example-payload-stripe-charge.json" resource slurp)]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+    (testing "Charge a valid card"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
                                        verifyPayment(productId: $productId, provider: $provider, token: $token) {
                                          paymentId
                                          productId
                                          provider
                                        }
                                      }"
-                           :variables {:productId product-id
-                                       :provider provider
-                                       :token token}}})
+                             :variables {:productId product-id
+                                         :provider provider
+                                         :token token}}})
 
-     (util/pprint+identity (test-util/<message!! 1000))
-     (util/pprint+identity (test-util/<message!! 1000))
+      (util/ppi (test-util/<message!! 5000))
+      (util/ppi (test-util/<message!! 5000))
 
-     ;; (test-util/<message!! 1000)
-     ;; (test-util/<message!! 1000)
+      #_(let [error-message (-> (test-util/<message!! 5000) util/pprint+identity :payload :errors first :message)
+            expected-error-message "Your card has expired."]
 
+        (is (= expected-error-message error-message))))
+
+    #_(testing "Subsciption with a valid card"
+
+      (let [token (-> "example-payload-stripe-subscription-valid.json" resource slurp)]
+
+        (test-util/send-data {:id   987
+                              :type :start
+                              :payload
+                              {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                               :variables {:productId product-id
+                                           :provider provider
+                                           :token token}}})
+
+        (util/ppi (test-util/<message!! 1000))
+        (util/ppi (test-util/<message!! 1000))
+
+        #_(let [error-message (-> (test-util/<message!! 5000) util/pprint+identity :payload :errors first :message)
+              expected-error-message "Your card has expired."]
+
+          (is (= expected-error-message error-message)))
+        ))
     ))

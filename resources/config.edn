@@ -87,22 +87,22 @@
                :persistence/datomic           {:datomic         #ref [:secrets :production :persistence/datomic]}
 
                :payments/apple                {:service #ref [:secrets :production :payments/apple]
-                                               :products {:margin_trading_1month "margin_trading_1month.1"
-                                                          :additional_balance_100k "additional_balance_100k"
+                                               :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
+                                               :products {:additional_balance_100k "additional_balance_100k"
                                                           :additional_balance_200k "additional_balance_200k"
                                                           :additional_balance_300k "additional_balance_300k"
                                                           :additional_balance_400k "additional_balance_400k"
                                                           :additional_5_minutes "additional_5_minutes"}}
                :payments/google               {:service #ref [:secrets :production :payments/google]
-                                               :products {:margin_trading_1month "margin_trading_1month"
-                                                          :additional_balance_100k "additional_balance_100k"
+                                               :subscriptions {:margin_trading_1month "margin_trading_1month"}
+                                               :products {:additional_balance_100k "additional_balance_100k"
                                                           :additional_balance_200k "additional_balance_200k"
                                                           :additional_balance_300k "additional_balance_300k"
                                                           :additional_balance_400k "additional_balance_400k"
                                                           :additional_5_minutes "additional_5_minutes"}}
                :payments/stripe        {:service #ref [:secrets :production :payments/stripe]
-                                        :products {:margin_trading_1month "prod_I1RAoB8UK5GDab"
-                                                   :additional_balance_100k "prod_I1RCtpy369Bu4g"
+                                        :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
+                                        :products {:additional_balance_100k "prod_I1RCtpy369Bu4g"
                                                    :additional_balance_200k "prod_I1RC5THYQrZdYO"
                                                    :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
                                                    :additional_balance_400k "prod_I1RDqXXxLnMXdb"
@@ -123,22 +123,22 @@
                 :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                                   :config  {}}}
                 :payments/apple                {:service #ref [:secrets :development :payments/apple]
-                                                :products {:margin_trading_1month "margin_trading_1month.1"
-                                                           :additional_balance_100k "additional_balance_100k"
+                                                :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
+                                                :products {:additional_balance_100k "additional_balance_100k"
                                                            :additional_balance_200k "additional_balance_200k"
                                                            :additional_balance_300k "additional_balance_300k"
                                                            :additional_balance_400k "additional_balance_400k"
                                                            :additional_5_minutes "additional_5_minutes"}}
                 :payments/google               {:service #ref [:secrets :development :payments/google]
-                                                :products {:margin_trading_1month "margin_trading_1month"
-                                                           :additional_balance_100k "additional_balance_100k"
+                                                :subscriptions {:margin_trading_1month "margin_trading_1month"}
+                                                :products {:additional_balance_100k "additional_balance_100k"
                                                            :additional_balance_200k "additional_balance_200k"
                                                            :additional_balance_300k "additional_balance_300k"
                                                            :additional_balance_400k "additional_balance_400k"
                                                            :additional_5_minutes "additional_5_minutes"}}
                 :payments/stripe        {:service #ref [:secrets :development :payments/stripe]
-                                         :products {:margin_trading_1month "prod_I1RAoB8UK5GDab"
-                                                    :additional_balance_100k "prod_I1RCtpy369Bu4g"
+                                         :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
+                                         :products {:additional_balance_100k "prod_I1RCtpy369Bu4g"
                                                     :additional_balance_200k "prod_I1RC5THYQrZdYO"
                                                     :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
                                                     :additional_balance_400k "prod_I1RDqXXxLnMXdb"
@@ -159,22 +159,22 @@
          :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                            :config  {}}}
          :payments/apple                {:service #ref [:secrets :test :payments/apple]
-                                         :products {:margin_trading_1month "margin_trading_1month.1"
-                                                    :additional_balance_100k "additional_balance_100k"
+                                         :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
+                                         :products {:additional_balance_100k "additional_balance_100k"
                                                     :additional_balance_200k "additional_balance_200k"
                                                     :additional_balance_300k "additional_balance_300k"
                                                     :additional_balance_400k "additional_balance_400k"
                                                     :additional_5_minutes "additional_5_minutes"}}
          :payments/google               {:service #ref [:secrets :test :payments/google]
-                                         :products {:margin_trading_1month "margin_trading_1month"
-                                                    :additional_balance_100k "additional_balance_100k"
+                                         :subscriptions {:margin_trading_1month "margin_trading_1month"}
+                                         :products {:additional_balance_100k "additional_balance_100k"
                                                     :additional_balance_200k "additional_balance_200k"
                                                     :additional_balance_300k "additional_balance_300k"
                                                     :additional_balance_400k "additional_balance_400k"
                                                     :additional_5_minutes "additional_5_minutes"}}
          :payments/stripe        {:service #ref [:secrets :test :payments/stripe]
-                                  :products {:margin_trading_1month "prod_I1RAoB8UK5GDab"
-                                             :additional_balance_100k "prod_I1RCtpy369Bu4g"
+                                  :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
+                                  :products {:additional_balance_100k "prod_I1RCtpy369Bu4g"
                                              :additional_balance_200k "prod_I1RC5THYQrZdYO"
                                              :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
                                              :additional_balance_400k "prod_I1RDqXXxLnMXdb"

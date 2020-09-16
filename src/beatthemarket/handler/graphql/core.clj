@@ -472,68 +472,6 @@
       :status :running
       :profitLoss 0.0}]))
 
-(defn user-payments [context args _]
-
-  (try
-
-    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-          {{{email :email} :checked-authentication} :request} context]
-
-      (->> (payments.persistence/user-payments (d/db conn))
-           (map graphql.encoder/payment-purchase->graphql)))
-
-    (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
-
-(defmulti verify-payment-handler (fn [_ {provider :provider} _] provider))
-
-(defmethod verify-payment-handler "apple" [context {productId :productId
-                                                    provider :provider
-                                                    token :token} _]
-
-  ;;  (util/pprint+identity token)
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
-        apple-hash (json/read-str token :key-fn keyword)]
-
-    (->> (payments.apple/verify-payment-workflow conn verify-receipt-endpoint primary-shared-secret apple-hash)
-         (map graphql.encoder/payment-purchase->graphql))))
-
-(defmethod verify-payment-handler "google" [context {productId :productId
-                                                     provider :provider
-                                                     token :token :as args} _]
-
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        payment-config (-> repl.state/config :payments/google)]
-
-    ;; (util/pprint+identity ["Sanity 2" payment-config args])
-    (->> (payments.google/verify-payment-workflow conn payment-config args)
-         (map graphql.encoder/payment-purchase->graphql))
-
-    []))
-
-(defmethod verify-payment-handler "stripe" [context {productId :productId
-                                                     provider :provider
-                                                     token :token :as args} _]
-
-  (let [{{{conn :conn} :opts} :persistence/datomic
-         component :payments/stripe} repl.state/system]
-
-    (->> (update args :token #(json/read-str % :key-fn keyword))
-         (payments.stripe/verify-payment-workflow conn component)
-         (map graphql.encoder/payment-purchase->graphql))
-
-    []))
-
-(defn verify-payment [context args parent]
-
-  (try
-
-    (verify-payment-handler context args parent)
-
-    (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
-
 (defn create-stripe-customer [context {email :email} parent]
 
   (try
@@ -555,6 +493,107 @@
 
     (catch Exception e
       (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defn user-payments [context args _]
+
+  (try
+
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context]
+
+      (->> (payments.persistence/user-payments (d/db conn))
+           (map graphql.encoder/payment-purchase->graphql)))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defmulti verify-payment-handler (fn [_ {provider :provider} _] provider))
+
+(defmethod verify-payment-handler "apple" [context {productId :productId
+                                                    provider :provider
+                                                    token :token :as args} _]
+
+  (util/ppi args)
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+        {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
+        apple-hash (json/read-str token :key-fn keyword)]
+
+    (->> (payments.apple/verify-payment-workflow conn verify-receipt-endpoint primary-shared-secret apple-hash)
+         (map graphql.encoder/payment-purchase->graphql))))
+
+(defmethod verify-payment-handler "google" [context {productId :productId
+                                                     provider :provider
+                                                     token :token :as args} _]
+
+  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+        payment-config (-> repl.state/config :payments/google)]
+
+    ;; (util/pprint+identity ["Sanity 2" payment-config args])
+    (->> (payments.google/verify-payment-workflow conn payment-config args)
+         (map graphql.encoder/payment-purchase->graphql))
+
+    []))
+
+(defn valid-stripe-product-id? [product-id]
+
+  (let [products (-> repl.state/system :payments/stripe :products)]
+
+    (as-> (vals products) v
+      (into #{} v)
+      (some v #{product-id})
+      (util/exists? v))))
+
+(defn valid-stripe-subscription-id? [subscription-id]
+
+  (let [subscriptions (-> repl.state/system :payments/stripe :subscriptions)]
+
+    (as-> (vals subscriptions) v
+      (into #{} v)
+      (some v #{subscription-id})
+      (util/exists? v))))
+
+(defmethod verify-payment-handler "stripe" [context {product-id :productId :as args} _]
+
+  (let [{{{conn :conn} :opts} :persistence/datomic
+         component :payments/stripe} repl.state/system]
+
+    ;; (util/ppi args)
+    ;; (println (format "Valid product %s" (valid-stripe-product-id? product-id)))
+    ;; (println (format "Valid subscription %s" (valid-stripe-subscription-id? product-id)))
+
+    ;; (update args :token #(json/read-str % :key-fn keyword))
+
+     (cond
+
+         (valid-stripe-product-id? product-id)
+         (->> (update args :token #(json/read-str % :key-fn keyword))
+              (payments.stripe/verify-product-workflow conn component))
+
+         (valid-stripe-subscription-id? product-id)
+         (->> (update args :token #(json/read-str % :key-fn keyword))
+              (payments.stripe/verify-subscription-workflow conn component))
+
+         :else (throw (Exception. (format "Invalid product ID given %s" product-id))))
+    )
+
+  ;; (let [{{{conn :conn} :opts} :persistence/datomic
+  ;;          component :payments/stripe} repl.state/system]
+  ;;
+  ;;     (->> (update args :token # (json/read-str % :key-fn keyword))
+  ;;          (payments.stripe/verify-payment-workflow conn component)
+  ;;          #_(map graphql.encoder/payment-purchase->graphql)))
+  )
+
+(defn verify-payment [context args parent]
+
+  (try
+
+    (verify-payment-handler context args parent)
+
+    (catch Exception e
+      (do
+        (util/ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 
 ; STREAMERS

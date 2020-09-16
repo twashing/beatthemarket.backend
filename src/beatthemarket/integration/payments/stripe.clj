@@ -12,7 +12,7 @@
 
 ;; [ok] Binding for Stripe productId => local productId
 
-;; Conditionally create a Stripe customer
+;; [ok] Conditionally create a Stripe customer
 
 ;; Set the payment method as the default payment method for the subscription invoices
 
@@ -26,21 +26,6 @@
 
 (defmethod ig/init-key :payments/stripe [_ {opts :service :as config}]
   (assoc config :client (ig/init-key :magnet.payments/stripe opts)))
-
-#_(defn local-customer-exists? [conn customer-id]
-    ((comp not empty?) (util/ppi (stripe.persistence/customer-by-id conn customer-id))))
-
-#_(defn stripe-customer-exists? [client customer-id]
-    (->> (payments.core/get-all-customers client {})
-         :customers
-         (map :id)
-         util/ppi
-         (filter #(= customer-id %))
-         util/ppi
-         (util/exists?)))
-
-#_(defn local-customer [conn customer-id]
-    (util/ppi (ffirst (stripe.persistence/customer-by-id conn customer-id))))
 
 (defn stripe-customer-by-id [client id]
   (->> (payments.core/get-all-customers client {})
@@ -75,28 +60,97 @@
        :customers
        (map #(delete-customer! client (:id %)))))
 
-(defn verify-payment-workflow [conn
+;; List<Object> items = new ArrayList<>();
+;; Map<String, Object> item1 = new HashMap<>();
+;; item1.put(
+;;           "price",
+;;           "price_0HROINu4V08wojXst9HsC6Yw"
+;;           );
+;; items.add(item1);
+;; Map<String, Object> params = new HashMap<>();
+;; params.put("customer", "cus_Hz9Ms08zUybaTM");
+;; params.put("items", items);
+;;
+;; Subscription subscription =
+;; Subscription.create(params);
+
+#_(defn get-test-subscription-data []
+  (let [payments-adapter (ig/init-key :magnet.payments/stripe test-config)
+        plan-id (-> (core/create-plan payments-adapter test-plan-data) :plan :id)]
+    {:customer (->> {:description "customer for someone@example.com"}
+                    (core/create-customer payments-adapter)
+                    :customer
+                    :id)
+     :items {"0" {:plan plan-id}}
+     :trial_period_days 30}))
+
+(comment
+
+  (def stripe-client (-> integrant.repl.state/system
+                         :payments/stripe
+                         :client))
+
+  (def input (-> "example-payload-stripe-subscription-expired-card-error.json"
+                 resource
+                 slurp
+                 (json/read-str :key-fn keyword)))
+
+  (let [{customer-id :customerId
+         payment-method-id :paymentMethodId
+         price-id :priceId} input
+
+        payload {:customer customer-id
+                 :default_payment_method payment-method-id
+                 :items {"0" {:price price-id}}}]
+
+    ;; (util/ppi [stripe-client payload])
+    (util/ppi (payments.core/create-subscription stripe-client payload))))
+
+(defn verify-product-workflow [conn
                                {client :client :as component}
-                               {{customer-id :customerId} :token :as args}]
+                               {{customer-id :customer
+                                 source :source
+                                 :as payload} :token}]
 
-  ;; [ok] List customer
-  ;; https://stripe.com/docs/api/customers/list
+  (util/ppi payload)
+  (util/ppi (payments.core/attach-payment-method client source customer-id))
+  (util/ppi (payments.core/create-charge client payload)))
 
-  ;; (util/ppi [component args])
+(defn conditionally-create-subscription [stripe-client payload]
 
+  ;; TODO Check if subscription exists
+  (let [{success? :success? :as subscription} (util/ppi (payments.core/create-subscription stripe-client payload))]
 
+    (if-not success?
+      (throw (Exception. (-> subscription :error-details :error :message util/ppi)))
+      subscription)))
 
-  ;; (util/pprint+identity component)
+(defn verify-subscription-workflow [conn
+                                    {client :client :as component}
+                                    {product-id :productId
+                                     {customer-id :customerId
+                                      payment-method-id :paymentMethodId
+                                      price-id :priceId} :token :as args}]
 
+  ;; Attach payment method to client
+  (println "A /")
 
-  ;; Conditionally create a Stripe customer
+  ;; TODO check if payment method attached
+  (util/ppi (payments.core/attach-payment-method client payment-method-id customer-id))
 
-  ;; X. Create a customer
-  #_(def customer
-      (let [create-customer-body {:email "swashing@gmail.com"}]
-        (payments.core/create-customer stripe-client create-customer-body)))
+  ;; Purchase Product || Create a subscription
+  (let [payload {:customer customer-id
+                 :default_payment_method payment-method-id
+                 :items {"0" {:price price-id}}}]
 
-  )
+    (println "B /")
+    ;; (println (format "Valid product %s" (valid-stripe-product-id? product-id)))
+    ;; (println (format "Valid subscription %s" (valid-stripe-subscription-id? product-id)))
+    (conditionally-create-subscription client payload)))
+
+;; {"customerId": "cus_9JzjeBVXZWH0e5",
+;;  "paymentMethodId": "card_9Jzj8NB5gDrYce",
+;;  "priceId": "price_0HROJnu4V08wojXsIaqX0FEP"}
 
 (comment
 
