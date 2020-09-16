@@ -113,7 +113,9 @@
                                  :as payload} :token}]
 
   (util/ppi payload)
-  (util/ppi (payments.core/attach-payment-method client source customer-id))
+  ;; (util/ppi (payments.core/attach-payment-method client source customer-id))
+
+  (util/ppi (payments.core/update-customer client customer-id {:source source}))
   (util/ppi (payments.core/create-charge client payload)))
 
 (defn conditionally-create-subscription [stripe-client payload]

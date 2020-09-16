@@ -61,7 +61,7 @@
         {profile         :profile
          market-trading? :market-trading} (process-parsed-options options)]
 
-    (println "\nCreating your server...")
+    (println (format "\nCreating your server... %s" profile))
 
     ;; (state.core/set-prep)
     ;; (state.core/init-components)
