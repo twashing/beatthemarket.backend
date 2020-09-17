@@ -122,11 +122,11 @@
 
                 (fn [response]
                   (println "response is:" response)
-                  (util/pprint+identity response))
+                  (util/ppi response))
 
                 (fn [exception]
                   (println "exception message is: " (.getMessage exception))
-                  (util/pprint+identity exception))))
+                  (util/ppi exception))))
 
   ;; NOTE Try debug
   (let [opts {;; :redirect-strategy :none
@@ -142,9 +142,9 @@
                              "redirect_uri" redirect-url
                              "client_id" oauth-client-id}}]
 
-    #_(util/pprint+identity [refresh-token-url opts])
+    #_(util/ppi [refresh-token-url opts])
     (-> (client/get refresh-token-url opts)
-        util/pprint+identity
+        util/ppi
         (get "Location")))
 
   #_"4/4AF0Ihuc8cwmtQ7sdRRlw__qqZkRfAnKEwcpPyDPSAZs8ri8hPtRtetsRvRFjLmkdQbMtZbHxeEpxWWoBgTd5_o"
@@ -157,7 +157,7 @@
               "redirect_uri" redirect-url
               "client_id" oauth-client-id}]
 
-    (util/pprint+identity
+    (util/ppi
       (http/GET client refresh-token-url
                 :query opts)))
 
@@ -174,9 +174,9 @@
                       :client_secret oauth-client-secret
                       :redirect_uri redirect-url}]
 
-    (util/pprint+identity ["Sanity 3" access-token-url request-body])
+    (util/ppi ["Sanity 3" access-token-url request-body])
     (-> (client/post access-token-url {:body (json/write-str request-body)})
-        util/pprint+identity
+        util/ppi
         :body
         (json/read-str :key-fn keyword)
         :access_token)))
@@ -247,38 +247,38 @@
     ;;                    (setApplicationName googleProductName)
     ;;                    (build)))
     ;;
-    ;; (def result (util/pprint+identity
+    ;; (def result (util/ppi
     ;;               (.. publisher
     ;;                   (purchases)
     ;;                   (products)
     ;;                   (get googlePackageName subscriptionId purchaseToken)
     ;;                   (execute))))
 
-    ;; (util/pprint+identity (.refreshToken credential))
-    ;; (util/pprint+identity (bean credential))
+    ;; (util/ppi (.refreshToken credential))
+    ;; (util/ppi (bean credential))
 
-    ;; (util/pprint+identity (.executeRefreshToken credential))
-    ;; (util/pprint+identity (bean credential))
+    ;; (util/ppi (.executeRefreshToken credential))
+    ;; (util/ppi (bean credential))
 
     ;; i.
-    ;; (util/pprint+identity (doto credential
+    ;; (util/ppi (doto credential
     ;;                         (.setServiceAccountPrivateKeyFromP12File (File. "resources/beatthemarket-c13f8-a87cc30b3d77.json"))
     ;;                         (.getRefreshToken)))
-    ;; (util/pprint+identity (bean credential))
+    ;; (util/ppi (bean credential))
 
     ;; ii.
-    ;; (util/pprint+identity (.getRefreshToken credential))
-    ;; (util/pprint+identity (bean credential))
+    ;; (util/ppi (.getRefreshToken credential))
+    ;; (util/ppi (bean credential))
 
     ;; iii.
-    ;; (util/pprint+identity (bean (.executeRefreshToken credential)))
-    ;; (util/pprint+identity (->refresh-token googleClientId googleClientSecret))
+    ;; (util/ppi (bean (.executeRefreshToken credential)))
+    ;; (util/ppi (->refresh-token googleClientId googleClientSecret))
 
     ;; iv.
-    ;; (util/pprint+identity (.refreshToken credential))
-    ;; (util/pprint+identity (.getAccessToken credential))
+    ;; (util/ppi (.refreshToken credential))
+    ;; (util/ppi (.getAccessToken credential))
 
-    ;; (util/pprint+identity (.accessToken credential))
+    ;; (util/ppi (.accessToken credential))
     )
 
   #_(let [requestScope (cond
@@ -309,7 +309,7 @@
                       (setApplicationName googleProductName)
                       (build))]
 
-    (util/pprint+identity
+    (util/ppi
       (.. publisher
           (purchases)
           (products)
@@ -336,13 +336,13 @@
                         :refresh_token
                         "1//05uaJkTCWegauCgYIARAAGAUSNwF-L9IrvzRvrDy5WzTAWvN6PJi78-V1xiCrh7HAFDVkpHv3sViTGGItBl3tKKki6JPBfPvETWM"}]
 
-      (util/pprint+identity (client/post token-endpoint {:body (json/write-str request-body)}))))
+      (util/ppi (client/post token-endpoint {:body (json/write-str request-body)}))))
 
   (def access-token-string
     (-> access-token
         :body
         (json/read-str :key-fn keyword)
-        util/pprint+identity
+        util/ppi
         :access_token)))
 
 (comment ;; Verifying purchases
@@ -359,8 +359,8 @@
           headers {"Authorization" (format "Bearer %s" access-token-string)
                    "Accept" "application/json"}]
 
-      (util/pprint+identity verify-endpoint)
-      (util/pprint+identity headers)
+      (util/ppi verify-endpoint)
+      (util/ppi headers)
 
       (client/get verify-endpoint headers)))
 

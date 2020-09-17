@@ -72,8 +72,8 @@
 
   (log/debug :game.games (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
   (println (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
-  ;; (util/pprint+identity stock-tick-stream)
-  ;; (util/pprint+identity stock-ticks)
+  ;; (util/ppi stock-tick-stream)
+  ;; (util/ppi stock-ticks)
   (core.async/go (core.async/>! stock-tick-stream stock-ticks))
   ;; (core.async/go (core.async/>! stock-tick-stream wtf))
 
@@ -93,7 +93,7 @@
             :profit-loss
             ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
-    ;; (util/pprint+identity updated-profit-loss-calculations)
+    ;; (util/ppi updated-profit-loss-calculations)
 
     (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
     (hash-map :stock-ticks stock-ticks
@@ -115,11 +115,11 @@
 (defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
 
   (println (format ">> TRANSACT :profit-loss / " (pr-str data)))
-  ;; (util/pprint+identity data)
+  ;; (util/ppi data)
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn)))]
 
-    ;; (util/pprint+identity realized-profit-loss)
+    ;; (util/ppi realized-profit-loss)
 
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
@@ -134,7 +134,7 @@
                          flatten
                          (map #(dissoc % :user-id :tick-id)))]
 
-    ;; (util/pprint+identity profit-loss)
+    ;; (util/ppi profit-loss)
 
     (when (not (empty? profit-loss))
 
@@ -171,7 +171,7 @@
 
   (println (format ">> CHECK level-complete / " (pr-str data)))
   ;; (println [:check-level-complete user-db-id game-id control-channel data])
-  ;; (util/pprint+identity profit-loss)
+  ;; (util/ppi profit-loss)
 
   (let [current-level (-> repl.state/system :game/games
                           deref
@@ -201,13 +201,13 @@
                              lose-threshold-met? (assoc :event :lose
                                                         :profit-loss running-pl))]
 
-    #_(util/pprint+identity [:running running-pl (* -1 lose-threshold) lose-threshold-met?
+    #_(util/ppi [:running running-pl (* -1 lose-threshold) lose-threshold-met?
                            :realized realized-pl (> realized-pl profit-threshold)
                            :current-level (deref current-level)])
 
 
     (when (:event game-event-message)
-      ;; (util/pprint+identity game-event-message)
+      ;; (util/ppi game-event-message)
       (update-inmemory-game-level!* game-id level)
       (core.async/go (core.async/>! control-channel game-event-message))))
 
@@ -216,7 +216,7 @@
 (defn process-transact-level-update! [conn {level-update :level-update :as data}]
 
   ;; (println (format ">> TRANSACT :level-update / " (pr-str level-update)))
-  ;; (util/pprint+identity level-update)
+  ;; (util/ppi level-update)
   #_(when (not (empty? level-update))
     (persistence.datomic/transact-entities! conn level-update))
   data)

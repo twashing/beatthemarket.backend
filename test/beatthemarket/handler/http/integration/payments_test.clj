@@ -1,6 +1,7 @@
 (ns beatthemarket.handler.http.integration.payments-test
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
+            [clojure.data.json :as json]
             [integrant.repl.state :as repl.state]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.util :as util])
@@ -54,6 +55,21 @@
 
         (is (= expected-user-payments empty-user-payments))))))
 
+(defn verify-payment-response [payment-response product-id provider]
+
+  (let [expected-verify-keys #{:paymentId :productId :provider}
+        expected-verify-payment-response [{:productId product-id
+                                           :provider provider}]]
+
+    (->> payment-response
+         (map keys)
+         (map #(into #{} %))
+         (every? #(= expected-verify-keys %))
+         is)
+
+    (is (= expected-verify-payment-response
+           (map #(select-keys % [:productId :provider]) payment-response)))))
+
 (deftest verify-payment-apple-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
@@ -85,20 +101,8 @@
 
     (testing "Basic verify payment"
 
-      (let [verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
-
-            expected-verify-keys #{:paymentId :productId :provider}
-            expected-verify-payment-response [{:productId product-id
-                                               :provider provider}]]
-
-        (->> verify-payment-response
-             (map keys)
-             (map #(into #{} %))
-             (every? #(= expected-verify-keys %))
-             is)
-
-        (is (= expected-verify-payment-response
-               (map #(select-keys % [:productId :provider]) verify-payment-response)))))
+      (verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
+                               product-id provider))
 
     (testing "Subsequent call to list payments, includes the most recent"
 
@@ -160,20 +164,8 @@
 
     (testing "Basic verify payment"
 
-      (let [verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
-
-            expected-verify-keys #{:paymentId :productId :provider}
-            expected-verify-payment-response [{:productId product-id
-                                               :provider provider}]]
-
-        (->> verify-payment-response
-             (map keys)
-             (map #(into #{} %))
-             (every? #(= expected-verify-keys %))
-             is)
-
-        (is (= expected-verify-payment-response
-               (map #(select-keys % [:productId :provider]) verify-payment-response)))))
+      (verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
+                               product-id provider))
 
     (testing "Subsequent call to list payments, includes the most recent"
 
@@ -231,8 +223,8 @@
                                        :provider provider
                                        :token token}}})
 
-     (util/pprint+identity (test-util/<message!! 1000))
-     (util/pprint+identity (test-util/<message!! 1000))
+     (util/ppi (test-util/<message!! 1000))
+     (util/ppi (test-util/<message!! 1000))
 
      ;; (test-util/<message!! 1000)
      ;; (test-util/<message!! 1000)
@@ -301,6 +293,22 @@
 
   (test-util/<message!! 1000))
 
+(defn create-test-customer! [email]
+
+  (test-util/send-data {:id   987
+                        :type :start
+                        :payload
+                        {:query "mutation CreateStripeCustomer($email: String!) {
+                                       createStripeCustomer(email: $email) {
+                                         id
+                                         email
+                                       }
+                                     }"
+                         :variables {:email email}}})
+
+  (test-util/<message!! 1000)
+  (test-util/<message!! 1000))
+
 (deftest create-stripe-customer-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
@@ -315,20 +323,8 @@
 
     (testing "Create customer if Stripe doesn't have it"
 
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "mutation CreateStripeCustomer($email: String!) {
-                                       createStripeCustomer(email: $email) {
-                                         id
-                                         email
-                                       }
-                                     }"
-                             :variables {:email email}}})
-
-      (test-util/<message!! 1000)
       (let [[{result-id :id
-              result-email :email}] (-> (test-util/<message!! 1000) :payload :data :createStripeCustomer)]
+              result-email :email}] (-> (create-test-customer! email) util/ppi :payload :data :createStripeCustomer)]
 
         (is (= email result-email))
         (is (not (nil? result-id)))
@@ -348,7 +344,7 @@
 
           (test-util/<message!! 1000)
           (let [[{result-id2 :id
-                  result-email2 :email}] (-> (test-util/<message!! 1000) util/pprint+identity :payload :data :createStripeCustomer)]
+                  result-email2 :email}] (-> (test-util/<message!! 1000) util/ppi :payload :data :createStripeCustomer)]
 
             (are [x y] (= x y)
               email result-email2
@@ -364,12 +360,12 @@
         client-id (UUID/randomUUID)
 
         product-id "prod_I1RAoB8UK5GDab" ;; Margin Trading
-        ;; product-id "prod_I1RCtpy369Bu4g" ;; Additional $100k
         provider "stripe"
-        token (-> "example-payload-stripe-subscription-expired-card-error.json" resource slurp)]
+        token (-> "example-payload-stripe-subscription-expired-card-error.json" resource slurp util/ppi)]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
+
 
     (testing "Subscription error with an invalid card"
 
@@ -388,38 +384,57 @@
                                          :token token}}})
 
       (test-util/<message!! 5000)
-      (let [error-message (-> (test-util/<message!! 5000) util/pprint+identity :payload :errors first :message)
+      (let [error-message (-> (test-util/<message!! 5000) :payload :errors first :message)
             expected-error-message "Your card has expired."]
-
         (is (= expected-error-message error-message))))
 
-    (testing "Subsciption with a valid card"
 
-      (let [token (-> "example-payload-stripe-subscription-valid.json" resource slurp)]
+    ;; {"customerId": "cus_9JzjeBVXZWH0e5",
+    ;;  "paymentMethodId": "card_9Jzj8NB5gDrYce",
+    ;;  "priceId": "price_0HROJnu4V08wojXsIaqX0FEP"}
 
-        (test-util/send-data {:id   987
-                              :type :start
-                              :payload
-                              {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"
-                               :variables {:productId product-id
-                                           :provider provider
-                                           :token token}}})
+    ;; {"source": "tok_visa",
+    ;;  "customer": "cus_9JzjeBVXZWH0e5",
+    ;;  "amount": 100,
+    ;;  "currency": "usd"}
 
-        (util/ppi (test-util/<message!! 1000))
-        (util/ppi (test-util/<message!! 1000))
 
-        #_(let [error-message (-> (test-util/<message!! 5000) util/pprint+identity :payload :errors first :message)
-              expected-error-message "Your card has expired."]
+    (let [token (-> "example-payload-stripe-subscription-valid.json" resource slurp (json/read-str :key-fn keyword))
+          email "foo@bar.com"]
 
-          (is (= expected-error-message error-message)))
-        ))
-    ))
+      (testing "Create a test customer"
+
+        (let [[{result-id :id
+                result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+
+              token-json (json/write-str
+                           (assoc token
+                                  :customerId result-id
+                                  :paymentMethodId "pm_card_visa"))]
+
+          (testing "Subsciption with a valid card"
+
+            (test-util/send-data {:id   988
+                                  :type :start
+                                  :payload
+                                  {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                             verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                               paymentId
+                                               productId
+                                               provider
+                                             }
+                                           }"
+                                   :variables {:productId product-id
+                                               :provider provider
+                                               :token token-json}}})
+
+            (test-util/<message!! 1000)
+
+            (verify-payment-response (-> (test-util/<message!! 5000) :payload :data :verifyPayment)
+                                     product-id provider))
+
+          (testing "DELETEING test customer"
+            (delete-test-customer! result-id)))))))
 
 (deftest verify-charge-stripe-test
 
@@ -453,7 +468,7 @@
       (util/ppi (test-util/<message!! 5000))
       (util/ppi (test-util/<message!! 5000))
 
-      #_(let [error-message (-> (test-util/<message!! 5000) util/pprint+identity :payload :errors first :message)
+      #_(let [error-message (-> (test-util/<message!! 5000) util/ppi :payload :errors first :message)
             expected-error-message "Your card has expired."]
 
         (is (= expected-error-message error-message))))
@@ -479,7 +494,7 @@
         (util/ppi (test-util/<message!! 1000))
         (util/ppi (test-util/<message!! 1000))
 
-        #_(let [error-message (-> (test-util/<message!! 5000) util/pprint+identity :payload :errors first :message)
+        #_(let [error-message (-> (test-util/<message!! 5000) util/ppi :payload :errors first :message)
               expected-error-message "Your card has expired."]
 
           (is (= expected-error-message error-message)))

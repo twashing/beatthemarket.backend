@@ -7,32 +7,38 @@
             [magnet.payments.stripe.customer :as customer]
 
             [beatthemarket.integration.payments.stripe.persistence :as stripe.persistence]
-            [beatthemarket.util :as util]))
+            [beatthemarket.integration.payments.persistence :as payments.persistence]
+            [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.util :as util])
+  (:import [java.util UUID]))
 
 
 ;; [ok] Binding for Stripe productId => local productId
 
 ;; [ok] Conditionally create a Stripe customer
 
-;; Set the payment method as the default payment method for the subscription invoices
+;; [~] Set the payment method as the default payment method for the subscription invoices
+;; Adding payment method if not there
 
-;; Create subscription
+;; [ok] Create subscription
 
+;; TODO
 ;; Enable features, based on purchases ..products
 
 ;; TODO GQL Subscription "Payments"
 ;; payment.success payment.fail
 
-
 (defmethod ig/init-key :payments/stripe [_ {opts :service :as config}]
   (assoc config :client (ig/init-key :magnet.payments/stripe opts)))
 
+
+;; CUSTOMER
 (defn stripe-customer-by-id [client id]
   (->> (payments.core/get-all-customers client {})
        :customers
        (filter #(= id (:id %)))
-       first
-       util/ppi))
+       first))
 
 (defn stripe-customers-by-email [client email]
   (-> (payments.core/get-all-customers client {})
@@ -46,7 +52,6 @@
       result
 
       (let [create-customer-body {:email email}]
-
         (->> (payments.core/create-customer client create-customer-body)
              :customer
              list
@@ -60,92 +65,22 @@
        :customers
        (map #(delete-customer! client (:id %)))))
 
-;; List<Object> items = new ArrayList<>();
-;; Map<String, Object> item1 = new HashMap<>();
-;; item1.put(
-;;           "price",
-;;           "price_0HROINu4V08wojXst9HsC6Yw"
-;;           );
-;; items.add(item1);
-;; Map<String, Object> params = new HashMap<>();
-;; params.put("customer", "cus_Hz9Ms08zUybaTM");
-;; params.put("items", items);
-;;
-;; Subscription subscription =
-;; Subscription.create(params);
 
-#_(defn get-test-subscription-data []
-  (let [payments-adapter (ig/init-key :magnet.payments/stripe test-config)
-        plan-id (-> (core/create-plan payments-adapter test-plan-data) :plan :id)]
-    {:customer (->> {:description "customer for someone@example.com"}
-                    (core/create-customer payments-adapter)
-                    :customer
-                    :id)
-     :items {"0" {:plan plan-id}}
-     :trial_period_days 30}))
+;; PAYMENT METHOD
+(defn conditionally-attach-payment-method [client payment-method-id customer-id]
 
-(comment
+  (let [payment-methods (->> (payments.core/get-customer-payment-methods stripe-client customer-id "card" {})
+                             :payment-methods
+                             (filter #(= payment-method-id (:id %))))]
 
-  (def stripe-client (-> integrant.repl.state/system
-                         :payments/stripe
-                         :client))
+    (if (empty? payment-methods)
 
-  (def input (-> "example-payload-stripe-subscription-expired-card-error.json"
-                 resource
-                 slurp
-                 (json/read-str :key-fn keyword)))
+      (payments.core/attach-payment-method client payment-method-id customer-id)
 
-  (let [{customer-id :customerId
-         payment-method-id :paymentMethodId
-         price-id :priceId} input
+      (first payment-methods))))
 
-        payload {:customer customer-id
-                 :default_payment_method payment-method-id
-                 :items {"0" {:price price-id}}}]
 
-    ;; (util/ppi [stripe-client payload])
-    (util/ppi (payments.core/create-subscription stripe-client payload))))
-
-;; A
-{:db/ident       :payment/id
- :db/valueType   :db.type/uuid
- :db/cardinality :db.cardinality/one
- :db/unique      :db.unique/value}
-
-{:db/ident       :payment/product-id
- :db/valueType   :db.type/string
- :db/cardinality :db.cardinality/one
- :db/unique      :db.unique/value}
-
-{:db/ident       :payment/provider-type
- :db/valueType   :db.type/ref
- :db/cardinality :db.cardinality/one}
-
-{:db/ident       :payment/provider
- :db/valueType   :db.type/ref
- :db/cardinality :db.cardinality/one}
-
-;; B
-{:db/ident       :payment.stripe/id
- :db/valueType   :db.type/uuid
- :db/cardinality :db.cardinality/one
- :db/unique      :db.unique/value}
-
-{:db/ident       :payment.stripe/customer-id
- :db/valueType   :db.type/string
- :db/cardinality :db.cardinality/one
- :db/unique      :db.unique/value}
-
-{:db/ident       :payment.stripe/payment-method-id
- :db/valueType   :db.type/string
- :db/cardinality :db.cardinality/one
- :db/unique      :db.unique/value}
-
-{:db/ident       :payment.stripe/price-id
- :db/valueType   :db.type/string
- :db/cardinality :db.cardinality/one
- :db/unique      :db.unique/value}
-
+;; PRODUCT
 (defn verify-product-workflow [conn
                                {client :client :as component}
                                {{customer-id :customer
@@ -166,127 +101,31 @@
 
     []))
 
+
+;; SUBSCRIPTION
 (defn conditionally-create-subscription [stripe-client payload]
 
   ;; TODO Check if subscription exists (db, stripe)
-  (let [{success? :success? :as subscription} (util/ppi (payments.core/create-subscription stripe-client payload))]
+  (let [{success? :success? :as subscription} (payments.core/create-subscription stripe-client payload)]
 
     (if-not success?
-      (throw (Exception. (-> subscription :error-details :error :message util/ppi)))
 
-      ;; TODO transact to DB
+      (throw (Exception. (-> subscription :error-details :error :message)))
+
       subscription)))
 
+(defn transact-subscription! [conn product-id payment-type {payment-id :id}]
 
-{:success? true
- :charge
- {:calculated_statement_descriptor "INTERRUPTSOFTWARE.COM"
-  :description nil
-  :disputed false
-  :amount 100
-  :payment_method "card_0HS5PNu4V08wojXsBCmtXWsi"
-  :application_fee nil
-  :source_transfer nil
-  :receipt_url
-  "https://pay.stripe.com/receipts/acct_12Z6u4V08wojXsSOSBOg/ch_0HSDjBu4V08wojXsmkrqfq68/rcpt_I2IJgqarEIIrSuTvGEgaXkRhyjgdrq2"
-  :application_fee_amount nil
-  :application nil
-  :failure_message nil
-  :payment_intent nil
-  :captured true
-  :statement_descriptor_suffix nil
-  :dispute nil
-  :payment_method_details
-  {:card
-   {:exp_year 2021
-    :installments nil
-    :wallet nil
-    :checks
-    {:address_line1_check nil
-     :address_postal_code_check nil
-     :cvc_check nil}
-    :last4 "4242"
-    :brand "visa"
-    :funding "credit"
-    :three_d_secure nil
-    :network "visa"
-    :exp_month 9
-    :country "US"
-    :fingerprint "L7v8KceRseAFi1Ve"}
-   :type "card"}
-  :receipt_email nil
-  :on_behalf_of nil
-  :created 1600313049
-  :outcome
-  {:network_status "approved_by_network"
-   :reason nil
-   :risk_level "normal"
-   :risk_score 57
-   :seller_message "Payment complete."
-   :type "authorized"}
-  :receipt_number nil
-  :source
-  {:address_line1_check nil
-   :address_state nil
-   :dynamic_last4 nil
-   :address_zip_check nil
-   :tokenization_method nil
-   :exp_year 2021
-   :name nil
-   :cvc_check nil
-   :last4 "4242"
-   :brand "Visa"
-   :customer "cus_9JzjeBVXZWH0e5"
-   :address_country nil
-   :funding "credit"
-   :address_line2 nil
-   :id "card_0HS5PNu4V08wojXsBCmtXWsi"
-   :address_zip nil
-   :address_line1 nil
-   :exp_month 9
-   :country "US"
-   :metadata {}
-   :object "card"
-   :fingerprint "L7v8KceRseAFi1Ve"
-   :address_city nil}
-  :customer "cus_9JzjeBVXZWH0e5"
-  :balance_transaction "txn_0HSDjBu4V08wojXsui8n5Sdy"
-  :transfer_group nil
-  :invoice nil
-  :currency "usd"
-  :refunded false
-  :review nil
-  :status "succeeded"
-  :id "ch_0HSDjBu4V08wojXsmkrqfq68"
-  :paid true
-  :failure_code nil
-  :order nil
-  :transfer_data nil
-  :livemode false
-  :shipping nil
-  :fraud_details {}
-  :billing_details
-  {:address
-   {:city nil
-    :country nil
-    :line1 nil
-    :line2 nil
-    :postal_code nil
-    :state nil}
-   :email nil
-   :name nil
-   :phone nil}
-  :metadata {}
-  :destination nil
-  :object "charge"
-  :statement_descriptor nil
-  :refunds
-  {:object "list"
-   :data []
-   :has_more false
-   :total_count 0
-   :url "/v1/charges/ch_0HSDjBu4V08wojXsmkrqfq68/refunds"}
-  :amount_refunded 0}}
+  (let [payment-stripe (persistence.core/bind-temporary-id
+                         {:payment.stripe/id payment-id
+                          :payment.stripe/type payment-type})
+
+        payment {:payment/id (UUID/randomUUID)
+                 :payment/product-id product-id
+                 :payment/provider-type :payment.provider/stripe
+                 :payment/provider payment-stripe}]
+
+    (persistence.datomic/transact-entities! conn payment)))
 
 (defn verify-subscription-workflow [conn
                                     {client :client :as component}
@@ -295,25 +134,27 @@
                                       payment-method-id :paymentMethodId
                                       price-id :priceId} :token :as args}]
 
-  ;; Attach payment method to client
-  (println "A /")
+  ;; (println "A /")
+  (let [{success? :success? :as payment-method}
+        (conditionally-attach-payment-method client payment-method-id customer-id)]
 
-  ;; TODO check if payment method attached
-  (util/ppi (payments.core/attach-payment-method client payment-method-id customer-id))
+    (if-not success?
 
-  ;; Purchase Product || Create a subscription
-  (let [payload {:customer customer-id
-                 :default_payment_method payment-method-id
-                 :items {"0" {:price price-id}}}]
+      (throw (Exception. (-> payment-method :error-details :error :message)))
 
-    (println "B /")
-    ;; (println (format "Valid product %s" (valid-stripe-product-id? product-id)))
-    ;; (println (format "Valid subscription %s" (valid-stripe-subscription-id? product-id)))
-    (conditionally-create-subscription client payload)))
+      (let [{{payment-method-id :id} :payment-method} payment-method
+            payload {:customer customer-id
+                     :default_payment_method payment-method-id
+                     :items {"0" {:price price-id}}}
 
-;; {"customerId": "cus_9JzjeBVXZWH0e5",
-;;  "paymentMethodId": "card_9Jzj8NB5gDrYce",
-;;  "priceId": "price_0HROJnu4V08wojXsIaqX0FEP"}
+            payment-type :payment.provider.stripe/subscription]
+
+        ;; (println "B /")
+        (->> (conditionally-create-subscription client payload)
+             :subscription
+             (transact-subscription! conn product-id payment-type)
+             :db-after
+             payments.persistence/user-payments)))))
 
 (comment
 
@@ -346,8 +187,39 @@
 
   ;; X. Create a customer
   (def customer
-    (let [create-customer-body {:email "swashing@gmail.com"}]
+    (let [create-customer-body {:email "foo@bar.com"}]
       (util/ppi (payments.core/create-customer stripe-client create-customer-body))))
+
+  (def customer-id (-> customer :customer :id))
+  ;; (def payment-method-id "card_0HRqOOu4V08wojXsHiMnmpRv")
+  (def payment-method-id "pm_card_visa")
+
+  (-> (payments.core/get-customer stripe-client customer-id)
+      :customer
+      util/ppi)
+
+  (->> (payments.core/get-customer-payment-methods stripe-client customer-id "card" {})
+       :payment-methods
+       (filter #(= "pm_0HSR8iu4V08wojXsqTE17D9g" #_payment-method-id (:id %)))
+       util/ppi)
+
+  (def result (payments.core/attach-payment-method stripe-client payment-method-id customer-id))
+
+
+
+
+  (defprotocol Customers
+    (create-customer [this customer])
+    (get-customer [this customer-id])
+    (get-all-customers [this opt-args])
+    (update-customer [this customer-id customer])
+    (delete-customer [this customer-id]))
+
+  (defprotocol PaymentMethod
+    (get-payment-method [this payment-method-id])
+    (get-customer-payment-methods [this customer-id payment-method-type opt-args])
+    (attach-payment-method [this payment-method-id customer-id])
+    (detach-payment-method [this payment-method-id]))
 
 
   ;; TODO Overview

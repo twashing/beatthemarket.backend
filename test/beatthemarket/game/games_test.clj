@@ -1337,7 +1337,7 @@
 
 
         ;; TODO Run the next :op, check P/L
-        ;; (util/pprint+identity iterations)
+        ;; (util/ppi iterations)
 
         ;; TODO check values are streamed to the correct client
 
@@ -1411,11 +1411,11 @@
     (testing "After joining, getting correct status and P/L"
 
       (let [local-stream-stock-tick (fn [stock-ticks]
-                                      (util/pprint+identity [:stock-ticks stock-ticks])
+                                      (util/ppi [:stock-ticks stock-ticks])
                                       stock-ticks)
 
             local-stream-portfolio-update! (fn [{:keys [profit-loss] :as data}]
-                                             (util/pprint+identity [:profit-loss profit-loss])
+                                             (util/ppi [:profit-loss profit-loss])
                                              data)
 
             {iterations-after-join :iterations} (games.control/join-game!

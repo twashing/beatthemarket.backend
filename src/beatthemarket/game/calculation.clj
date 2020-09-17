@@ -105,7 +105,7 @@
 
   ([game-id profit-loss]
 
-   #_(util/pprint+identity [game-id profit-loss])
+   #_(util/ppi [game-id profit-loss])
    (let [profit-loss-type :running-profit-loss]
      (for [[user-db-id pls] profit-loss
            [stock-id vs] pls
@@ -328,9 +328,9 @@
 
         realized-profit-loss (calculate-resolved-PL op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation)]
 
-    ;; (util/pprint+identity "WTF / Resolved !!")
-    ;; (util/pprint+identity profit-loss)
-    ;; (util/pprint+identity profit-loss-calculation)
+    ;; (util/ppi "WTF / Resolved !!")
+    ;; (util/ppi profit-loss)
+    ;; (util/ppi profit-loss-calculation)
 
 
     (replace-trade-state-for-stock! user-id game-id game-stock-id [])
@@ -349,9 +349,9 @@
         realized-profit-loss (calculate-realized-PL op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation)
         running-profit-loss (collect-running-profit-loss game-id)]
 
-    #_(util/pprint+identity "WTF / Crossover !!")
-    #_(util/pprint+identity profit-loss)
-    #_(util/pprint+identity profit-loss-calculation)
+    #_(util/ppi "WTF / Crossover !!")
+    #_(util/ppi profit-loss)
+    #_(util/ppi profit-loss-calculation)
 
     (replace-trade-state-for-stock! user-id game-id game-stock-id running-profit-loss-calculations)
 
@@ -363,7 +363,7 @@
 
   (let [direction (-> profit-loss last :counter-balance-direction)]
 
-    #_(util/pprint+identity [:trade-opposite-of-counter-balance-direction? [op profit-loss]
+    #_(util/ppi [:trade-opposite-of-counter-balance-direction? [op profit-loss]
                              (and direction (not (= op direction)))])
 
     (and direction (not (= op direction)))))
@@ -427,7 +427,7 @@
         crossing-counter-balance-threshold? (crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
 
 
-    (util/pprint+identity [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
+    (util/ppi [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
 
     (match [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?]
 

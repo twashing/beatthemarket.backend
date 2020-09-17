@@ -59,7 +59,7 @@
 
     ;; PRODUCTION
 
-    #_(def response-prod (util/pprint+identity (client/post "https://buy.itunes.apple.com/verifyReceipt" {:body request-body})))
+    #_(def response-prod (util/ppi (client/post "https://buy.itunes.apple.com/verifyReceipt" {:body request-body})))
 
 
     ;; SANDBOX
@@ -67,12 +67,12 @@
     ;; BAD Response - :body "status" 21002
     ;; https://developer.apple.com/documentation/appstorereceipts/status
     #_(def response-sand
-      (util/pprint+identity (client/post "https://sandbox.itunes.apple.com/verifyReceipt")))
+      (util/ppi (client/post "https://sandbox.itunes.apple.com/verifyReceipt")))
 
     ;; GOOD Response - :body "status" 0
     (def response-sand
       (-> (client/post "https://sandbox.itunes.apple.com/verifyReceipt" {:body (json/write-str request-body)})
-           util/pprint+identity
+           util/ppi
            :body
            (json/read-str :key-fn keyword)))
 
@@ -144,7 +144,7 @@
                                      {:payment/provider [*]}
                                      {:payment/provider-type [*]}])
                      :where [?e :payment/id]])
-              util/pprint+identity
+              util/ppi
               (map first)
               (map payment-purchase->graphql)))
 

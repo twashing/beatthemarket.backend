@@ -202,7 +202,7 @@
 
   (log/debug :reason ::send-data :data data)
   (g/send-msg *session* (json/write-str data))
-  #_(g/send-msg *session* (json/write-str (util/pprint+identity data)) ))
+  #_(g/send-msg *session* (json/write-str (util/ppi data)) ))
 
 (defn send-init
   ([]
@@ -218,7 +218,7 @@
 
    (alt!!
        *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)
-   #_(util/pprint+identity
+   #_(util/ppi
      (alt!!
        *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))))
 
@@ -349,9 +349,9 @@
 
     (<message!! 1000)
 
-    ;; (util/pprint+identity "consume-subscriptions...")
+    ;; (util/ppi "consume-subscriptions...")
     (let [latest-tick (->> (consume-subscriptions)
-                           ;; util/pprint+identity
+                           ;; util/ppi
                            (filter #(= 989 (:id %)))
                            last)
           [{stockTickId :stockTickId

@@ -139,7 +139,7 @@
                                    :close-sink-fn (partial sink-fn nil)
                                    :sink-fn       #(sink-fn {:event %})})]
 
-     ;; (util/pprint+identity (dissoc game-control :input-sequence :stocks-with-tick-data))
+     ;; (util/ppi (dissoc game-control :input-sequence :stocks-with-tick-data))
      (games.core/register-game-control! game game-control)
      game-control)))
 
@@ -240,7 +240,7 @@
 
 (defn update-start-position! [conn game-id start-position]
 
-  ;; (util/pprint+identity [game-id start-position])
+  ;; (util/ppi [game-id start-position])
 
   (let [{game-db-id :db/id
          old-start-position :game/start-position} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))

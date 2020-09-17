@@ -208,7 +208,7 @@
   (do
     (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
     (->> (d/pull (d/db conn) '[*] result-user-id)
-         util/pprint+identity
+         util/ppi
          (def user-pulled)))
 
   ;; (cash-account-by-game-user user-pulled)
@@ -231,7 +231,7 @@
                               (d/db conn)
                               (-> stocks first :game.stock/id))))
   (->> (d/pull (d/db conn) '[*] result-stock-id)
-       util/pprint+identity
+       util/ppi
        (def stock-pulled))
 
 
@@ -277,7 +277,7 @@
                                (d/db conn)
                                (:bookkeeping.tentry/id tentry))))
   (->> (d/pull (d/db conn) '[*] result-tentry-id)
-       util/pprint+identity
+       util/ppi
        (def tentry-pulled))
 
 

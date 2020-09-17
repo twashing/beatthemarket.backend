@@ -660,7 +660,7 @@
                                               (->> (stocks->stocks-with-tick-data game-stocks data-sequence-fn data-generators)
                                                    stocks->stock-sequences
                                                    (seek-to-position tick-index)
-                                                   ;; util/pprint+identity
+                                                   ;; util/ppi
                                                    second))))
 
            ;; game-control-live
@@ -779,10 +779,10 @@
                   {{game-stocks :game/stocks :as game} :game :as game-control}
                   data-sequence-fn]
 
-  ;; (util/pprint+identity "join-game! / A check-user-does-not-have-running-game /")
+  ;; (util/ppi "join-game! / A check-user-does-not-have-running-game /")
   (let [user-games (check-user-does-not-have-running-game conn user-db-id)]
 
-    ;; (util/pprint+identity "join-game! / B user-joined-game? /")
+    ;; (util/ppi "join-game! / B user-joined-game? /")
     (when-not (user-joined-game? user-games game-id user-db-id)
 
       ;; Join

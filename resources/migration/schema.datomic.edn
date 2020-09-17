@@ -24,6 +24,9 @@
  {:db/ident :payment.provider/google}
  {:db/ident :payment.provider/stripe}
 
+ {:db/ident :payment.provider.stripe/charge}
+ {:db/ident :payment.provider.stripe/subscription}
+
 
  {:db/ident       :payment/id
   :db/valueType   :db.type/uuid
@@ -103,24 +106,13 @@
 
  ;; Stripe
  {:db/ident       :payment.stripe/id
-  :db/valueType   :db.type/uuid
-  :db/cardinality :db.cardinality/one
-  :db/unique      :db.unique/value}
-
- {:db/ident       :payment.stripe/customer-id
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/unique      :db.unique/value}
 
- {:db/ident       :payment.stripe/payment-method-id
-  :db/valueType   :db.type/string
-  :db/cardinality :db.cardinality/one
-  :db/unique      :db.unique/value}
-
- {:db/ident       :payment.stripe/price-id
-  :db/valueType   :db.type/string
-  :db/cardinality :db.cardinality/one
-  :db/unique      :db.unique/value}
+ {:db/ident       :payment.stripe/type
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one}
 
 
 

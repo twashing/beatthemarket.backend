@@ -16,7 +16,7 @@
                                                stock-account-amount
                                                pershare-purchase-ratio] :as calculation}]
 
-  (util/pprint+identity
+  (util/ppi
     [latest-price
      {:keys [price
              stock-account-amount

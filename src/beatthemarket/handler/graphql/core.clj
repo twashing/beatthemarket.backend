@@ -528,7 +528,7 @@
   (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
         payment-config (-> repl.state/config :payments/google)]
 
-    ;; (util/pprint+identity ["Sanity 2" payment-config args])
+    ;; (util/ppi ["Sanity 2" payment-config args])
     (->> (payments.google/verify-payment-workflow conn payment-config args)
          (map graphql.encoder/payment-purchase->graphql))
 
@@ -567,33 +567,22 @@
 
          (valid-stripe-product-id? product-id)
          (->> (update args :token #(json/read-str % :key-fn keyword))
-              (payments.stripe/verify-product-workflow conn component))
+              (payments.stripe/verify-product-workflow conn component)
+              (map graphql.encoder/payment-purchase->graphql))
 
          (valid-stripe-subscription-id? product-id)
          (->> (update args :token #(json/read-str % :key-fn keyword))
-              (payments.stripe/verify-subscription-workflow conn component))
+              (payments.stripe/verify-subscription-workflow conn component)
+              (map graphql.encoder/payment-purchase->graphql))
 
-         :else (throw (Exception. (format "Invalid product ID given %s" product-id))))
-    )
-
-  ;; (let [{{{conn :conn} :opts} :persistence/datomic
-  ;;          component :payments/stripe} repl.state/system]
-  ;;
-  ;;     (->> (update args :token # (json/read-str % :key-fn keyword))
-  ;;          (payments.stripe/verify-payment-workflow conn component)
-  ;;          #_(map graphql.encoder/payment-purchase->graphql)))
-  )
+         :else (throw (Exception. (format "Invalid product ID given %s" product-id))))))
 
 (defn verify-payment [context args parent]
 
   (try
-
     (verify-payment-handler context args parent)
-
     (catch Exception e
-      (do
-        (util/ppi (bean e))
-        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 
 ; STREAMERS
