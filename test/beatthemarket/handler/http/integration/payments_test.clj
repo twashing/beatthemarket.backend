@@ -324,7 +324,7 @@
     (testing "Create customer if Stripe doesn't have it"
 
       (let [[{result-id :id
-              result-email :email}] (-> (create-test-customer! email) util/ppi :payload :data :createStripeCustomer)]
+              result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)]
 
         (is (= email result-email))
         (is (not (nil? result-id)))
@@ -344,7 +344,7 @@
 
           (test-util/<message!! 1000)
           (let [[{result-id2 :id
-                  result-email2 :email}] (-> (test-util/<message!! 1000) util/ppi :payload :data :createStripeCustomer)]
+                  result-email2 :email}] (-> (test-util/<message!! 1000) :payload :data :createStripeCustomer)]
 
             (are [x y] (= x y)
               email result-email2
@@ -361,7 +361,7 @@
 
         product-id "prod_I1RAoB8UK5GDab" ;; Margin Trading
         provider "stripe"
-        token (-> "example-payload-stripe-subscription-expired-card-error.json" resource slurp util/ppi)]
+        token (-> "example-payload-stripe-subscription-expired-card-error.json" resource slurp)]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
@@ -387,17 +387,6 @@
       (let [error-message (-> (test-util/<message!! 5000) :payload :errors first :message)
             expected-error-message "Your card has expired."]
         (is (= expected-error-message error-message))))
-
-
-    ;; {"customerId": "cus_9JzjeBVXZWH0e5",
-    ;;  "paymentMethodId": "card_9Jzj8NB5gDrYce",
-    ;;  "priceId": "price_0HROJnu4V08wojXsIaqX0FEP"}
-
-    ;; {"source": "tok_visa",
-    ;;  "customer": "cus_9JzjeBVXZWH0e5",
-    ;;  "amount": 100,
-    ;;  "currency": "usd"}
-
 
     (let [token (-> "example-payload-stripe-subscription-valid.json" resource slurp (json/read-str :key-fn keyword))
           email "foo@bar.com"]
@@ -438,6 +427,17 @@
 
 (deftest verify-charge-stripe-test
 
+
+  ;; {"customerId": "cus_9JzjeBVXZWH0e5",
+  ;;  "paymentMethodId": "card_9Jzj8NB5gDrYce",
+  ;;  "priceId": "price_0HROJnu4V08wojXsIaqX0FEP"}
+
+  ;; {"source": "tok_visa",
+  ;;  "customer": "cus_9JzjeBVXZWH0e5",
+  ;;  "amount": 100,
+  ;;  "currency": "usd"}
+
+
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         client-id (UUID/randomUUID)
@@ -465,8 +465,10 @@
                                          :provider provider
                                          :token token}}})
 
-      (util/ppi (test-util/<message!! 5000))
-      (util/ppi (test-util/<message!! 5000))
+      (test-util/<message!! 5000)
+
+      (verify-payment-response (-> (test-util/<message!! 5000) :payload :data :verifyPayment)
+                               product-id provider)
 
       #_(let [error-message (-> (test-util/<message!! 5000) util/ppi :payload :errors first :message)
             expected-error-message "Your card has expired."]

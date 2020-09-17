@@ -81,25 +81,38 @@
 
 
 ;; PRODUCT
+(defn transact-payment! [conn product-id payment-type {payment-id :id}]
+
+  (let [payment-stripe (persistence.core/bind-temporary-id
+                         {:payment.stripe/id payment-id
+                          :payment.stripe/type payment-type})
+
+        payment {:payment/id (UUID/randomUUID)
+                 :payment/product-id product-id
+                 :payment/provider-type :payment.provider/stripe
+                 :payment/provider payment-stripe}]
+
+    (persistence.datomic/transact-entities! conn payment)))
+
 (defn verify-product-workflow [conn
                                {client :client :as component}
-                               {{customer-id :customer
+                               {product-id :productId
+                                {customer-id :customer
                                  source :source
                                  :as payload} :token}]
 
-  ;; {"customer": "cus_9JzjeBVXZWH0e5",
-  ;;  "amount": 100,
-  ;;  "currency": "usd"}
+  ;; TODO
+  ;; check if customer already has source
+  ;; check for errors
+  (payments.core/update-customer client customer-id {:source source})
 
-  (util/ppi payload)
+  (let [payment-type :payment.provider.stripe/charge]
 
-  ;; TODO check if customer already has source
-  (util/ppi (payments.core/update-customer client customer-id {:source source}))
-
-  ;; TODO transform result to client
-  (let [{id :id} (util/ppi (payments.core/create-charge client (dissoc payload :source)))]
-
-    []))
+    (->> (payments.core/create-charge client (dissoc payload :source))
+         :charge
+         (transact-payment! conn product-id payment-type)
+         :db-after
+         payments.persistence/user-payments)))
 
 
 ;; SUBSCRIPTION
@@ -113,19 +126,6 @@
       (throw (Exception. (-> subscription :error-details :error :message)))
 
       subscription)))
-
-(defn transact-subscription! [conn product-id payment-type {payment-id :id}]
-
-  (let [payment-stripe (persistence.core/bind-temporary-id
-                         {:payment.stripe/id payment-id
-                          :payment.stripe/type payment-type})
-
-        payment {:payment/id (UUID/randomUUID)
-                 :payment/product-id product-id
-                 :payment/provider-type :payment.provider/stripe
-                 :payment/provider payment-stripe}]
-
-    (persistence.datomic/transact-entities! conn payment)))
 
 (defn verify-subscription-workflow [conn
                                     {client :client :as component}
@@ -152,7 +152,7 @@
         ;; (println "B /")
         (->> (conditionally-create-subscription client payload)
              :subscription
-             (transact-subscription! conn product-id payment-type)
+             (transact-payment! conn product-id payment-type)
              :db-after
              payments.persistence/user-payments)))))
 
