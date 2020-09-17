@@ -25,7 +25,6 @@
 ;; a secure connection between your app and your server,
 ;; code on your server to to validate the receipt with the App Store
 
-
 (comment
 
 
@@ -78,7 +77,6 @@
            (json/read-str :key-fn keyword)))
 
     ))
-
 
 (defn group-and-sort-verify-response [latest-receipt-info]
   (->> (group-by :product_id latest-receipt-info)

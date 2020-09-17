@@ -513,9 +513,9 @@
                                                     provider :provider
                                                     token :token :as args} _]
 
-  (util/ppi args)
+  ;; (util/ppi args)
   (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple)
+        {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payments/apple :service)
         apple-hash (json/read-str token :key-fn keyword)]
 
     (->> (payments.apple/verify-payment-workflow conn verify-receipt-endpoint primary-shared-secret apple-hash)
