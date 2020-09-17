@@ -32,8 +32,7 @@
 
  {:db/ident       :payment/product-id
   :db/valueType   :db.type/string
-  :db/cardinality :db.cardinality/one
-  :db/unique      :db.unique/value}
+  :db/cardinality :db.cardinality/one}
 
  {:db/ident       :payment/provider-type
   :db/valueType   :db.type/ref

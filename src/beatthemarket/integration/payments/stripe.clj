@@ -106,26 +106,187 @@
     ;; (util/ppi [stripe-client payload])
     (util/ppi (payments.core/create-subscription stripe-client payload))))
 
+;; A
+{:db/ident       :payment/id
+ :db/valueType   :db.type/uuid
+ :db/cardinality :db.cardinality/one
+ :db/unique      :db.unique/value}
+
+{:db/ident       :payment/product-id
+ :db/valueType   :db.type/string
+ :db/cardinality :db.cardinality/one
+ :db/unique      :db.unique/value}
+
+{:db/ident       :payment/provider-type
+ :db/valueType   :db.type/ref
+ :db/cardinality :db.cardinality/one}
+
+{:db/ident       :payment/provider
+ :db/valueType   :db.type/ref
+ :db/cardinality :db.cardinality/one}
+
+;; B
+{:db/ident       :payment.stripe/id
+ :db/valueType   :db.type/uuid
+ :db/cardinality :db.cardinality/one
+ :db/unique      :db.unique/value}
+
+{:db/ident       :payment.stripe/customer-id
+ :db/valueType   :db.type/string
+ :db/cardinality :db.cardinality/one
+ :db/unique      :db.unique/value}
+
+{:db/ident       :payment.stripe/payment-method-id
+ :db/valueType   :db.type/string
+ :db/cardinality :db.cardinality/one
+ :db/unique      :db.unique/value}
+
+{:db/ident       :payment.stripe/price-id
+ :db/valueType   :db.type/string
+ :db/cardinality :db.cardinality/one
+ :db/unique      :db.unique/value}
+
 (defn verify-product-workflow [conn
                                {client :client :as component}
                                {{customer-id :customer
                                  source :source
                                  :as payload} :token}]
 
-  (util/ppi payload)
-  ;; (util/ppi (payments.core/attach-payment-method client source customer-id))
+  ;; {"customer": "cus_9JzjeBVXZWH0e5",
+  ;;  "amount": 100,
+  ;;  "currency": "usd"}
 
+  (util/ppi payload)
+
+  ;; TODO check if customer already has source
   (util/ppi (payments.core/update-customer client customer-id {:source source}))
-  (util/ppi (payments.core/create-charge client payload)))
+
+  ;; TODO transform result to client
+  (let [{id :id} (util/ppi (payments.core/create-charge client (dissoc payload :source)))]
+
+    []))
 
 (defn conditionally-create-subscription [stripe-client payload]
 
-  ;; TODO Check if subscription exists
+  ;; TODO Check if subscription exists (db, stripe)
   (let [{success? :success? :as subscription} (util/ppi (payments.core/create-subscription stripe-client payload))]
 
     (if-not success?
       (throw (Exception. (-> subscription :error-details :error :message util/ppi)))
+
+      ;; TODO transact to DB
       subscription)))
+
+
+{:success? true
+ :charge
+ {:calculated_statement_descriptor "INTERRUPTSOFTWARE.COM"
+  :description nil
+  :disputed false
+  :amount 100
+  :payment_method "card_0HS5PNu4V08wojXsBCmtXWsi"
+  :application_fee nil
+  :source_transfer nil
+  :receipt_url
+  "https://pay.stripe.com/receipts/acct_12Z6u4V08wojXsSOSBOg/ch_0HSDjBu4V08wojXsmkrqfq68/rcpt_I2IJgqarEIIrSuTvGEgaXkRhyjgdrq2"
+  :application_fee_amount nil
+  :application nil
+  :failure_message nil
+  :payment_intent nil
+  :captured true
+  :statement_descriptor_suffix nil
+  :dispute nil
+  :payment_method_details
+  {:card
+   {:exp_year 2021
+    :installments nil
+    :wallet nil
+    :checks
+    {:address_line1_check nil
+     :address_postal_code_check nil
+     :cvc_check nil}
+    :last4 "4242"
+    :brand "visa"
+    :funding "credit"
+    :three_d_secure nil
+    :network "visa"
+    :exp_month 9
+    :country "US"
+    :fingerprint "L7v8KceRseAFi1Ve"}
+   :type "card"}
+  :receipt_email nil
+  :on_behalf_of nil
+  :created 1600313049
+  :outcome
+  {:network_status "approved_by_network"
+   :reason nil
+   :risk_level "normal"
+   :risk_score 57
+   :seller_message "Payment complete."
+   :type "authorized"}
+  :receipt_number nil
+  :source
+  {:address_line1_check nil
+   :address_state nil
+   :dynamic_last4 nil
+   :address_zip_check nil
+   :tokenization_method nil
+   :exp_year 2021
+   :name nil
+   :cvc_check nil
+   :last4 "4242"
+   :brand "Visa"
+   :customer "cus_9JzjeBVXZWH0e5"
+   :address_country nil
+   :funding "credit"
+   :address_line2 nil
+   :id "card_0HS5PNu4V08wojXsBCmtXWsi"
+   :address_zip nil
+   :address_line1 nil
+   :exp_month 9
+   :country "US"
+   :metadata {}
+   :object "card"
+   :fingerprint "L7v8KceRseAFi1Ve"
+   :address_city nil}
+  :customer "cus_9JzjeBVXZWH0e5"
+  :balance_transaction "txn_0HSDjBu4V08wojXsui8n5Sdy"
+  :transfer_group nil
+  :invoice nil
+  :currency "usd"
+  :refunded false
+  :review nil
+  :status "succeeded"
+  :id "ch_0HSDjBu4V08wojXsmkrqfq68"
+  :paid true
+  :failure_code nil
+  :order nil
+  :transfer_data nil
+  :livemode false
+  :shipping nil
+  :fraud_details {}
+  :billing_details
+  {:address
+   {:city nil
+    :country nil
+    :line1 nil
+    :line2 nil
+    :postal_code nil
+    :state nil}
+   :email nil
+   :name nil
+   :phone nil}
+  :metadata {}
+  :destination nil
+  :object "charge"
+  :statement_descriptor nil
+  :refunds
+  {:object "list"
+   :data []
+   :has_more false
+   :total_count 0
+   :url "/v1/charges/ch_0HSDjBu4V08wojXsmkrqfq68/refunds"}
+  :amount_refunded 0}}
 
 (defn verify-subscription-workflow [conn
                                     {client :client :as component}
@@ -177,8 +338,6 @@
   ;; Testing
   ;; https://stripe.com/docs/testing
 
-
-  ;; tok_visa
 
   (def stripe-client (-> integrant.repl.state/system
                          :payments/stripe
