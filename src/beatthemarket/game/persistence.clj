@@ -5,6 +5,39 @@
   (:import [java.util UUID]))
 
 
+(defn running-game-for-user-device [conn email client-id]
+
+  (ffirst
+    (d/q '[:find (pull ?g [*])
+           :in $ ?email ?client-id
+           :where
+           [?g :game/start-time]
+           [(missing? $ ?g :game/end-time)] ;; game still active
+           (or [?g :game/status :game-status/running]
+               [?g :game/status :game-status/paused]) ;; game not exited
+           [?g :game/users ?us]
+           [?us :game.user/user-client ?client-id]  ;; For a Device
+           [?us :game.user/user ?u]
+           [?u :user/email ?email] ;; For a User
+           ]
+         (d/db conn)
+         email client-id)))
+
+(defn cash-account-for-user-game [conn email game-id]
+
+  (d/q '[:find (pull ?uas [*])
+         :in $ ?game-id
+         :where
+         [?g :game/id ?game-id]
+         [?g :game/users ?us]
+
+         [?us :game.user/accounts ?uas]
+         [?uas :bookkeeping.account/name "Cash"]
+
+         [?us :game.user/user ?u]
+         [?u :user/email ?email]]
+       (d/db conn) game-id))
+
 (defn update-profit-loss-state! [game-id updated-profit-loss-calculations]
 
   (swap! (:game/games repl.state/system)

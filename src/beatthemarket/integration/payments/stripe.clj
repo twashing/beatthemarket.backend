@@ -1,6 +1,9 @@
 (ns beatthemarket.integration.payments.stripe
   (:require [clojure.data.json :as json]
             [integrant.core :as ig]
+            [integrant.repl.state :as repl.state]
+            [clj-time.core :as t]
+            [clj-time.coerce :as c]
             [magnet.payments.core :as payments.core]
             [magnet.payments.stripe.core :as core]
             [magnet.payments.stripe :as stripe]
@@ -8,9 +11,12 @@
 
             [beatthemarket.integration.payments.stripe.persistence :as stripe.persistence]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
+            [beatthemarket.integration.payments.core :as integration.payments.core]
+            [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :as util]
+            [datomic.client.api :as d])
   (:import [java.util UUID]))
 
 
@@ -26,10 +32,16 @@
 ;; TODO
 ;; Enable features, based on purchases ..products
 
+;; mark payment as consumed
+;; check if payment has been applied / consumed... at beginning of game
+
+;; TODO
+;; pro-rate the monthly charge for the first month
+
 ;; TODO GQL Subscription "Payments"
 ;; payment.success payment.fail
 
-(defmethod ig/init-key :payments/stripe [_ {opts :service :as config}]
+(defmethod ig/init-key :payment.provider/stripe [_ {opts :service :as config}]
   (assoc config :client (ig/init-key :magnet.payments/stripe opts)))
 
 
@@ -69,7 +81,7 @@
 ;; PAYMENT METHOD
 (defn conditionally-attach-payment-method [client payment-method-id customer-id]
 
-  (let [payment-methods (->> (payments.core/get-customer-payment-methods stripe-client customer-id "card" {})
+  (let [payment-methods (->> (payments.core/get-customer-payment-methods client customer-id "card" {})
                              :payment-methods
                              (filter #(= payment-method-id (:id %))))]
 
@@ -81,38 +93,97 @@
 
 
 ;; PRODUCT
-(defn transact-payment! [conn product-id payment-type {payment-id :id}]
+#_(defn transact-payment! [conn product-id payment-type {payment-id :id}]
 
   (let [payment-stripe (persistence.core/bind-temporary-id
                          {:payment.stripe/id payment-id
                           :payment.stripe/type payment-type})
 
-        payment {:payment/id (UUID/randomUUID)
-                 :payment/product-id product-id
-                 :payment/provider-type :payment.provider/stripe
-                 :payment/provider payment-stripe}]
+        payment (persistence.core/bind-temporary-id
+                  {:payment/id (UUID/randomUUID)
+                   :payment/product-id product-id
+                   :payment/provider-type :payment.provider/stripe
+                   :payment/provider payment-stripe})]
 
-    (persistence.datomic/transact-entities! conn payment)))
+    (persistence.datomic/transact-entities! conn payment)
+
+    payment))
+
+(defn ->payment [conn product-id payment-type {payment-id :id}]
+
+  (let [payment-stripe (persistence.core/bind-temporary-id
+                         {:payment.stripe/id payment-id
+                          :payment.stripe/type payment-type})]
+
+    (persistence.core/bind-temporary-id
+      {:payment/id (UUID/randomUUID)
+       :payment/product-id product-id
+       :payment/provider-type :payment.provider/stripe
+       :payment/provider payment-stripe})))
+
+
+(defn conditionally-mark-payment-applied [conn email client-id payment]
+
+  (let [game-entity (game.persistence/running-game-for-user-device conn email client-id)]
+
+    (if (util/exists? game-entity)
+
+      (hash-map :game game-entity
+                :payment (assoc payment :payment/applied (c/to-date (t/now))))
+
+      (hash-map :payment payment))))
+
+(defn conditionally-apply-payment [conn email payment-entity game-entity]
+
+  ;; TODO
+  ;; subscription - turn on margin trading
+  ;; products
+  ;;   - increase Cash balance
+  ;;   - notify Client through portfolioUpdate
+
+  (when game-entity
+
+    (let [{{subscriptions :subscriptions
+            products :products} :payment.provider/stripe} repl.state/system
+
+          feature (get (merge (integration.payments.core/subscription-lookup subscriptions)
+                              (integration.payments.core/product-lookup products))
+                       (:payment/product-id payment-entity))]
+
+      (integration.payments.core/apply-feature feature conn email payment-entity game-entity))))
 
 (defn verify-product-workflow [conn
+                               client-id
+                               email
                                {client :client :as component}
                                {product-id :productId
+                                provider :provider
                                 {customer-id :customer
                                  source :source
-                                 :as payload} :token}]
+                                 :as payload} :token :as args}]
+
+  ;; (util/ppi [conn client-id email client args])
 
   ;; TODO
   ;; check if customer already has source
   ;; check for errors
   (payments.core/update-customer client customer-id {:source source})
 
-  (let [payment-type :payment.provider.stripe/charge]
+  (let [payment-type :payment.provider.stripe/charge
 
-    (->> (payments.core/create-charge client (dissoc payload :source))
-         :charge
-         (transact-payment! conn product-id payment-type)
-         :db-after
-         payments.persistence/user-payments)))
+        {game-entity :game
+         payment-entity :payment :as result-entities}
+        (->> (payments.core/create-charge client (dissoc payload :source)) ;; TODO check for errors
+             :charge
+             (->payment conn product-id payment-type)
+             (conditionally-mark-payment-applied conn email client-id))]
+
+    (persistence.datomic/transact-entities! conn payment-entity)
+
+    ;; TODO
+    ;; only apply if there's a running game, per device
+    (conditionally-apply-payment conn email payment-entity game-entity)
+    (payments.persistence/user-payments conn)))
 
 
 ;; SUBSCRIPTION
@@ -128,8 +199,11 @@
       subscription)))
 
 (defn verify-subscription-workflow [conn
+                                    client-id
+                                    email
                                     {client :client :as component}
                                     {product-id :productId
+                                     provider :provider
                                      {customer-id :customerId
                                       payment-method-id :paymentMethodId
                                       price-id :priceId} :token :as args}]
@@ -152,8 +226,9 @@
         ;; (println "B /")
         (->> (conditionally-create-subscription client payload)
              :subscription
-             (transact-payment! conn product-id payment-type)
+             ;; (transact-payment! conn product-id payment-type)
              :db-after
+             ;; (payments.core/apply-payment-functionality! provider)
              payments.persistence/user-payments)))))
 
 (comment
@@ -181,7 +256,7 @@
 
 
   (def stripe-client (-> integrant.repl.state/system
-                         :payments/stripe
+                         :payment.provider/stripe
                          :client))
 
 

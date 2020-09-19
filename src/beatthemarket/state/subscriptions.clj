@@ -19,6 +19,7 @@
     ;; :additional-balance-200k
     ;; :additional-balance-300k
     :additional-balance-400k
-    :refill-balance}
-  #{}
+      :refill-balance}
+
+  (atom #{})
   )

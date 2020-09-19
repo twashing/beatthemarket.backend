@@ -116,6 +116,7 @@
                                    :stocks-with-tick-data stocks-with-tick-data ;; TODO load + seek to index
                                    :input-sequence        (or input-sequence input-sequence-local)
 
+                                   :short-circuit-game? (atom false)
                                    :tick-sleep-atom (atom
                                                       (or tick-sleep-ms
                                                           (-> integrant.repl.state/config :game/game :tick-sleep-ms)))

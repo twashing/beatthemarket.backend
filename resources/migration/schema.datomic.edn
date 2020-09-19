@@ -45,10 +45,9 @@
   :db/valueType   :db.type/ref
   :db/cardinality :db.cardinality/one}
 
- #_{:db/ident       :payment/verify-attempt-dates
-  :db/valueType   :db.type/string
-  :db/cardinality :db.cardinality/one
-  :db/unique      :db.unique/value}
+ {:db/ident       :payment/applied
+  :db/valueType   :db.type/instant
+  :db/cardinality :db.cardinality/one}
 
 
  ;; Apple

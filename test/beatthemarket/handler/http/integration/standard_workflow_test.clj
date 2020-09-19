@@ -180,7 +180,7 @@
 
       (test-util/<message!! 1000)
 
-      (let [conn                                         (-> repl.repl.state/system :persistence/datomic :opts :conn)
+      (let [conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
             {game-id :id}                                (-> (test-util/<message!! 1000) :payload :data :createGame)
 
             {[{client-id-persisted :game.user/user-client}] :game/users}
@@ -344,7 +344,7 @@
                                        }"
                                :variables {:id id}}})
 
-        (as-> (:game/games repl.state/system) gs
+        #_(as-> (:game/games repl.state/system) gs
           (deref gs)
           (get gs (UUID/fromString id))
           (:control-channel gs)
@@ -353,10 +353,10 @@
                               :game-id id}))
 
 
-        (test-util/<message!! 1000)
+        (util/ppi (test-util/<message!! 1000))
 
         (let [expected-result []
-              result (-> (test-util/<message!! 1000) :payload :data :startGame)]
+              result (-> (test-util/<message!! 1000) util/ppi :payload :data :startGame)]
 
           (is (= expected-result result)))))))
 

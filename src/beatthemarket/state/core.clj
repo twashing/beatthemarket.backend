@@ -35,7 +35,7 @@
                        :beatthemarket.state/nrepl                 :nrepl/nrepl
                        :beatthemarket.state/logging               :logging/logging
                        :beatthemarket.state/subscriptions         :subscriptions/subscriptions
-                       :beatthemarket.integration.payments/stripe :payments/stripe
+                       :beatthemarket.integration.payments/stripe :payment.provider/stripe
                        :beatthemarket.datasource/name-generator   :name-generator/name-generator
                        :beatthemarket.game/core                   :game/games}))
 

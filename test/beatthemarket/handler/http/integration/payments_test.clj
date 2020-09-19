@@ -2,7 +2,13 @@
   (:require [clojure.test :refer :all]
             [clojure.java.io :refer [resource]]
             [clojure.data.json :as json]
+            [clojure.core.async :as core.async]
             [integrant.repl.state :as repl.state]
+            [datomic.client.api :as d]
+
+            [beatthemarket.game.persistence :as game.persistence]
+            [beatthemarket.game.games.control :as games.control]
+            [beatthemarket.integration.payments.persistence :as payments.persistence]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
@@ -25,6 +31,47 @@
 ;; store product, provider, token
 ;;
 ;; Update subscription (Webhook - POST)
+
+(defn start-game-workflow []
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        gameLevel 1]
+
+    (testing "Create a Game"
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation CreateGame($gameLevel: Int!) {
+                                       createGame(gameLevel: $gameLevel) {
+                                         id
+                                         stocks { id name symbol }
+                                       }
+                                     }"
+                             :variables {:gameLevel gameLevel}}}))
+
+    (testing "Start a Game"
+
+      (let [{:keys [stocks id] :as create-game} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+
+        (test-util/send-data {:id   988
+                              :type :start
+                              :payload
+                              {:query "mutation StartGame($id: String!) {
+                                         startGame(id: $id) {
+                                           stockTickId
+                                           stockTickTime
+                                           stockTickClose
+                                           stockId
+                                           stockName
+                                         }
+                                       }"
+                               :variables {:id id}}})
+
+        (test-util/<message!! 5000)
+        (-> (test-util/<message!! 1000) :payload :data :startGame)
+
+        create-game))))
 
 (deftest user-payments-test
 
@@ -425,18 +472,7 @@
           (testing "DELETEING test customer"
             (delete-test-customer! result-id)))))))
 
-(deftest verify-charge-stripe-test
-
-
-  ;; {"customerId": "cus_9JzjeBVXZWH0e5",
-  ;;  "paymentMethodId": "card_9Jzj8NB5gDrYce",
-  ;;  "priceId": "price_0HROJnu4V08wojXsIaqX0FEP"}
-
-  ;; {"source": "tok_visa",
-  ;;  "customer": "cus_9JzjeBVXZWH0e5",
-  ;;  "amount": 100,
-  ;;  "currency": "usd"}
-
+(deftest verify-stripe-charge-test-no-game
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -449,8 +485,12 @@
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
+    (test-util/<message!! 1000)
+
+
     (testing "Charge a valid card"
 
+      (test-util/send-init {:client-id (str client-id)})
       (test-util/send-data {:id   987
                             :type :start
                             :payload
@@ -465,21 +505,46 @@
                                          :provider provider
                                          :token token}}})
 
-      (test-util/<message!! 5000)
+      (test-util/<message!! 1000)
 
-      (verify-payment-response (-> (test-util/<message!! 5000) :payload :data :verifyPayment)
-                               product-id provider)
+      (let [payment-response (-> (test-util/<message!! 3000) :payload :data :verifyPayment)]
 
-      #_(let [error-message (-> (test-util/<message!! 5000) util/ppi :payload :errors first :message)
-            expected-error-message "Your card has expired."]
+        (verify-payment-response payment-response product-id provider)
 
-        (is (= expected-error-message error-message))))
 
-    #_(testing "Subsciption with a valid card"
+        (testing "With no game, charge is not applied"
 
-      (let [token (-> "example-payload-stripe-subscription-valid.json" resource slurp)]
+          (let [[{payment-id :paymentId}] payment-response
+                conn (-> repl.state/system :persistence/datomic :opts :conn)
 
-        (test-util/send-data {:id   987
+                {payment-applied :payment/applied} (ffirst
+                                                     (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))]
+
+            (is (nil? payment-applied))))))))
+
+(deftest verify-stripe-charge-test-with-game
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1RCtpy369Bu4g" ;; Additional $100k
+        provider "stripe"
+        token (-> "example-payload-stripe-charge.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+    (test-util/<message!! 1000)
+
+
+    (let [{game-id :id} (start-game-workflow)
+          game-id-uuid (UUID/fromString game-id)]
+
+
+      (testing "Charge a valid card"
+
+        (test-util/send-init {:client-id (str client-id)})
+        (test-util/send-data {:id   989
                               :type :start
                               :payload
                               {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
@@ -493,12 +558,30 @@
                                            :provider provider
                                            :token token}}})
 
-        (util/ppi (test-util/<message!! 1000))
-        (util/ppi (test-util/<message!! 1000))
+        (test-util/<message!! 1000)
+        (test-util/<message!! 1000)
 
-        #_(let [error-message (-> (test-util/<message!! 5000) util/ppi :payload :errors first :message)
-              expected-error-message "Your card has expired."]
+        (let [payment-response (-> (test-util/<message!! 3000) :payload :data :verifyPayment)]
 
-          (is (= expected-error-message error-message)))
-        ))
-    ))
+          (verify-payment-response payment-response product-id provider)
+
+
+          (testing "With a running game, charge is applied"
+
+            (let [[{payment-id :paymentId}] payment-response
+                  conn (-> repl.state/system :persistence/datomic :opts :conn)
+                  email "twashing@gmail.com"
+
+                  expected-cash-account-balance (.floatValue 200000.0)
+
+                  {payment-applied :payment/applied}
+                  (ffirst
+                    (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))
+
+                  {cash-account-balance :bookkeeping.account/balance}
+                  (game.persistence/cash-account-for-user-game conn email game-id-uuid)]
+
+              (is payment-applied)
+              (is expected-cash-account-balance cash-account-balance)))))
+
+      (games.control/update-short-circuit-game! game-id-uuid true))))

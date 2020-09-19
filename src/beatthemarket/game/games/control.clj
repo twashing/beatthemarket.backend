@@ -388,6 +388,12 @@
     (core.async/>!! game-event-stream timeout-timer-event))
   [])
 
+(defn update-short-circuit-game! [game-id short-circuit-game?]
+
+  (swap! (:game/games repl.state/system)
+         (fn [gs]
+           (update-in gs [game-id :short-circuit-game?] (constantly short-circuit-game?)))))
+
 (defn update-inmemory-game-timer! [game-id time-in-seconds]
 
   (swap! (:game/games repl.state/system)
@@ -432,12 +438,19 @@
                        end (t/plus now (t/seconds @level-timer))
                        iters iterations]
 
-    (let [remaining                            (calculate-remaining-time now end)
+    (let [remaining             (calculate-remaining-time now end)
           [{event :event
-            :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])]
+            :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
+
+          short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)]
 
       ;; TODO i. If this is a market, and ii. there are no players, :pause
-      (log/debug :game.games (format "game-loop %s:%s / %s"
+      (println (format "game-loop %s:%s / %s / short-circuit-game? %s"
+                                     (:remaining-in-minutes remaining)
+                                     (:remaining-in-seconds remaining)
+                                     (if controlv controlv :running)
+                                     short-circuit-game?))
+      #_(log/debug :game.games (format "game-loop %s:%s / %s"
                                        (:remaining-in-minutes remaining)
                                        (:remaining-in-seconds remaining)
                                        (if controlv controlv :running)))
@@ -467,7 +480,7 @@
                                                                                             :event :timeout
                                                                                             :game-id game-id) now end))]
 
-        (when (and nowA endA)
+        (when (and nowA endA (not short-circuit-game?))
           (recur nowA endA (next iters)))))))
 
 (defn extract-tick-and-trade [conn {price-history :game.stock/price-history :as stock}]

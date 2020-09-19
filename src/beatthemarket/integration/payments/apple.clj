@@ -14,7 +14,7 @@
             [beatthemarket.util :as util]))
 
 
-(defmethod ig/init-key :payments/apple [_ {_verify-receipt-endpoint :verify-receipt-endpoint
+(defmethod ig/init-key :payment.provider/apple [_ {_verify-receipt-endpoint :verify-receipt-endpoint
                                            _primary-shared-secret :primary-shared-secret}])
 
 ;; Validating locally

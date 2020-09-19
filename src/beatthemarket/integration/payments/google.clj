@@ -15,7 +15,7 @@
            [java.io File]))
 
 
-(defmethod ig/init-key :payments/google [_ {_googleClientId :googleClientId
+(defmethod ig/init-key :payment.provider/google [_ {_googleClientId :googleClientId
                                             _googleClientSecret :googleClientSecret
                                             _googleProductName :googleProductName
                                             _googlePackageName :googlePackageName}])
