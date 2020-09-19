@@ -9,12 +9,14 @@
             [magnet.payments.stripe :as stripe]
             [magnet.payments.stripe.customer :as customer]
 
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.integration.payments.stripe.persistence :as stripe.persistence]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
             [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.state.subscriptions :as state.subscriptions]
             [beatthemarket.util :as util]
             [datomic.client.api :as d])
   (:import [java.util UUID]))
@@ -93,22 +95,6 @@
 
 
 ;; PRODUCT
-#_(defn transact-payment! [conn product-id payment-type {payment-id :id}]
-
-  (let [payment-stripe (persistence.core/bind-temporary-id
-                         {:payment.stripe/id payment-id
-                          :payment.stripe/type payment-type})
-
-        payment (persistence.core/bind-temporary-id
-                  {:payment/id (UUID/randomUUID)
-                   :payment/product-id product-id
-                   :payment/provider-type :payment.provider/stripe
-                   :payment/provider payment-stripe})]
-
-    (persistence.datomic/transact-entities! conn payment)
-
-    payment))
-
 (defn ->payment [conn product-id payment-type {payment-id :id}]
 
   (let [payment-stripe (persistence.core/bind-temporary-id
@@ -122,23 +108,25 @@
        :payment/provider payment-stripe})))
 
 
-(defn conditionally-mark-payment-applied [conn email client-id payment]
+(defn mark-payment-applied-conditionally-on-running-game [conn email client-id payment]
 
   (let [game-entity (game.persistence/running-game-for-user-device conn email client-id)]
 
     (if (util/exists? game-entity)
 
       (hash-map :game game-entity
-                :payment (assoc payment :payment/applied (c/to-date (t/now))))
+                :payment (assoc payment
+                                :payment.applied/game (select-keys game-entity [:db/id])
+                                :payment.applied/applied (c/to-date (t/now))))
 
       (hash-map :payment payment))))
 
-(defn conditionally-apply-payment [conn email payment-entity game-entity]
+(defn apply-payment-conditionally-on-running-game [conn email payment-entity game-entity]
 
   ;; TODO
-  ;; subscription - turn on margin trading
+  ;; [ok] subscription - turn on margin trading
   ;; products
-  ;;   - increase Cash balance
+  ;;   [ok] increase Cash balance
   ;;   - notify Client through portfolioUpdate
 
   (when game-entity
@@ -172,17 +160,18 @@
   (let [payment-type :payment.provider.stripe/charge
 
         {game-entity :game
-         payment-entity :payment :as result-entities}
+         payment-entity :payment}
         (->> (payments.core/create-charge client (dissoc payload :source)) ;; TODO check for errors
              :charge
              (->payment conn product-id payment-type)
-             (conditionally-mark-payment-applied conn email client-id))]
+             (mark-payment-applied-conditionally-on-running-game conn email client-id))
 
-    (persistence.datomic/transact-entities! conn payment-entity)
+        user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
+                        ffirst
+                        (assoc :user/payments payment-entity))]
 
-    ;; TODO
-    ;; only apply if there's a running game, per device
-    (conditionally-apply-payment conn email payment-entity game-entity)
+    (persistence.datomic/transact-entities! conn user-entity)
+    (apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
     (payments.persistence/user-payments conn)))
 
 
@@ -208,7 +197,6 @@
                                       payment-method-id :paymentMethodId
                                       price-id :priceId} :token :as args}]
 
-  ;; (println "A /")
   (let [{success? :success? :as payment-method}
         (conditionally-attach-payment-method client payment-method-id customer-id)]
 
@@ -221,15 +209,24 @@
                      :default_payment_method payment-method-id
                      :items {"0" {:price price-id}}}
 
-            payment-type :payment.provider.stripe/subscription]
+            payment-type :payment.provider.stripe/subscription
 
-        ;; (println "B /")
-        (->> (conditionally-create-subscription client payload)
-             :subscription
-             ;; (transact-payment! conn product-id payment-type)
-             :db-after
-             ;; (payments.core/apply-payment-functionality! provider)
-             payments.persistence/user-payments)))))
+            {game-entity :game
+             payment-entity :payment}
+            (->> (conditionally-create-subscription client payload)
+                 :subscription
+                 (->payment conn product-id payment-type)
+                 (mark-payment-applied-conditionally-on-running-game conn email client-id))
+
+            user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
+                            ffirst
+                            (assoc :user/payments payment-entity))]
+
+        (persistence.datomic/transact-entities! conn user-entity)
+        (apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
+        (payments.persistence/user-payments conn)
+
+        ))))
 
 (comment
 

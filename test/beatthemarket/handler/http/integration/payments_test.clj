@@ -6,9 +6,11 @@
             [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
 
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
+            [beatthemarket.state.subscriptions :as state.subscriptions]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
@@ -34,6 +36,7 @@
 
 (defn start-game-workflow []
 
+  (test-util/<message!! 1000)
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         gameLevel 1]
 
@@ -400,7 +403,7 @@
         (testing "DELETEING test customer"
           (delete-test-customer! result-id))))))
 
-(deftest verify-subscription-stripe-test
+(deftest verify-subscription-stripe-test-no-game
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -472,6 +475,66 @@
           (testing "DELETEING test customer"
             (delete-test-customer! result-id)))))))
 
+(deftest verify-subscription-stripe-test-with-game
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1RAoB8UK5GDab" ;; Margin Trading
+        provider "stripe"
+        token (-> "example-payload-stripe-subscription-expired-card-error.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (testing "Create a test customer"
+
+      (let [email "foo@bar.com"
+            [{result-id :id
+              result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)]
+
+        (testing "Subsciption with a valid card"
+
+          (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+                game-id-uuid (-> (start-game-workflow) :id UUID/fromString)
+
+                token (-> "example-payload-stripe-subscription-valid.json"
+                          resource
+                          slurp
+                          (json/read-str :key-fn keyword))
+                token-json (json/write-str
+                             (assoc token
+                                    :customerId result-id
+                                    :paymentMethodId "pm_card_visa"))
+
+                user-email "twashing@gmail.com"
+                user-entity (ffirst (iam.persistence/user-by-email conn user-email '[:db/id]))]
+
+            (test-util/send-data {:id   988
+                                  :type :start
+                                  :payload
+                                  {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                             verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                               paymentId
+                                               productId
+                                               provider
+                                             }
+                                           }"
+                                   :variables {:productId product-id
+                                               :provider provider
+                                               :token token-json}}})
+
+            (test-util/<message!! 1000)
+
+            (verify-payment-response (-> (test-util/<message!! 5000) :payload :data :verifyPayment)
+                                     product-id provider)
+
+            (is (state.subscriptions/margin-trading? conn (:db/id user-entity)))))
+
+        (testing "DELETEING test customer"
+          (delete-test-customer! result-id))))))
+
 (deftest verify-stripe-charge-test-no-game
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
@@ -517,8 +580,8 @@
           (let [[{payment-id :paymentId}] payment-response
                 conn (-> repl.state/system :persistence/datomic :opts :conn)
 
-                {payment-applied :payment/applied} (ffirst
-                                                     (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))]
+                {payment-applied :payment.applied/applied}
+                (ffirst (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))]
 
             (is (nil? payment-applied))))))))
 
@@ -534,11 +597,8 @@
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
-    (test-util/<message!! 1000)
 
-
-    (let [{game-id :id} (start-game-workflow)
-          game-id-uuid (UUID/fromString game-id)]
+    (let [game-id-uuid (-> (start-game-workflow) :id UUID/fromString)]
 
 
       (testing "Charge a valid card"
@@ -574,9 +634,8 @@
 
                   expected-cash-account-balance (.floatValue 200000.0)
 
-                  {payment-applied :payment/applied}
-                  (ffirst
-                    (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))
+                  {payment-applied :payment.applied/applied}
+                  (ffirst (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))
 
                   {cash-account-balance :bookkeeping.account/balance}
                   (game.persistence/cash-account-for-user-game conn email game-id-uuid)]
@@ -585,3 +644,8 @@
               (is expected-cash-account-balance cash-account-balance)))))
 
       (games.control/update-short-circuit-game! game-id-uuid true))))
+
+;; TODO
+;; Apply margin trading; store in DB
+;; Apply additional 5 minutes
+;; Check for unapplied purchases, on game start

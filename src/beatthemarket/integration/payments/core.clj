@@ -12,12 +12,6 @@
                 "additional_400k"
                 "additional_5_minutes"})
 
-#_(defn apply-payment-functionality! [provider user-payments]
-
-  ;; provider-comparator (keyword "payment.provider" provider)
-  ;; {provider-type :db/ident} :payment/provider-type
-
-  user-payments)
 
 (defn credit-cash-account [amount account]
   (update account :bookkeeping.account/balance #(+ % amount)))
@@ -28,11 +22,8 @@
                                                  payment-entity
                                                  {game-id :game/id :as game-entity}]
 
-  ;; TODO store margin trading in DB
-  #_(swap! (:game/games repl.state/system)
-         (fn [gs]
-           (update-in gs [game-id :level-timer] (constantly time-in-seconds))))
-  )
+  ;; NOTE subscriptions (margin trading) stored in DB
+  :noop)
 
 (defmethod apply-feature :additional_100k [_ conn email
                                            payment-entity

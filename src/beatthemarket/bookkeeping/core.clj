@@ -281,9 +281,9 @@
     (catch Throwable e (rop/fail (ex-info (format "No stock entity [%s]" stock-id)
                                           inputs)))))
 
-(defn- stock-account-has-sufficient-shares-OR-trades-on-margin? [{:keys [conn stock-id stock-amount stock-account] :as inputs}]
+(defn- stock-account-has-sufficient-shares-OR-trades-on-margin? [{:keys [conn user-id stock-id stock-amount stock-account] :as inputs}]
 
-  (if (state.subscriptions/margin-trading?)
+  (if (state.subscriptions/margin-trading? conn user-id)
 
     (rop/succeed inputs)
 

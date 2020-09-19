@@ -86,68 +86,66 @@
                :firebase/firebase             #ref [:secrets :firebase]
                :persistence/datomic           {:datomic         #ref [:secrets :production :persistence/datomic]}
 
-               :payments/apple                {:service #ref [:secrets :production :payments/apple]
-                                               :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
-                                               :products {:additional_balance_100k "additional_balance_100k"
-                                                          :additional_balance_200k "additional_balance_200k"
-                                                          :additional_balance_300k "additional_balance_300k"
-                                                          :additional_balance_400k "additional_balance_400k"
-                                                          :additional_5_minutes "additional_5_minutes"}}
-               :payments/google               {:service #ref [:secrets :production :payments/google]
-                                               :subscriptions {:margin_trading_1month "margin_trading_1month"}
-                                               :products {:additional_balance_100k "additional_balance_100k"
-                                                          :additional_balance_200k "additional_balance_200k"
-                                                          :additional_balance_300k "additional_balance_300k"
-                                                          :additional_balance_400k "additional_balance_400k"
-                                                          :additional_5_minutes "additional_5_minutes"}}
-               :payments/stripe        {:service #ref [:secrets :production :payments/stripe]
-                                        :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
-                                        :products {:additional_balance_100k "prod_I1RCtpy369Bu4g"
-                                                   :additional_balance_200k "prod_I1RC5THYQrZdYO"
-                                                   :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
-                                                   :additional_balance_400k "prod_I1RDqXXxLnMXdb"
-                                                   :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
+               :payment.provider/apple                {:service #ref [:secrets :production :payment.provider/apple]
+                                                       :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
+                                                       :products {:additional_100k "additional_100k"
+                                                                  :additional_200k "additional_200k"
+                                                                  :additional_300k "additional_300k"
+                                                                  :additional_400k "additional_400k"
+                                                                  :additional_5_minutes "additional_5_minutes"}}
+               :payment.provider/google               {:service #ref [:secrets :production :payment.provider/google]
+                                                       :subscriptions {:margin_trading_1month "margin_trading_1month"}
+                                                       :products {:additional_100k "additional_100k"
+                                                                  :additional_200k "additional_200k"
+                                                                  :additional_300k "additional_300k"
+                                                                  :additional_400k "additional_400k"
+                                                                  :additional_5_minutes "additional_5_minutes"}}
+               :payment.provider/stripe        {:service #ref [:secrets :production :payment.provider/stripe]
+                                                :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
+                                                :products {:additional_100k "prod_I1RCtpy369Bu4g"
+                                                           :additional_200k "prod_I1RC5THYQrZdYO"
+                                                           :additional_300k "prod_I1RDVzSR4oZKJ3"
+                                                           :additional_400k "prod_I1RDqXXxLnMXdb"
+                                                           :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
                :game/games                    {:datomic #ig/ref :persistence/datomic }
                :game/game                     #ref[:game]
                :nrepl/nrepl                   {:port 7000}
                :logging/logging               #ref [:logging]
-               :subscriptions/subscriptions   {}
                :name-generator/name-generator {}}
 
   :development {:service/service               {:join?         false
                                                 :hostname      "0.0.0.0"
-                                                :port          8080
+                                                :port          5000
                                                 :keep-alive-ms 10000}
                 :server/server                 {:service #ig/ref :service/service}
                 :firebase/firebase             #ref [:secrets :firebase]
                 :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                                   :config  {}}}
-                :payments/apple                {:service #ref [:secrets :development :payments/apple]
-                                                :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
-                                                :products {:additional_balance_100k "additional_balance_100k"
-                                                           :additional_balance_200k "additional_balance_200k"
-                                                           :additional_balance_300k "additional_balance_300k"
-                                                           :additional_balance_400k "additional_balance_400k"
-                                                           :additional_5_minutes "additional_5_minutes"}}
-                :payments/google               {:service #ref [:secrets :development :payments/google]
-                                                :subscriptions {:margin_trading_1month "margin_trading_1month"}
-                                                :products {:additional_balance_100k "additional_balance_100k"
-                                                           :additional_balance_200k "additional_balance_200k"
-                                                           :additional_balance_300k "additional_balance_300k"
-                                                           :additional_balance_400k "additional_balance_400k"
-                                                           :additional_5_minutes "additional_5_minutes"}}
-                :payments/stripe        {:service #ref [:secrets :development :payments/stripe]
-                                         :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
-                                         :products {:additional_balance_100k "prod_I1RCtpy369Bu4g"
-                                                    :additional_balance_200k "prod_I1RC5THYQrZdYO"
-                                                    :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
-                                                    :additional_balance_400k "prod_I1RDqXXxLnMXdb"
-                                                    :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
+                :payment.provider/apple                {:service #ref [:secrets :development :payment.provider/apple]
+                                                        :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
+                                                        :products {:additional_100k "additional_100k"
+                                                                   :additional_200k "additional_200k"
+                                                                   :additional_300k "additional_300k"
+                                                                   :additional_400k "additional_400k"
+                                                                   :additional_5_minutes "additional_5_minutes"}}
+                :payment.provider/google               {:service #ref [:secrets :development :payment.provider/google]
+                                                        :subscriptions {:margin_trading_1month "margin_trading_1month"}
+                                                        :products {:additional_100k "additional_100k"
+                                                                   :additional_200k "additional_200k"
+                                                                   :additional_300k "additional_300k"
+                                                                   :additional_400k "additional_400k"
+                                                                   :additional_5_minutes "additional_5_minutes"}}
+                :payment.provider/stripe        {:service #ref [:secrets :development :payment.provider/stripe]
+                                                 :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
+                                                 :products {:additional_100k "prod_I1RCtpy369Bu4g"
+                                                            :additional_200k "prod_I1RC5THYQrZdYO"
+                                                            :additional_300k "prod_I1RDVzSR4oZKJ3"
+                                                            :additional_400k "prod_I1RDqXXxLnMXdb"
+                                                            :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
                 :game/games                    {:datomic #ig/ref :persistence/datomic}
                 :game/game                     #ref[:game]
                 :nrepl/nrepl                   {:port 7000}
                 :logging/logging               #ref [:logging]
-                :subscriptions/subscriptions   {}
                 :name-generator/name-generator {}}
 
   :test {:service/service               {:join?         false
@@ -158,30 +156,29 @@
          :firebase/firebase             #ref [:secrets :firebase]
          :persistence/datomic           {:datomic         {:db-name "beaththemarket"
                                                            :config  {}}}
-         :payments/apple                {:service #ref [:secrets :test :payments/apple]
-                                         :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
-                                         :products {:additional_balance_100k "additional_balance_100k"
-                                                    :additional_balance_200k "additional_balance_200k"
-                                                    :additional_balance_300k "additional_balance_300k"
-                                                    :additional_balance_400k "additional_balance_400k"
-                                                    :additional_5_minutes "additional_5_minutes"}}
-         :payments/google               {:service #ref [:secrets :test :payments/google]
-                                         :subscriptions {:margin_trading_1month "margin_trading_1month"}
-                                         :products {:additional_balance_100k "additional_balance_100k"
-                                                    :additional_balance_200k "additional_balance_200k"
-                                                    :additional_balance_300k "additional_balance_300k"
-                                                    :additional_balance_400k "additional_balance_400k"
-                                                    :additional_5_minutes "additional_5_minutes"}}
-         :payments/stripe        {:service #ref [:secrets :test :payments/stripe]
-                                  :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
-                                  :products {:additional_balance_100k "prod_I1RCtpy369Bu4g"
-                                             :additional_balance_200k "prod_I1RC5THYQrZdYO"
-                                             :additional_balance_300k "prod_I1RDVzSR4oZKJ3"
-                                             :additional_balance_400k "prod_I1RDqXXxLnMXdb"
-                                             :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
+         :payment.provider/apple                {:service #ref [:secrets :test :payment.provider/apple]
+                                                 :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
+                                                 :products {:additional_100k "additional_100k"
+                                                            :additional_200k "additional_200k"
+                                                            :additional_300k "additional_300k"
+                                                            :additional_400k "additional_400k"
+                                                            :additional_5_minutes "additional_5_minutes"}}
+         :payment.provider/google               {:service #ref [:secrets :test :payment.provider/google]
+                                                 :subscriptions {:margin_trading_1month "margin_trading_1month"}
+                                                 :products {:additional_100k "additional_100k"
+                                                            :additional_200k "additional_200k"
+                                                            :additional_300k "additional_300k"
+                                                            :additional_400k "additional_400k"
+                                                            :additional_5_minutes "additional_5_minutes"}}
+         :payment.provider/stripe        {:service #ref [:secrets :test :payment.provider/stripe]
+                                          :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
+                                          :products {:additional_100k "prod_I1RCtpy369Bu4g"
+                                                     :additional_200k "prod_I1RC5THYQrZdYO"
+                                                     :additional_300k "prod_I1RDVzSR4oZKJ3"
+                                                     :additional_400k "prod_I1RDqXXxLnMXdb"
+                                                     :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
          :game/games                    {:datomic #ig/ref :persistence/datomic}
          :game/game                     #ref[:game]
          :nrepl/nrepl                   {:port 7001}
          :logging/logging               #ref [:logging]
-         :subscriptions/subscriptions   {}
          :name-generator/name-generator {}}}}

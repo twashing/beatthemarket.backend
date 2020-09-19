@@ -16,6 +16,9 @@
   :db/valueType   :db.type/string
   :db/cardinality :db.cardinality/one
   :db/doc         "User's ID in the external Authentication system (Firebase)"}
+ {:db/ident       :user/payments
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/many}
 
 
  ;; PAYMENT
@@ -45,7 +48,15 @@
   :db/valueType   :db.type/ref
   :db/cardinality :db.cardinality/one}
 
- {:db/ident       :payment/applied
+ {:db/ident       :payment.applied/game
+  :db/valueType   :db.type/ref
+  :db/cardinality :db.cardinality/one}
+
+ {:db/ident       :payment.applied/applied
+  :db/valueType   :db.type/instant
+  :db/cardinality :db.cardinality/one}
+
+ {:db/ident       :payment.applied/expired
   :db/valueType   :db.type/instant
   :db/cardinality :db.cardinality/one}
 

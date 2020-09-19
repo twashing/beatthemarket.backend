@@ -572,7 +572,6 @@
 
     ;; (println (format "Valid product %s" (valid-stripe-product-id? product-id)))
     ;; (println (format "Valid subscription %s" (valid-stripe-subscription-id? product-id)))
-
     ;; (update args :token #(json/read-str % :key-fn keyword))
 
      (cond
@@ -595,7 +594,7 @@
     (verify-payment-handler context args parent)
     (catch Exception e
       (do
-        (util/ppi (bean e))
+        ;; (util/ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 
