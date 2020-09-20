@@ -194,7 +194,9 @@
 
       (check-user-device-doesnt-have-running-game? conn email client-id)
 
-      (let [user-db-id        (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+      (let [user-entity (-> (beatthemarket.iam.persistence/user-by-email conn email '[:db/id :user/email])
+                            ffirst
+                            (select-keys [:db/id :user/email]))
             mapped-game-level (get graphql.encoder/game-level-map gameLevel)
 
 
@@ -205,12 +207,12 @@
             sink-fn                identity
             {{game-id :game/id
               :as     game} :game} (game.games/create-game! conn sink-fn combined-data-sequence-fn
-                                                            {:user (hash-map :db/id user-db-id)
+                                                            {:user user-entity
                                                              :accounts (game.core/->game-user-accounts)
                                                              :game-level mapped-game-level
                                                              :client-id client-id})]
 
-        (->> (game.games/game->new-game-message game user-db-id)
+        (->> (game.games/game->new-game-message game (:db/id user-entity))
              (transform [:stocks ALL] #(dissoc % :db/id))
              (transform [:stocks ALL MAP-KEYS] (comp keyword name)))))
 

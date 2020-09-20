@@ -10,7 +10,7 @@
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
-            [beatthemarket.state.subscriptions :as state.subscriptions]
+            [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
@@ -75,6 +75,31 @@
         (-> (test-util/<message!! 1000) :payload :data :startGame)
 
         create-game))))
+
+(defn verify-payment-workflow [client-id product-id provider token]
+
+  (test-util/<message!! 1000)
+  (test-util/send-init {:client-id (str client-id)})
+
+  (test-util/<message!! 1000)
+  (test-util/send-data {:id   987
+                        :type :start
+                        :payload
+                        {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                         :variables {:productId product-id
+                                     :provider provider
+                                     :token token}}})
+
+  (let [verify-payment (-> (test-util/<message!! 3000) :payload :data :verifyPayment)]
+
+    (test-util/<message!! 1000)
+    verify-payment))
 
 (deftest user-payments-test
 
@@ -403,7 +428,7 @@
         (testing "DELETEING test customer"
           (delete-test-customer! result-id))))))
 
-(deftest verify-subscription-stripe-test-no-game
+(deftest verify-stripe-subscription-test-no-game
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -475,7 +500,7 @@
           (testing "DELETEING test customer"
             (delete-test-customer! result-id)))))))
 
-(deftest verify-subscription-stripe-test-with-game
+(deftest verify-stripe-subscription-test-with-game
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -530,7 +555,7 @@
             (verify-payment-response (-> (test-util/<message!! 5000) :payload :data :verifyPayment)
                                      product-id provider)
 
-            (is (state.subscriptions/margin-trading? conn (:db/id user-entity)))))
+            (is (integration.payments.core/margin-trading? conn (:db/id user-entity)))))
 
         (testing "DELETEING test customer"
           (delete-test-customer! result-id))))))
@@ -645,7 +670,94 @@
 
       (games.control/update-short-circuit-game! game-id-uuid true))))
 
+(deftest apply-product-and-subscription-payments-on-game-start-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+
+    (testing "Purchase Product and Subscription before game start"
+
+      (let [provider "stripe"
+
+            product-id-subscription "prod_I1RAoB8UK5GDab" ;; Margin Trading
+            product-id-product "prod_I1RCtpy369Bu4g" ;; Additional $100k
+
+            token-product (-> "example-payload-stripe-charge.json" resource slurp)
+
+            token-subscription (-> "example-payload-stripe-subscription-valid.json"
+                                   resource
+                                   slurp
+                                   (json/read-str :key-fn keyword))
+
+            conn (-> repl.state/system :persistence/datomic :opts :conn)
+            email "foo@bar.com"
+
+            user-email "twashing@gmail.com"
+            user-entity (ffirst (iam.persistence/user-by-email conn user-email '[:db/id]))
+
+            [{result-id :id}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+            token-subscription-json (json/write-str
+                                      (assoc token-subscription
+                                             :customerId result-id
+                                             :paymentMethodId "pm_card_visa"))]
+
+        (verify-payment-workflow client-id product-id-product provider token-product)
+        (verify-payment-workflow client-id product-id-subscription provider token-subscription-json)
+
+
+        (testing "Purchases are unapplied"
+
+          (let [expected-unapplied-purchases #{product-id-subscription product-id-product}
+                unapplied-payments-before-game-start
+                (integration.payments.core/unapplied-payments-for-user conn (:db/id user-entity))]
+
+            (->> (map :payment/product-id unapplied-payments-before-game-start)
+                 (into #{})
+                 (= expected-unapplied-purchases)
+                 is)))
+
+
+        (testing "Purchses are applied after game start"
+
+          (let [game-id-uuid (-> (start-game-workflow) :id UUID/fromString)]
+
+            (is (empty? (integration.payments.core/unapplied-payments-for-user conn (:db/id user-entity))))
+
+            (let [expected-applied-purchases #{product-id-subscription product-id-product}
+                  applied-payments-after-game-start
+                  (integration.payments.core/applied-payments-for-user conn (:db/id user-entity))]
+
+              (->> (map :payment/product-id applied-payments-after-game-start)
+                   (into #{})
+                   (= expected-applied-purchases)
+                   is))
+
+            (testing "Cash account is increased and Margin Trading is enabled"
+
+              (let [expected-cash-account-balance (.floatValue 200000.0)
+
+                    email "twashing@gmail.com"
+                    {cash-account-balance :bookkeeping.account/balance}
+                    (game.persistence/cash-account-for-user-game conn email game-id-uuid)]
+
+                (is (integration.payments.core/margin-trading? conn (:db/id user-entity)))
+                (is expected-cash-account-balance cash-account-balance)))
+
+            (games.control/update-short-circuit-game! game-id-uuid true)))
+
+        (testing "DELETEING test customer"
+          (delete-test-customer! result-id))))))
+
+
 ;; TODO
-;; Apply margin trading; store in DB
+
+;; Apply purchases on Apple
+;; Notify client of applied purchases
+
+;; Apply purchases on Google
 ;; Apply additional 5 minutes
-;; Check for unapplied purchases, on game start

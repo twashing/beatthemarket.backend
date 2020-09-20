@@ -16,7 +16,6 @@
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
-            [beatthemarket.state.subscriptions :as state.subscriptions]
             [beatthemarket.util :as util]
             [datomic.client.api :as d])
   (:import [java.util UUID]))

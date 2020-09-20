@@ -107,6 +107,9 @@
                                                            :additional_300k "prod_I1RDVzSR4oZKJ3"
                                                            :additional_400k "prod_I1RDqXXxLnMXdb"
                                                            :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
+               :payments/feature-registry {:apple #ref [:payment.provider/apple]
+                                           :google #ref [:payment.provider/google]
+                                           :stripe #ref [:payment.provider/stripe]}
                :game/games                    {:datomic #ig/ref :persistence/datomic }
                :game/game                     #ref[:game]
                :nrepl/nrepl                   {:port 7000}
@@ -142,6 +145,9 @@
                                                             :additional_300k "prod_I1RDVzSR4oZKJ3"
                                                             :additional_400k "prod_I1RDqXXxLnMXdb"
                                                             :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
+                :payments/feature-registry {:apple #ref [:payment.provider/apple]
+                                            :google #ref [:payment.provider/google]
+                                            :stripe #ref [:payment.provider/stripe]}
                 :game/games                    {:datomic #ig/ref :persistence/datomic}
                 :game/game                     #ref[:game]
                 :nrepl/nrepl                   {:port 7000}
@@ -177,6 +183,9 @@
                                                      :additional_300k "prod_I1RDVzSR4oZKJ3"
                                                      :additional_400k "prod_I1RDqXXxLnMXdb"
                                                      :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
+         :payments/feature-registry {:apple #ref [:payment.provider/apple]
+                                     :google #ref [:payment.provider/google]
+                                     :stripe #ref [:payment.provider/stripe]}
          :game/games                    {:datomic #ig/ref :persistence/datomic}
          :game/game                     #ref[:game]
          :nrepl/nrepl                   {:port 7001}

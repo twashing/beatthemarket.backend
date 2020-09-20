@@ -6,10 +6,10 @@
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.calculation :as game.calculation]
+            [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.iam.persistence :as iam.persistence]
-            [beatthemarket.state.subscriptions :as state.subscriptions]
             [beatthemarket.util :as util :refer [exists?]]
             [clojure.core.async :as core.async])
   (:import [java.util UUID]))
@@ -249,7 +249,7 @@
 (defn- cash-account-has-sufficient-funds-OR-trades-on-margin? [conn debit-value {user-pulled :user-pulled
                                                                                  game-pulled :game-pulled :as inputs}]
 
-  (if (state.subscriptions/margin-trading?)
+  (if (integration.payments.core/margin-trading?)
 
     (rop/succeed inputs)
 
@@ -283,7 +283,7 @@
 
 (defn- stock-account-has-sufficient-shares-OR-trades-on-margin? [{:keys [conn user-id stock-id stock-amount stock-account] :as inputs}]
 
-  (if (state.subscriptions/margin-trading? conn user-id)
+  (if (integration.payments.core/margin-trading? conn user-id)
 
     (rop/succeed inputs)
 

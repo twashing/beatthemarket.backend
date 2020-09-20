@@ -18,8 +18,7 @@
             [beatthemarket.game.games.processing :as games.processing]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
-
-            [beatthemarket.state.subscriptions :as state.subscriptions]
+            [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
 
@@ -712,7 +711,7 @@
         ops-short-sell  [{:op :buy :stockAmount 100}]
         ops-short-sell-count (count ops-short-sell)]
 
-    (with-redefs [state.subscriptions/margin-trading? (constantly true)]
+    (with-redefs [integration.payments.core/margin-trading? (constantly true)]
 
       (testing "The stock account amount can go negative"
 
@@ -986,7 +985,7 @@
 
     (testing "Testing the correct game win message is shown"
 
-      (with-redefs [state.subscriptions/margin-trading? (constantly true)]
+      (with-redefs [integration.payments.core/margin-trading? (constantly true)]
 
         (run-trades! iterations stock-id opts ops-before ops-before-count)
 

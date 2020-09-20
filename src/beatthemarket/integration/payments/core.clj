@@ -1,9 +1,29 @@
 (ns beatthemarket.integration.payments.core
   (:require [integrant.repl.state :as repl.state]
+            [integrant.core :as ig]
+            [datomic.client.api :as d]
+            [clj-time.core :as t]
+            [clj-time.coerce :as c]
+            [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.util :as util]))
 
+
+(defmethod ig/init-key :payments/feature-registry [_ _]
+
+  (let [extract-products-and-subscriptions (juxt :products :subscriptions)]
+
+    (->> (select-keys repl.state/config
+                      [:payment.provider/apple
+                       :payment.provider/google
+                       :payment.provider/stripe])
+         vals
+         (map extract-products-and-subscriptions)
+         (map #(apply merge %))
+         (transform [ALL MAP-VALS] #(list %))
+         (apply merge-with into)
+         (transform [MAP-VALS] set))))
 
 (def subscriptions #{"margin_trading_1month"})
 (def products #{"additional_100k"
@@ -12,6 +32,11 @@
                 "additional_400k"
                 "additional_5_minutes"})
 
+(defn subscription-lookup [subscriptions]
+  (clojure.set/map-invert subscriptions))
+
+(defn product-lookup [products]
+  (clojure.set/map-invert products))
 
 (defn credit-cash-account [amount account]
   (update account :bookkeeping.account/balance #(+ % amount)))
@@ -64,21 +89,118 @@
 ;; TODO
 (defmethod apply-feature :additional_5_minutes [_ conn email payment-entity game-entity])
 
+(defn margin-trading? [conn user-db-id]
 
+  (let [subscription-set (->> (select-keys repl.state/config
+                                           [:payment.provider/apple
+                                            :payment.provider/google
+                                            :payment.provider/stripe])
+                              vals
+                              (map :subscriptions)
+                              (map :margin_trading_1month))]
 
-(defn subscription-lookup [subscriptions]
-  (clojure.set/map-invert subscriptions))
+    (-> (d/q '[:find (pull ?p [*])
+               :in $ ?u [?product-ids ...]
+               :where
+               [?u :user/payments ?p]
+               [?p :payment/product-id ?product-ids]
+               [?p :payment.applied/applied]
+               [(missing? $ ?p :payment.applied/expired)]]
+             (d/db conn) user-db-id subscription-set)
+        util/exists?)))
 
-(defn product-lookup [products]
-  (clojure.set/map-invert products))
+(defn applied-payments-for-user [conn user-db-id]
 
+  (map first
+       (d/q '[:find (pull ?p [*])
+              :in $ ?u ;; [?product-ids ...]
+              :where
+              [?u :user/payments ?p]
+              [?p :payment.applied/applied]]
+            (d/db conn) user-db-id)))
+
+(defn unapplied-payments-for-user [conn user-db-id]
+
+  (map first
+       (d/q '[:find (pull ?p [*])
+              :in $ ?u ;; [?product-ids ...]
+              :where
+              [?u :user/payments ?p]
+              [(missing? $ ?p :payment.applied/applied)]]
+            (d/db conn) user-db-id)))
+
+(defn apply-unapplied-payments-for-user
+
+  ([conn {user-db-id :db/id :as user-entity} game-entity]
+
+   (apply-unapplied-payments-for-user
+     conn user-entity game-entity (unapplied-payments-for-user conn user-db-id)))
+
+  ([conn {email :user/email} game-entity payment-entities]
+
+   ;; A
+   (->> (map #(assoc % :payment.applied/applied (c/to-date (t/now))) payment-entities)
+        (persistence.datomic/transact-entities! conn))
+
+   (let [lookup-feature (fn [{product-id :payment/product-id :as payment-entity}]
+                          (let [feature (->> repl.state/system
+                                             :payments/feature-registry
+                                             (filter (fn [[k v]] (some v #{product-id})))
+                                             ffirst)]
+
+                            (assoc payment-entity :feature feature)))]
+
+     (->> (map lookup-feature payment-entities)
+          (map #(apply-feature (:feature %) conn email % game-entity))
+          doall))))
 
 (comment
 
-  (let [product-id "prod_I1RCtpy369Bu4g"
-        {{subscriptions :subscriptions
-          products :products} :payment.provider/stripe} repl.state/system]
+  (->> (select-keys repl.state/config
+                    [:payment.provider/apple
+                     :payment.provider/google
+                     :payment.provider/stripe])
+       vals
+       (map :subscriptions)
+       ;; (group-by first)
+       ;; (reduce-kv (fn [m k v]) {})
+       util/ppi)
 
-    (cond
-      ((subscription-lookup subscriptions) product-id) :a
-      ((product-lookup products) product-id) :b)))
+  (def feature-registry
+    (let [extract-products-and-subscriptions (juxt :products :subscriptions)]
+
+      (->> (select-keys repl.state/config
+                        [:payment.provider/apple
+                         :payment.provider/google
+                         :payment.provider/stripe])
+           vals
+           (map extract-products-and-subscriptions)
+           (map #(apply merge %))
+           (transform [ALL MAP-VALS] #(list %))
+           (apply merge-with into)
+           (transform [MAP-VALS] set)
+           util/ppi)))
+
+
+  (filter (fn [[k v]]
+            (some v #{"prod_I1RCtpy369Bu4g"}))
+          feature-registry)
+
+  (->> feature-registry
+       (filter (fn [[k v]]
+                 (some v #{"prod_I1RDqXXxLnMXdb"})))
+       util/ppi
+       (map first)
+       #_(map #(apply hash-map %)))
+
+  (->> repl.state/system
+      :payments/feature-registry
+      ;; util/ppi
+      (filter (fn [[k v]]
+                (some v #{"prod_I1RDqXXxLnMXdb"})))
+      util/ppi
+      ffirst)
+
+
+  )
+

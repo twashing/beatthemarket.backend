@@ -25,6 +25,7 @@
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.core :as games.core]
+            [beatthemarket.integration.payments.core :as integration.payments.core]
 
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
@@ -109,6 +110,7 @@
                               :lose-threshold   lose-threshold})
 
          game-control (merge-with #(if %2 %2 %1)
+                                  opts
                                   (games.core/default-game-control conn game-id
                                                                    (assoc opts :current-level current-level))
                                   {:game                  game                  ;; TODO load
@@ -257,9 +259,18 @@
   ([conn game-control]
    (start-game! conn game-control 0))
 
-  ([conn {{game-id :game/id} :game :as game-control} start-position]
+  ([conn
+    {user-entity :user
+     {game-id :game/id :as game-entity} :game :as game-control}
+    start-position]
 
    ;; A
+
+   ;; TODO apply unused payments
+
+   ;; (util/ppi [:A user-entity game-entity])
+
+   (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
 
    ;; B
@@ -302,7 +313,8 @@
    (start-game!-workbench conn game-control 0))
 
   ([conn
-    {{game-id :game/id} :game
+    {user-entity :user
+     {game-id :game/id :as game-entity} :game
      level-timer :level-timer
      tick-sleep-atom :tick-sleep-atom
      game-event-stream :game-event-stream
@@ -311,6 +323,8 @@
     start-position]
 
    ;; A
+   ;; TODO apply unused payments
+   (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
    (game-workbench-loop conn game-control tick-sleep-atom level-timer)
 
