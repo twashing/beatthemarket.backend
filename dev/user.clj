@@ -26,11 +26,10 @@
   (go)
 
   ;; These functions are also available for control
-  (halt)
   (reset-all)
 
+  (halt)
 
-  ;; Catach all
   (do
     (state.core/set-prep :development)
     (state.core/init-components)
