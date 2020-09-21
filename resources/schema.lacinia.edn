@@ -6,7 +6,7 @@
    {:message {:type (non-null :LoginAckMessage)}
     :user    {:type (non-null String)}}}
 
-  :CreateGamekAck
+  :CreateGameAck
   {:fields
    {:id     {:type (non-null String)}
     :stocks {:type (list (non-null :Stock))}}}
@@ -26,7 +26,6 @@
     :gameId {:type (non-null String)}}}
 
 
-
   :User
   {:fields
    {:userEmail {:type String}
@@ -37,9 +36,7 @@
   {:fields
    {:id     {:type (non-null String)}
     :name   {:type (non-null String)}
-    :symbol {:type (non-null String)}
-    ;; logo {:type (non-null String)} ;; URL where we can get image
-    }}
+    :symbol {:type (non-null String)}}}
 
   :StockTick
   {:fields
@@ -84,13 +81,28 @@
     :secondsRemaining {:type (non-null Int)}}}
 
 
-
   :GameStatus
   {:description "The status of a user's game, in the system"
    :fields
    {:gameId {:type (non-null String)}
     :status {:type (non-null :GameStatusType)}
-    :profitLoss {:type (non-null Float)}}}}
+    :profitLoss {:type (non-null Float)}}}
+
+
+  :Payment
+  {:fields
+   {:paymentId {:type (non-null String)}
+    :productId {:type (non-null String)}
+    :provider {:type (non-null String)}}}
+
+  :StripeCustomer
+  {:fields
+   {:id {:type (non-null String)}
+    :email {:type (non-null String)}}}
+
+  :DeleteStripeCustomerAck
+  {:fields
+   {:message {:type (non-null String)}}}}
 
 
  ;; //
@@ -179,7 +191,11 @@
   :listGames
   {:type (list :GameStatus)
    :resolve :resolve-list-games
-   :description "Lists out a User's open, running and finished games, per device"}}
+   :description "Lists out a User's open, running and finished games, per device"}
+
+  :userPayments
+  {:type (list :Payment)
+   :resolve :user-payments}}
 
 
  ;; //
@@ -190,7 +206,7 @@
    :resolve     :resolve-login}
 
   :createGame
-  {:type        :CreateGamekAck
+  {:type        :CreateGameAck
    :description "Creates a new game"
    :resolve     :resolve-create-game
    :args
@@ -233,7 +249,27 @@
   {:type :ControlEvent
    :resolve :resolve-exit-game
    :args
-   {:gameId {:type (non-null String)}}}}
+   {:gameId {:type (non-null String)}}}
+
+  :verifyPayment
+  {:type    (list :Payment)
+   :resolve :verify-payment
+   :args
+   {:productId {:type (non-null String)}
+    :provider {:type (non-null String)}
+    :token {:type (non-null String)}}}
+
+  :createStripeCustomer
+  {:type (list :StripeCustomer)
+   :resolve :create-stripe-customer
+   :args
+   {:email {:type (non-null String)}}}
+
+  :deleteStripeCustomer
+  {:type :DeleteStripeCustomerAck
+   :resolve :delete-stripe-customer
+   :args
+   {:id {:type (non-null String)}}}}
 
 
  ;; //

@@ -18,8 +18,7 @@
             [beatthemarket.game.games.processing :as games.processing]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
-
-            [beatthemarket.state.subscriptions :as state.subscriptions]
+            [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
 
@@ -712,7 +711,7 @@
         ops-short-sell  [{:op :buy :stockAmount 100}]
         ops-short-sell-count (count ops-short-sell)]
 
-    (with-redefs [state.subscriptions/margin-trading? (constantly true)]
+    (with-redefs [integration.payments.core/margin-trading? (constantly true)]
 
       (testing "The stock account amount can go negative"
 
@@ -986,7 +985,7 @@
 
     (testing "Testing the correct game win message is shown"
 
-      (with-redefs [state.subscriptions/margin-trading? (constantly true)]
+      (with-redefs [integration.payments.core/margin-trading? (constantly true)]
 
         (run-trades! iterations stock-id opts ops-before ops-before-count)
 
@@ -1337,7 +1336,7 @@
 
 
         ;; TODO Run the next :op, check P/L
-        ;; (util/pprint+identity iterations)
+        ;; (util/ppi iterations)
 
         ;; TODO check values are streamed to the correct client
 
@@ -1411,11 +1410,11 @@
     (testing "After joining, getting correct status and P/L"
 
       (let [local-stream-stock-tick (fn [stock-ticks]
-                                      (util/pprint+identity [:stock-ticks stock-ticks])
+                                      (util/ppi [:stock-ticks stock-ticks])
                                       stock-ticks)
 
             local-stream-portfolio-update! (fn [{:keys [profit-loss] :as data}]
-                                             (util/pprint+identity [:profit-loss profit-loss])
+                                             (util/ppi [:profit-loss profit-loss])
                                              data)
 
             {iterations-after-join :iterations} (games.control/join-game!

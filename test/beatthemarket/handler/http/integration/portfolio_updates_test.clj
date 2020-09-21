@@ -95,11 +95,11 @@
                  :variables {:gameId id}}})
 
 
-    (util/pprint+identity (test-util/<message!! 1000))
-    (util/pprint+identity (test-util/<message!! 1000))
-    (util/pprint+identity (test-util/<message!! 1000))
-    (util/pprint+identity (test-util/<message!! 1000))
-    (util/pprint+identity (test-util/<message!! 1000))
+    (util/ppi (test-util/<message!! 1000))
+    (util/ppi (test-util/<message!! 1000))
+    (util/ppi (test-util/<message!! 1000))
+    (util/ppi (test-util/<message!! 1000))
+    (util/ppi (test-util/<message!! 1000))
 
     (let [latest-tick (->> (test-util/consume-subscriptions)
                            (filter #(= 989 (:id %)))
@@ -119,7 +119,7 @@
                                            message
                                          }
                                      }"
-                             :variables (util/pprint+identity {:input {:gameId      id
+                             :variables (util/ppi {:input {:gameId      id
                                                                        :stockId     stockId
                                                                        :stockAmount 100
                                                                        :tickId      stockTickId

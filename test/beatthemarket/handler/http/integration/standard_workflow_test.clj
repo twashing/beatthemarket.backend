@@ -13,7 +13,6 @@
 
             [beatthemarket.game.games :as game.games]
             [beatthemarket.test-util :as test-util]
-            [integrant.repl.state :as state]
             [integrant.repl :refer [clear go halt prep init reset reset-all]]
             [io.pedestal.test :refer [response-for]]
             [beatthemarket.handler.authentication :as auth]
@@ -33,7 +32,7 @@
 
 (deftest subscription-handler-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)]
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)]
 
     (testing "Auth interceptor rejects GQL call"
       (let [expected-error-status 401
@@ -77,7 +76,7 @@
 
 (deftest create-game-resolver-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         gameLevel 1
 
@@ -147,14 +146,14 @@
                   :stream-portfolio-update!
                   :stream-stock-tick}]
 
-            (->> state/system :game/games deref (#(get % game-id)) keys
+            (->> repl.state/system :game/games deref (#(get % game-id)) keys
                  (into #{})
                  (= expected-component-game-keys)
                  is)))))))
 
 (deftest one-game-per-user-per-device-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         gameLevel 1
 
@@ -213,7 +212,7 @@
 
 (deftest check-empty-client-id-start-or-resume-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         gameLevel 1
 
@@ -298,7 +297,7 @@
 
 (deftest start-game-resolver-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         gameLevel 1
 
@@ -345,7 +344,7 @@
                                        }"
                                :variables {:id id}}})
 
-        (as-> (:game/games state/system) gs
+        #_(as-> (:game/games repl.state/system) gs
           (deref gs)
           (get gs (UUID/fromString id))
           (:control-channel gs)
@@ -354,16 +353,16 @@
                               :game-id id}))
 
 
-        (test-util/<message!! 1000)
+        (util/ppi (test-util/<message!! 1000))
 
         (let [expected-result []
-              result (-> (test-util/<message!! 1000) :payload :data :startGame)]
+              result (-> (test-util/<message!! 1000) util/ppi :payload :data :startGame)]
 
           (is (= expected-result result)))))))
 
 (deftest start-game-resolver-with-start-position-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         gameLevel 1
 
@@ -411,7 +410,7 @@
                                :variables {:id id
                                            :startPosition startPosition}}})
 
-        (as-> (:game/games state/system) gs
+        (as-> (:game/games repl.state/system) gs
           (deref gs)
           (get gs (UUID/fromString id))
           (:control-channel gs)
@@ -439,7 +438,7 @@
 
 (deftest stream-stock-ticks-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         gameLevel 1
 
@@ -532,7 +531,7 @@
                                        }"
                                  :variables {:gameId id}}}))
 
-        (as-> (:game/games state/system) gs
+        (as-> (:game/games repl.state/system) gs
           (deref gs)
           (get gs (UUID/fromString id))
           (:control-channel gs)
@@ -562,7 +561,7 @@
 
 (deftest buy-stock-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         gameLevel 1
 
@@ -620,7 +619,7 @@
 
         (test-util/<message!! 1000)
 
-        (as-> (:game/games state/system) gs
+        (as-> (:game/games repl.state/system) gs
           (deref gs)
           (get gs (UUID/fromString id))
           (:control-channel gs)
@@ -661,7 +660,7 @@
 
 (deftest sell-stock-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         gameLevel 1
 
@@ -719,7 +718,7 @@
 
       (test-util/<message!! 1000)
 
-      (as-> (:game/games state/system) gs
+      (as-> (:game/games repl.state/system) gs
         (deref gs)
         (get gs (UUID/fromString id))
         (:control-channel gs)
@@ -789,7 +788,7 @@
                                        }"
                            :variables {:gameId id}}})
 
-    (as-> (:game/games state/system) gs
+    (as-> (:game/games repl.state/system) gs
       (deref gs)
       (get gs (UUID/fromString id))
       (:control-channel gs)
@@ -847,7 +846,7 @@
                                    }"
                            :variables {:gameId id}}})
 
-    (as-> (:game/games state/system) gs
+    (as-> (:game/games repl.state/system) gs
       (deref gs)
       (get gs (UUID/fromString id))
       (:control-channel gs)
@@ -1016,7 +1015,7 @@
                (= expected-profit-losses)
                is))))
 
-    (as-> (:game/games state/system) gs
+    (as-> (:game/games repl.state/system) gs
       (deref gs)
       (get gs (UUID/fromString gameId))
       (:control-channel gs)

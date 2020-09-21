@@ -28,8 +28,8 @@
     (state.core/init-components)
     (migration.core/run-migrations))
 
-  ;; (util/pprint+identity integrant.repl.state/config)
-  ;; (util/pprint+identity integrant.repl.state/system)
+  ;; (util/ppi integrant.repl.state/config)
+  ;; (util/ppi integrant.repl.state/system)
 
   ;; 2
   (do

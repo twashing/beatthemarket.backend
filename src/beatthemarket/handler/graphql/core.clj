@@ -20,6 +20,12 @@
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.bookkeeping.core :as bookkeeping]
+            [beatthemarket.integration.payments.persistence :as payments.persistence]
+            [beatthemarket.integration.payments.core :as payments.core]
+            [beatthemarket.integration.payments.apple :as payments.apple]
+            [beatthemarket.integration.payments.apple.persistence :as payments.apple.persistence]
+            [beatthemarket.integration.payments.google :as payments.google]
+            [beatthemarket.integration.payments.stripe :as payments.stripe]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
             [beatthemarket.util :as util])
   (:import [java.util UUID]))
@@ -130,7 +136,8 @@
 
 (defn check-client-id-exists [context]
 
-  (if-let [client-id (-> context :request :headers (get "client-id"))]
+  (if-let [client-id (or (-> context :request :headers (get "client-id"))
+                         (-> context :com.walmartlabs.lacinia/connection-params :client-id))]
     (UUID/fromString client-id)
     (throw (Exception. "Missing :client-id in your connection_init"))))
 
@@ -187,7 +194,9 @@
 
       (check-user-device-doesnt-have-running-game? conn email client-id)
 
-      (let [user-db-id        (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+      (let [user-entity (-> (beatthemarket.iam.persistence/user-by-email conn email '[:db/id :user/email])
+                            ffirst
+                            (select-keys [:db/id :user/email]))
             mapped-game-level (get graphql.encoder/game-level-map gameLevel)
 
 
@@ -198,12 +207,12 @@
             sink-fn                identity
             {{game-id :game/id
               :as     game} :game} (game.games/create-game! conn sink-fn combined-data-sequence-fn
-                                                            {:user (hash-map :db/id user-db-id)
+                                                            {:user user-entity
                                                              :accounts (game.core/->game-user-accounts)
                                                              :game-level mapped-game-level
                                                              :client-id client-id})]
 
-        (->> (game.games/game->new-game-message game user-db-id)
+        (->> (game.games/game->new-game-message game (:db/id user-entity))
              (transform [:stocks ALL] #(dissoc % :db/id))
              (transform [:stocks ALL MAP-KEYS] (comp keyword name)))))
 
@@ -229,7 +238,9 @@
              (map #(map graphql.encoder/stock-tick->graphql %)))))
 
     (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+      (do
+        ;; (util/ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-buy-stock [context args _]
 
@@ -315,8 +326,6 @@
                                                                 :user/external-uid :userExternalUid})))))
 
 (defn resolve-user-personal-profit-loss [context {:keys [email gameId groupByStock] :as args} _]
-
-  ;; (util/pprint+identity args)
 
   (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
         user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
@@ -469,6 +478,129 @@
       :status :running
       :profitLoss 0.0}]))
 
+(defn create-stripe-customer [context {email :email} parent]
+
+  (try
+
+    (let [{{client :client} :payment.provider/stripe} repl.state/system]
+      (->> (payments.stripe/conditionally-create-customer! client email)
+           :customers
+           (map graphql.encoder/stripe-customer->graphql)))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defn delete-stripe-customer [context {id :id} parent]
+
+  (try
+
+    (let [{{client :client} :payment.provider/stripe} repl.state/system]
+      {:message (:success? (payments.stripe/delete-customer! client id))})
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defn user-payments [context args _]
+
+  (try
+
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context]
+
+      (->> (payments.persistence/user-payments conn)
+           (map graphql.encoder/payment-purchase->graphql)))
+
+    (catch Exception e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+
+(defmulti verify-payment-handler (fn [_ {provider :provider} _] provider))
+
+(defmethod verify-payment-handler "apple" [context {productId :productId
+                                                    provider :provider
+                                                    token :token :as args} _]
+
+  ;; (util/ppi args)
+  (let [client-id (check-client-id-exists context)
+        {{{email :email} :checked-authentication} :request} context
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payment.provider/apple :service)
+        apple-hash (json/read-str token :key-fn keyword)]
+
+    (->> (payments.apple/verify-payment-workflow conn client-id email verify-receipt-endpoint primary-shared-secret apple-hash)
+         (map graphql.encoder/payment-purchase->graphql))))
+
+(defmethod verify-payment-handler "google" [context {productId :productId
+                                                     provider :provider
+                                                     token :token :as args} _]
+
+  (let [client-id (check-client-id-exists context)
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        payment-config (-> repl.state/config :payment.provider/google)]
+
+    ;; (util/ppi ["Sanity 2" payment-config args])
+    (->> (payments.google/verify-payment-workflow conn payment-config args)
+         (map graphql.encoder/payment-purchase->graphql))
+
+    []))
+
+(defn valid-stripe-product-id? [product-id]
+
+  (let [products (-> repl.state/system :payment.provider/stripe :products)]
+
+    (as-> (vals products) v
+      (into #{} v)
+      (some v #{product-id})
+      (util/exists? v))))
+
+(defn valid-stripe-subscription-id? [subscription-id]
+
+  (let [subscriptions (-> repl.state/system :payment.provider/stripe :subscriptions)]
+
+    (as-> (vals subscriptions) v
+      (into #{} v)
+      (some v #{subscription-id})
+      (util/exists? v))))
+
+(defmethod verify-payment-handler "stripe" [context {product-id :productId
+                                                     provider :provider
+                                                     :as args} _]
+
+  ;; (util/ppi args)
+  ;; (util/ppi #_context (check-client-id-exists context))
+  ;; (util/ppi (-> context :request :checked-authentication))
+
+  (let [client-id                                           (check-client-id-exists context)
+        {{{email :email} :checked-authentication} :request} context
+        {{{conn :conn} :opts} :persistence/datomic
+         component            :payment.provider/stripe}     repl.state/system]
+
+    ;; (println (format "Valid product %s" (valid-stripe-product-id? product-id)))
+    ;; (println (format "Valid subscription %s" (valid-stripe-subscription-id? product-id)))
+    ;; (update args :token #(json/read-str % :key-fn keyword))
+
+     (cond
+
+       (valid-stripe-product-id? product-id)
+       (->> (update args :token #(json/read-str % :key-fn keyword))
+            (payments.stripe/verify-product-workflow conn client-id email component)
+            (map graphql.encoder/payment-purchase->graphql))
+
+       (valid-stripe-subscription-id? product-id)
+       (->> (update args :token #(json/read-str % :key-fn keyword))
+            (payments.stripe/verify-subscription-workflow conn client-id email component)
+            (map graphql.encoder/payment-purchase->graphql))
+
+       :else (throw (Exception. (format "Invalid product ID given %s" product-id))))))
+
+(defn verify-payment [context args parent]
+
+  (try
+    (verify-payment-handler context args parent)
+    (catch Exception e
+      (do
+        (util/ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
+
 
 ; STREAMERS
 
@@ -491,9 +623,7 @@
                                                                 :game/games
                                                                 deref
                                                                 (get (UUID/fromString id))
-                                                                :stock-tick-stream
-                                                                ;; util/pprint+identity
-                                                                )
+                                                                :stock-tick-stream)
         cleanup-fn                                          (constantly
                                                               (do
                                                                 (println "stream-stock-ticks CLEANUP")

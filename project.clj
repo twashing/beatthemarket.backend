@@ -122,15 +122,17 @@
                  [orchestra "2018.12.06-2"]
                  [org.kohsuke/wordnet-random-name "1.3"]
                  [random-seed "1.0.0"]
+                 [clj-http "3.10.1"]
+                 [com.google.api-client/google-api-client "1.30.10"]
+                 [com.google.apis/google-api-services-androidpublisher "v3-rev20200817-1.30.10"]
                  [magnet/payments.stripe "0.3.4"]]
 
   :min-lein-version "2.0.0"
-  :resource-paths ["config", "resources"]
+  :resource-paths ["config" "resources"]
 
   :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
                                       "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
                        :dependencies [[org.clojure/test.check "1.1.0"]
-                                      [clj-http "3.10.1"]
                                       [datomic-client-memdb "1.1.1"
                                        :exclusions
                                        [org.slf4j/slf4j-nop

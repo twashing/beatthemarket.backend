@@ -25,6 +25,7 @@
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.core :as games.core]
+            [beatthemarket.integration.payments.core :as integration.payments.core]
 
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
@@ -109,6 +110,7 @@
                               :lose-threshold   lose-threshold})
 
          game-control (merge-with #(if %2 %2 %1)
+                                  opts
                                   (games.core/default-game-control conn game-id
                                                                    (assoc opts :current-level current-level))
                                   {:game                  game                  ;; TODO load
@@ -116,6 +118,7 @@
                                    :stocks-with-tick-data stocks-with-tick-data ;; TODO load + seek to index
                                    :input-sequence        (or input-sequence input-sequence-local)
 
+                                   :short-circuit-game? (atom false)
                                    :tick-sleep-atom (atom
                                                       (or tick-sleep-ms
                                                           (-> integrant.repl.state/config :game/game :tick-sleep-ms)))
@@ -139,7 +142,7 @@
                                    :close-sink-fn (partial sink-fn nil)
                                    :sink-fn       #(sink-fn {:event %})})]
 
-     ;; (util/pprint+identity (dissoc game-control :input-sequence :stocks-with-tick-data))
+     ;; (util/ppi (dissoc game-control :input-sequence :stocks-with-tick-data))
      (games.core/register-game-control! game game-control)
      game-control)))
 
@@ -240,7 +243,7 @@
 
 (defn update-start-position! [conn game-id start-position]
 
-  ;; (util/pprint+identity [game-id start-position])
+  ;; (util/ppi [game-id start-position])
 
   (let [{game-db-id :db/id
          old-start-position :game/start-position} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
@@ -256,9 +259,13 @@
   ([conn game-control]
    (start-game! conn game-control 0))
 
-  ([conn {{game-id :game/id} :game :as game-control} start-position]
+  ([conn
+    {user-entity :user
+     {game-id :game/id :as game-entity} :game :as game-control}
+    start-position]
 
    ;; A
+   (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
 
    ;; B
@@ -301,7 +308,8 @@
    (start-game!-workbench conn game-control 0))
 
   ([conn
-    {{game-id :game/id} :game
+    {user-entity :user
+     {game-id :game/id :as game-entity} :game
      level-timer :level-timer
      tick-sleep-atom :tick-sleep-atom
      game-event-stream :game-event-stream
@@ -310,6 +318,8 @@
     start-position]
 
    ;; A
+   ;; TODO apply unused payments
+   (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
    (game-workbench-loop conn game-control tick-sleep-atom level-timer)
 

@@ -103,7 +103,7 @@
   (map (fn [{buy-or-sell :op :as maybe-tentry}]
 
          ;; (println "replay-stock-pipeline / A /")
-         ;; (util/pprint+identity maybe-tentry)
+         ;; (util/ppi maybe-tentry)
 
          (if buy-or-sell
            (->> (list maybe-tentry)

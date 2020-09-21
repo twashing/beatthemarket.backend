@@ -21,6 +21,8 @@
   (pprint/pprint e)
   e)
 
+(def ppi pprint+identity)
+
 (defn narrow-stock-ticks [stock-id stock-ticks]
 
   (let [f (fn [{id :game.stock/id}]
