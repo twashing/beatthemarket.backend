@@ -17,12 +17,15 @@
             [expound.alpha :as expound]
             [datomic.client.api :as d]
             [compute.datomic-client-memdb.core :as memdb]
+
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.migration.core :as migration.core]
+            [beatthemarket.migration.schema-init :as schema-init]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.persistence.generators :as persistence.generators]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.util :as util])
   (:import [com.google.firebase.auth FirebaseAuth]
@@ -79,7 +82,11 @@
 
 (defn migration-fixture [f]
 
-  (migration.core/apply-norms!)
+  (let [schema-norms (schema-init/load-norm)
+        sample-game-norms (persistence.generators/generate-games)]
+
+    ;; (run! migration.core/apply-norms! [schema-norms sample-game-norms])
+    (migration.core/apply-norms! schema-norms))
 
   (f))
 

@@ -335,7 +335,7 @@
  {:db/ident :bookkeeping.account.type/liability}
  {:db/ident :bookkeeping.account.type/revenue}
  {:db/ident :bookkeeping.account.type/expense}
- {:db/ident :bookkeeping.account.type/equity}
+ {:db/ident :bookkeeping.account.type/equity}p
 
  {:db/ident :bookkeeping.account.orientation/debit}
  {:db/ident :bookkeeping.account.orientation/credit}

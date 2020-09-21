@@ -2,7 +2,8 @@
   (:require [integrant.repl.state :as state]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.migration.schema-init :as schema-init]))
+            [beatthemarket.migration.schema-init :as schema-init]
+            [beatthemarket.util :as util :refer [ppi]]))
 
 
 (defn apply-norms!
@@ -16,6 +17,8 @@
        (apply-norms! norms)))
 
   ([conn norms]
+   (ppi [:norm-count (count norms)])
+   (ppi [:norms norms])
    (persistence.datomic/transact! conn norms)))
 
 (def run-migrations apply-norms!)
