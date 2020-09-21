@@ -17,8 +17,6 @@
        (apply-norms! norms)))
 
   ([conn norms]
-   (ppi [:norm-count (count norms)])
-   (ppi [:norms norms])
    (persistence.datomic/transact! conn norms)))
 
 (def run-migrations apply-norms!)

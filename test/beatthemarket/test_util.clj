@@ -85,8 +85,7 @@
   (let [schema-norms (schema-init/load-norm)
         sample-game-norms (persistence.generators/generate-games)]
 
-    ;; (run! migration.core/apply-norms! [schema-norms sample-game-norms])
-    (migration.core/apply-norms! schema-norms))
+    (run! migration.core/apply-norms! [schema-norms sample-game-norms]))
 
   (f))
 

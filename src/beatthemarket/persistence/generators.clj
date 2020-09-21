@@ -19,7 +19,9 @@
                      (concat v ["@foo.com"])
                      (apply str v))))
 
-(def gen-user-full-name (gen/elements ["Charles Mingus" "John Coltrane" "Herbie Hancock" "Miles Davis" "Sun Ra" "Thelonious Monk"]))
+
+(def jazz-names ["Charles Mingus" "John Coltrane" "Herbie Hancock" "Miles Davis" "Sun Ra" "Thelonious Monk"])
+(def gen-user-full-name (gen/elements jazz-names))
 (def gen-account-name (gen/elements ["Cash"]))
 (def gen-rand-long (gen/elements (map long (range 100))))
 
@@ -36,7 +38,7 @@
 (s/def :user/name full-name-spec)
 (s/def :user/email string?)
 (s/def :user/external-uid string?)
-(def user-spec (s/with-gen map?
+(def user-spec (s/with-gen (s/and map? distinct?)
                  #(gen/fmap
                     (fn [{:keys [user/name user/email] :as user}]
                       (->> (name->email name)
@@ -79,7 +81,10 @@
 
 (s/def :game/id uuid?)
 (s/def :game/start-time inst?)
-(s/def :game/users (s/coll-of ::game-user :count 1))
+(s/def :game/users (s/with-gen distinct?
+                     #(gen/fmap
+                        identity
+                        (s/gen (s/coll-of ::game-user :count 1)))))
 (s/def :game/start-position long-spec)
 (s/def :game/status game-status?)
 (s/def :game/level game-level?)
@@ -90,8 +95,18 @@
 (s/def ::game game-spec)
 
 (def generate-game #(gen/generate (s/gen ::game)))
-(def generate-games #(s/exercise ::game))
+(defn generate-games []
 
+  ;; TODO Fix this
+  (let [temporary-kludge-toget-distinct-names
+        (fn [jazz-name game]
+          (println jazz-name)
+          (let [uname jazz-name
+                email (name->email uname)]
+            (update-in game [:game/users 0 :game.user/user] #(assoc % :user/name uname :user/email email))))]
+    (->> (s/exercise ::game)
+         (map first)
+         (map temporary-kludge-toget-distinct-names jazz-names))))
 
 (comment
 
