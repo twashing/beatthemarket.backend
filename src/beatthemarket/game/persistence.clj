@@ -16,7 +16,7 @@
            (or [?g :game/status :game-status/running]
                [?g :game/status :game-status/paused]) ;; game not exited
            [?g :game/users ?us]
-           [?us :game.user/user-client ?client-id]  ;; For a Device
+           ;; [?us :game.user/user-client ?client-id]  ;; For a Device
            [?us :game.user/user ?u]
            [?u :user/email ?email] ;; For a User
            ]

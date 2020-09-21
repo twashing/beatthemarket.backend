@@ -251,17 +251,8 @@
    :args
    {:gameId {:type (non-null String)}}}
 
-
   :verifyPayment
   {:type    (list :Payment)
-   :resolve :verify-payment
-   :args
-   {:productId {:type (non-null String)}
-    :provider {:type (non-null String)}
-    :token {:type (non-null String)}}}
-
-  #_:verifyPayment
-  #_{:type    :Payment
    :resolve :verify-payment
    :args
    {:productId {:type (non-null String)}

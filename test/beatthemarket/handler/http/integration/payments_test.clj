@@ -145,7 +145,7 @@
     (is (= expected-verify-payment-response
            (map #(select-keys % [:productId :provider]) payment-response)))))
 
-(deftest verify-payment-apple-test
+(deftest verify-payment-apple-test-no-game
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -176,15 +176,17 @@
 
     (testing "Basic verify payment"
 
-      (verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
-                               product-id provider))
+      (let [payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)]
 
-    (testing "Subsequent call to list payments, includes the most recent"
+        (verify-payment-response payment-response product-id provider)
 
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "query UserPayments {
+
+        (testing "Subsequent call to list payments, includes the most recent"
+
+          (test-util/send-data {:id   987
+                                :type :start
+                                :payload
+                                {:query "query UserPayments {
                                        userPayments {
                                          paymentId
                                          productId
@@ -192,21 +194,89 @@
                                        }
                                      }"}})
 
-      (test-util/<message!! 1000)
+          (test-util/<message!! 3000)
 
-      (let [user-payments-response (-> (test-util/<message!! 1000) :payload :data :userPayments)
-            expected-user-payment-keys #{:paymentId :productId :provider}
-            expected-user-payments-response [{:productId product-id
-                                              :provider provider}]]
+          (let [user-payments-response (-> (test-util/<message!! 1000) :payload :data :userPayments)
+                expected-user-payment-keys #{:paymentId :productId :provider}
+                expected-user-payments-response [{:productId product-id
+                                                  :provider provider}]]
 
-        (->> user-payments-response
-             (map keys)
-             (map #(into #{} %))
-             (every? #(= expected-user-payment-keys %))
-             is)
+            (->> user-payments-response
+                 (map keys)
+                 (map #(into #{} %))
+                 (every? #(= expected-user-payment-keys %))
+                 is)
 
-        (is (= expected-user-payments-response
-               (map #(select-keys % [:productId :provider]) user-payments-response)))))))
+            (is (= expected-user-payments-response
+                   (map #(select-keys % [:productId :provider]) user-payments-response)))))
+
+
+        (testing "With no game, charge is not applied"
+
+          (let [[{payment-id :paymentId}] payment-response
+                conn (-> repl.state/system :persistence/datomic :opts :conn)
+
+                {payment-applied :payment.applied/applied}
+                (ffirst (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))]
+
+            (is (nil? payment-applied))))))))
+
+(deftest verify-payment-apple-test-with-game
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "additional_balance_100k"
+        provider "apple"
+        token (-> "example-hash-apple.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (let [game-id-uuid (-> (start-game-workflow) :id UUID/fromString)]
+
+      (test-util/send-init {:client-id (str client-id)})
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                             :variables {:productId product-id
+                                         :provider provider
+                                         :token token}}})
+
+      (test-util/<message!! 10000)
+      (test-util/<message!! 10000)
+
+      (let [payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)]
+
+        (verify-payment-response payment-response product-id provider)
+
+
+        (testing "With a running game, charge is applied"
+
+          (let [[{payment-id :paymentId}] payment-response
+                conn (-> repl.state/system :persistence/datomic :opts :conn)
+                email "twashing@gmail.com"
+
+                expected-cash-account-balance (.floatValue 200000.0)
+
+                {payment-applied :payment.applied/applied}
+                (ffirst (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))
+
+                {cash-account-balance :bookkeeping.account/balance}
+                (game.persistence/cash-account-for-user-game conn email game-id-uuid)]
+
+            (is payment-applied)
+            (is expected-cash-account-balance cash-account-balance))))
+
+      (games.control/update-short-circuit-game! game-id-uuid true))))
 
 (deftest verify-payment-apple2-test
 
@@ -756,8 +826,10 @@
 
 ;; TODO
 
-;; Apply purchases on Apple
+;; [~] Apply purchases on Google (ask on Codementor)
+
+;; Margin Trading should only allow up to 10x Cash level
+
+;; Apply additional 5 minutes
 ;; Notify client of applied purchases
 
-;; Apply purchases on Google
-;; Apply additional 5 minutes

@@ -265,11 +265,6 @@
     start-position]
 
    ;; A
-
-   ;; TODO apply unused payments
-
-   ;; (util/ppi [:A user-entity game-entity])
-
    (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
 

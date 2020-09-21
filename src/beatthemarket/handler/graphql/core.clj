@@ -238,7 +238,9 @@
              (map #(map graphql.encoder/stock-tick->graphql %)))))
 
     (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+      (do
+        ;; (util/ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-buy-stock [context args _]
 
@@ -505,7 +507,7 @@
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context]
 
-      (->> (payments.persistence/user-payments (d/db conn))
+      (->> (payments.persistence/user-payments conn)
            (map graphql.encoder/payment-purchase->graphql)))
 
     (catch Exception e
@@ -519,12 +521,12 @@
 
   ;; (util/ppi args)
   (let [client-id (check-client-id-exists context)
+        {{{email :email} :checked-authentication} :request} context
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         {:keys [verify-receipt-endpoint primary-shared-secret]} (-> repl.state/config :payment.provider/apple :service)
         apple-hash (json/read-str token :key-fn keyword)]
 
-    (->> (payments.apple/verify-payment-workflow conn verify-receipt-endpoint primary-shared-secret apple-hash)
-         ;; (payments.core/apply-payment-functionality! provider)
+    (->> (payments.apple/verify-payment-workflow conn client-id email verify-receipt-endpoint primary-shared-secret apple-hash)
          (map graphql.encoder/payment-purchase->graphql))))
 
 (defmethod verify-payment-handler "google" [context {productId :productId
@@ -596,7 +598,7 @@
     (verify-payment-handler context args parent)
     (catch Exception e
       (do
-        ;; (util/ppi (bean e))
+        (util/ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 

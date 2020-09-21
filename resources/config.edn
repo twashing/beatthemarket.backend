@@ -126,7 +126,8 @@
                                                                   :config  {}}}
                 :payment.provider/apple                {:service #ref [:secrets :development :payment.provider/apple]
                                                         :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
-                                                        :products {:additional_100k "additional_100k"
+                                                        :products {:additional_balance_100k "additional_balance_100k"
+                                                                   :additional_100k "additional_100k"
                                                                    :additional_200k "additional_200k"
                                                                    :additional_300k "additional_300k"
                                                                    :additional_400k "additional_400k"
@@ -164,7 +165,8 @@
                                                            :config  {}}}
          :payment.provider/apple                {:service #ref [:secrets :test :payment.provider/apple]
                                                  :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
-                                                 :products {:additional_100k "additional_100k"
+                                                 :products {:additional_balance_100k "additional_balance_100k"
+                                                            :additional_100k "additional_100k"
                                                             :additional_200k "additional_200k"
                                                             :additional_300k "additional_300k"
                                                             :additional_400k "additional_400k"

@@ -41,6 +41,7 @@
 (defn credit-cash-account [amount account]
   (update account :bookkeeping.account/balance #(+ % amount)))
 
+
 (defmulti apply-feature (fn [feature conn email payment-entity game-entity] feature))
 
 (defmethod apply-feature :margin_trading_1month [_ conn email
@@ -49,6 +50,15 @@
 
   ;; NOTE subscriptions (margin trading) stored in DB
   :noop)
+
+(defmethod apply-feature :additional_balance_100k [_ conn email
+                                                   payment-entity
+                                                   {game-id :game/id :as game-entity}]
+
+  (->> (game.persistence/cash-account-for-user-game conn email game-id)
+       ffirst
+       (credit-cash-account 100000.0)
+       (persistence.datomic/transact-entities! conn)))
 
 (defmethod apply-feature :additional_100k [_ conn email
                                            payment-entity
@@ -88,6 +98,53 @@
 
 ;; TODO
 (defmethod apply-feature :additional_5_minutes [_ conn email payment-entity game-entity])
+
+
+(defn mark-payment-applied-conditionally-on-running-game [conn email client-id payment]
+
+  (let [game-entity (game.persistence/running-game-for-user-device conn email client-id)]
+
+    (if (util/exists? game-entity)
+
+      (hash-map :game game-entity
+                :payment (assoc payment
+                                :payment.applied/game (select-keys game-entity [:db/id])
+                                :payment.applied/applied (c/to-date (t/now))))
+
+      (hash-map :payment payment))))
+
+(defn apply-payment-conditionally-on-running-game [conn email payment-entity game-entity]
+
+  ;; (util/ppi [conn email #_payment-entity game-entity])
+
+  ;; TODO
+  ;; [ok] subscription - turn on margin trading
+  ;; products
+  ;;   [ok] increase Cash balance
+  ;;   - notify Client through portfolioUpdate
+
+  (when game-entity
+
+    (let [{{subscriptions-apple :subscriptions
+            products-apple :products} :payment.provider/apple
+
+           {subscriptions-google :subscriptions
+            products-google :products} :payment.provider/google
+
+           {subscriptions-stripe :subscriptions
+            products-stripe :products} :payment.provider/stripe} repl.state/config
+
+          feature (get (merge (subscription-lookup subscriptions-apple)
+                              (product-lookup products-apple)
+
+                              (subscription-lookup subscriptions-google)
+                              (product-lookup products-google)
+
+                              (subscription-lookup subscriptions-stripe)
+                              (product-lookup products-stripe))
+                       (:payment/product-id payment-entity))]
+
+      (apply-feature feature conn email payment-entity game-entity))))
 
 (defn margin-trading? [conn user-db-id]
 
@@ -133,14 +190,17 @@
 
   ([conn {user-db-id :db/id :as user-entity} game-entity]
 
-   (apply-unapplied-payments-for-user
-     conn user-entity game-entity (unapplied-payments-for-user conn user-db-id)))
+   (apply-unapplied-payments-for-user conn user-entity game-entity (unapplied-payments-for-user conn user-db-id)))
 
-  ([conn {email :user/email} game-entity payment-entities]
+  ([conn {email :user/email :as user-entity} game-entity payment-entities]
 
    ;; A
-   (->> (map #(assoc % :payment.applied/applied (c/to-date (t/now))) payment-entities)
-        (persistence.datomic/transact-entities! conn))
+   (let [transact-entities-when-exists
+         #(when (util/exists? %)
+            (persistence.datomic/transact-entities! conn %))]
+
+     (->> (map #(assoc % :payment.applied/applied (c/to-date (t/now))) payment-entities)
+          transact-entities-when-exists))
 
    (let [lookup-feature (fn [{product-id :payment/product-id :as payment-entity}]
                           (let [feature (->> repl.state/system
@@ -203,4 +263,3 @@
 
 
   )
-

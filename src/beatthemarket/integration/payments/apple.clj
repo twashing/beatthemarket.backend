@@ -9,7 +9,9 @@
             [integrant.repl.state :as repl.state]
             [integrant.core :as ig]
 
+            [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.integration.payments.apple.persistence :as apple.persistence]
             [beatthemarket.util :as util]))
 
@@ -24,59 +26,6 @@
 ;;
 ;; a secure connection between your app and your server,
 ;; code on your server to to validate the receipt with the App Store
-
-(comment
-
-
-  (do
-
-    (def apple-hash (-> "example-hash-apple.json"
-                        resource
-                        slurp
-                        (json/read-str :key-fn keyword)))
-
-    (def apple-hash (-> "example-hash-apple.3.json"
-                        resource
-                        slurp
-                        (json/read-str :key-fn keyword)))
-
-    (def primary-shared-secret "d552367242fb40d9a2aee861031922ee"))
-
-
-  ;; app-specific shared-secret
-  ;; :beatthemarket-shared-secret ""
-
-
-  ;; Need to contact a server with an untrusted SSL cert?
-  (client/get "https://alioth.debian.org" {:insecure? true})
-  (client/get "https://api.github.com/gists")
-
-
-  (let [request-body {:receipt-data (:transactionReceipt apple-hash)
-                      :password primary-shared-secret ;; (if the receipt contains an auto-renewable subscription)
-                      :exclude-old-transactions false}]
-
-
-    ;; PRODUCTION
-
-    #_(def response-prod (util/ppi (client/post "https://buy.itunes.apple.com/verifyReceipt" {:body request-body})))
-
-
-    ;; SANDBOX
-
-    ;; BAD Response - :body "status" 21002
-    ;; https://developer.apple.com/documentation/appstorereceipts/status
-    #_(def response-sand
-      (util/ppi (client/post "https://sandbox.itunes.apple.com/verifyReceipt")))
-
-    ;; GOOD Response - :body "status" 0
-    (def response-sand
-      (-> (client/post "https://sandbox.itunes.apple.com/verifyReceipt" {:body (json/write-str request-body)})
-           util/ppi
-           :body
-           (json/read-str :key-fn keyword)))
-
-    ))
 
 (defn group-and-sort-verify-response [latest-receipt-info]
   (->> (group-by :product_id latest-receipt-info)
@@ -100,55 +49,21 @@
 
     (verify-response->latest-receipt response)))
 
-(defn- conditionally-transact-payment-receipt [conn apple-hash latest-receipts]
+(defn verify-payment-workflow [conn client-id email verify-receipt-endpoint primary-shared-secret apple-hash]
 
-  ;; TODO conditionally, if receipt has not been stored
-  (->> (apple.persistence/latest-receipts->entity apple-hash latest-receipts)
-       (persistence.datomic/transact-entities! conn)))
+  (let [game-and-user-entities
+        (->> (verify-payment verify-receipt-endpoint primary-shared-secret apple-hash)
+             (apple.persistence/latest-receipts->entity apple-hash)
+             (map #(integration.payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id %)))
 
-(defn verify-payment-workflow [conn verify-receipt-endpoint primary-shared-secret apple-hash]
+        user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
+                        ffirst
+                        (assoc :user/payments (map :payment game-and-user-entities)))]
 
-  (->> (verify-payment verify-receipt-endpoint primary-shared-secret apple-hash)
-       (conditionally-transact-payment-receipt conn apple-hash)
-
-       ;; TODO check for error
-       :db-after
-       payments.persistence/user-payments))
-
-(comment
-
-
-  ;; A.
-  (def A (let [verify-endpoint "https://sandbox.itunes.apple.com/verifyReceipt"
-
-               apple-hash (-> "example-hash-apple.json"
-                              resource
-                              slurp
-                              (json/read-str :key-fn keyword))
-
-               primary-shared-secret "d552367242fb40d9a2aee861031922ee"]
-
-           (verify-payment verify-endpoint primary-shared-secret apple-hash)))
-
-
-  ;; B. transact
-  (def B (apple.persistence/latest-receipts->entity apple-hash A))
-  (def conn (-> repl.state/system :persistence/datomic :opts :conn))
-
-
-  ;; C. GQL response
-  (def Z (persistence.datomic/transact-entities! conn B))
-  (def C (->> Z #_(persistence.datomic/transact-entities! conn B)
-              :db-after
-              (d/q '[:find (pull ?e [*
-                                     {:payment/provider [*]}
-                                     {:payment/provider-type [*]}])
-                     :where [?e :payment/id]])
-              util/ppi
-              (map first)
-              (map payment-purchase->graphql)))
-
-  )
+    (persistence.datomic/transact-entities! conn user-entity)
+    (run! #(integration.payments.core/apply-payment-conditionally-on-running-game conn email (:payment %) (:game %))
+          game-and-user-entities)
+    (payments.persistence/user-payments conn)))
 
 ;; Response keys: (:receipt :environment :latest_receipt_info :latest_receipt :status)
 

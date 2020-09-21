@@ -13,7 +13,6 @@
             [beatthemarket.integration.payments.stripe.persistence :as stripe.persistence]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
             [beatthemarket.integration.payments.core :as integration.payments.core]
-            [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.util :as util]
@@ -106,39 +105,6 @@
        :payment/provider-type :payment.provider/stripe
        :payment/provider payment-stripe})))
 
-
-(defn mark-payment-applied-conditionally-on-running-game [conn email client-id payment]
-
-  (let [game-entity (game.persistence/running-game-for-user-device conn email client-id)]
-
-    (if (util/exists? game-entity)
-
-      (hash-map :game game-entity
-                :payment (assoc payment
-                                :payment.applied/game (select-keys game-entity [:db/id])
-                                :payment.applied/applied (c/to-date (t/now))))
-
-      (hash-map :payment payment))))
-
-(defn apply-payment-conditionally-on-running-game [conn email payment-entity game-entity]
-
-  ;; TODO
-  ;; [ok] subscription - turn on margin trading
-  ;; products
-  ;;   [ok] increase Cash balance
-  ;;   - notify Client through portfolioUpdate
-
-  (when game-entity
-
-    (let [{{subscriptions :subscriptions
-            products :products} :payment.provider/stripe} repl.state/system
-
-          feature (get (merge (integration.payments.core/subscription-lookup subscriptions)
-                              (integration.payments.core/product-lookup products))
-                       (:payment/product-id payment-entity))]
-
-      (integration.payments.core/apply-feature feature conn email payment-entity game-entity))))
-
 (defn verify-product-workflow [conn
                                client-id
                                email
@@ -163,14 +129,14 @@
         (->> (payments.core/create-charge client (dissoc payload :source)) ;; TODO check for errors
              :charge
              (->payment conn product-id payment-type)
-             (mark-payment-applied-conditionally-on-running-game conn email client-id))
+             (integration.payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id))
 
         user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
                         ffirst
                         (assoc :user/payments payment-entity))]
 
     (persistence.datomic/transact-entities! conn user-entity)
-    (apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
+    (integration.payments.core/apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
     (payments.persistence/user-payments conn)))
 
 
@@ -215,17 +181,15 @@
             (->> (conditionally-create-subscription client payload)
                  :subscription
                  (->payment conn product-id payment-type)
-                 (mark-payment-applied-conditionally-on-running-game conn email client-id))
+                 (integration.payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id))
 
             user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
                             ffirst
                             (assoc :user/payments payment-entity))]
 
         (persistence.datomic/transact-entities! conn user-entity)
-        (apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
-        (payments.persistence/user-payments conn)
-
-        ))))
+        (integration.payments.core/apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
+        (payments.persistence/user-payments conn)))))
 
 (comment
 

@@ -16,6 +16,7 @@
                               :payment/id (java.util.UUID/randomUUID)
                               :payment/product-id product-id
                               :payment/provider-type :payment.provider/apple
-                              :payment/provider v)))]
+                              :payment/provider v)
+                            (persistence.core/bind-temporary-id v)))]
 
     (map receipt->entity latest-receipt)))
