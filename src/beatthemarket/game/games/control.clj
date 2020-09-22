@@ -245,7 +245,7 @@
 
   ;; NOTE !! DANGER !! doing this on a market game, will disconnect all clients
   ;; Unsubscribe clients, close streams
-  (let [{:keys [stock-tick-stream
+  #_(let [{:keys [stock-tick-stream
                 portfolio-update-stream
                 game-event-stream]}
         (select-keys repl.state/system [:stock-tick-stream :portfolio-update-stream :game-event-stream])]
@@ -322,14 +322,15 @@
 
 (defmulti handle-control-event (fn [_ _ {m :event} _ _] m))
 
-(defmethod handle-control-event :pause [_ game-event-stream
+(defmethod handle-control-event :pause [conn game-event-stream
                                         {game-id :game-id :as control}
                                         now end]
 
+  (pause-game! conn game-id)
+
   (let [remaining (calculate-remaining-time now end)]
     (log/info :game.games (format "< Paused > %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream
-                    (assoc control :type :ControlEvent)))
+    (core.async/>!! game-event-stream (assoc control :type :ControlEvent)))
 
   [])
 
@@ -445,12 +446,12 @@
           short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)]
 
       ;; TODO i. If this is a market, and ii. there are no players, :pause
-      (println (format "game-loop %s:%s / %s / short-circuit-game? %s"
+      #_(println (format "game-loop %s:%s / %s / short-circuit-game? %s"
                                      (:remaining-in-minutes remaining)
                                      (:remaining-in-seconds remaining)
                                      (if controlv controlv :running)
                                      short-circuit-game?))
-      #_(log/debug :game.games (format "game-loop %s:%s / %s"
+      (log/debug :game.games (format "game-loop %s:%s / %s"
                                        (:remaining-in-minutes remaining)
                                        (:remaining-in-seconds remaining)
                                        (if controlv controlv :running)))
@@ -652,13 +653,6 @@
        (map replay-per-stock ticks-and-trade-all))
 
 
-     ;; Set game status
-     (let [data [[:db/retract  game-db-id :game/status game-status]
-                 [:db/add      game-db-id :game/status :game-status/running]]]
-
-       (persistence.datomic/transact-entities! conn data))
-
-
      ;; Re-start game
      (let [data-generators (-> integrant.repl.state/config :game/game :data-generators)
 
@@ -673,7 +667,6 @@
                                               (->> (stocks->stocks-with-tick-data game-stocks data-sequence-fn data-generators)
                                                    stocks->stock-sequences
                                                    (seek-to-position tick-index)
-                                                   ;; util/ppi
                                                    second))))
 
            ;; game-control-live

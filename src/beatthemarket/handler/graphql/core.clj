@@ -97,6 +97,8 @@
 
 (defn check-user-device-has-paused-game? [conn email client-id]
 
+  (util/ppi [email client-id])
+
   (when-not (ffirst
               (d/q '[:find ?g
                      :in $ ?email ?client-id
@@ -379,13 +381,20 @@
   ;; game-status saved
   ;; tick index stored as no. of ticks saved
 
-  (let [game-id (UUID/fromString gameId)
-        event {:type :ControlEvent
-               :event :pause
-               :game-id game-id}]
+  (try
 
-    (-> (game.games/send-control-event! game-id event)
-        (assoc :gameId gameId))))
+    (let [game-id (UUID/fromString gameId)
+          event {:type :ControlEvent
+                 :event :pause
+                 :game-id game-id}]
+
+      (-> (game.games/send-control-event! game-id event)
+          (assoc :gameId gameId)))
+
+    (catch Exception e
+      (do
+        (util/ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-resume-game [context {gameId :gameId} _]
 
@@ -415,8 +424,8 @@
 
 
         ;; Resume Game
-        (games.control/resume-game! conn game-id user-db-id game-control data-sequence-fn)
-
+        ;; (games.control/resume-game! conn game-id user-db-id game-control data-sequence-fn)
+        (games.control/resume-game! conn user-db-id game-control)
 
         ;; Response
         (-> (game.games/send-control-event! game-id event)
@@ -424,7 +433,9 @@
       )
 
     (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+      (do
+        ;; (util/ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-join-game [context {gameId :gameId} _]
 
