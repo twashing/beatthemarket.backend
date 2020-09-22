@@ -19,9 +19,12 @@
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
         email "twashing@gmail.com"
         gameLevel 1]
 
+    (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
@@ -34,6 +37,9 @@
                                      }
                                    }"
                            :variables {:gameLevel gameLevel}}})
+
+
+    (test-util/<message!! 1000)
 
     (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
@@ -78,6 +84,7 @@
 
       (test-util/<message!! 1000)
       (test-util/<message!! 1000)
+      (test-util/<message!! 1000)
 
       ;; >> ================ >>
 
@@ -95,7 +102,6 @@
                                      }"
                                :variables {:gameId gameId}}})
 
-        (test-util/<message!! 1000)
         (let [expected-pause-response {:type "data"
                                        :id 989
                                        :payload
@@ -152,22 +158,6 @@
           (is (= expected-resume-response resume-response))))
 
 
-      ;; B.ii
-      (testing "We receive the correct resume subscription notification"
-
-        (test-util/<message!! 1000)
-        (let [expected-resume-event {:type "data"
-                                    :id 992
-                                    :payload
-                                    {:data
-                                     {:gameEvents
-                                      {:event "resume" :gameId gameId}}}}
-
-              resume-event (test-util/<message!! 1000)]
-
-          (is (= expected-resume-event resume-event))))
-
-
       ;; >> ================ >>
 
 
@@ -185,6 +175,8 @@
                                      }"
                                :variables {:gameId gameId}}})
 
+        (test-util/<message!! 1000)
+        (test-util/<message!! 1000)
         (let [expected-exit-message {:type "data"
                                      :id 993
                                      :payload
@@ -200,9 +192,12 @@
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
         email "twashing@gmail.com"
         gameLevel 1]
 
+    (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
@@ -215,6 +210,8 @@
                                      }
                                    }"
                            :variables {:gameLevel gameLevel}}})
+
+    (test-util/<message!! 1000)
 
     (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 

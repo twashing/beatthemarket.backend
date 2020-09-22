@@ -246,10 +246,12 @@
       (rop/succeed (assoc inputs :stock-pulled stock-pulled))
       (rop/fail (ex-info "No stock bound to id" inputs)))))
 
-(defn- cash-account-has-sufficient-funds-OR-trades-on-margin? [conn debit-value {user-pulled :user-pulled
-                                                                                 game-pulled :game-pulled :as inputs}]
+(defn- cash-account-has-sufficient-funds-OR-trades-on-margin? [conn
+                                                               debit-value
+                                                               {{user-db-id :db/id :as user-pulled} :user-pulled
+                                                                game-pulled :game-pulled :as inputs}]
 
-  (if (integration.payments.core/margin-trading?)
+  (if (integration.payments.core/margin-trading? conn user-db-id)
 
     (rop/succeed inputs)
 
@@ -281,7 +283,8 @@
     (catch Throwable e (rop/fail (ex-info (format "No stock entity [%s]" stock-id)
                                           inputs)))))
 
-(defn- stock-account-has-sufficient-shares-OR-trades-on-margin? [{:keys [conn user-id stock-id stock-amount stock-account] :as inputs}]
+(defn- stock-account-has-sufficient-shares-OR-trades-on-margin? [{:keys [conn user-id stock-id stock-amount stock-account]
+                                                                  :as inputs}]
 
   (if (integration.payments.core/margin-trading? conn user-id)
 
