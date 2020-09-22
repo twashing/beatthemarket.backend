@@ -192,9 +192,12 @@
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
         email "twashing@gmail.com"
         gameLevel 1]
 
+    (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
@@ -207,6 +210,8 @@
                                      }
                                    }"
                            :variables {:gameLevel gameLevel}}})
+
+    (test-util/<message!! 1000)
 
     (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
