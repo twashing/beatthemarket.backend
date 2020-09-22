@@ -429,8 +429,7 @@
 
         ;; Response
         (-> (game.games/send-control-event! game-id event)
-            (assoc :gameId gameId)))
-      )
+            (assoc :gameId gameId))))
 
     (catch Exception e
       (do

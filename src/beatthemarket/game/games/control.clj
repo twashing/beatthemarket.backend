@@ -399,7 +399,7 @@
 
   (swap! (:game/games repl.state/system)
          (fn [gs]
-           (update-in gs [game-id :level-timer] (constantly time-in-seconds)))))
+           (update-in gs [game-id :level-timer] (constantly (atom time-in-seconds))))))
 
 (defmethod handle-control-event :continue [_ game-event-stream {game-id :game-id :as control} now end]
 
@@ -421,10 +421,12 @@
 (defn run-game! [conn
                  {{game-id :game/id} :game
                   ;; current-level :current-level
+                  level-timer :level-timer
                   iterations :iterations
                   control-channel :control-channel
-                  game-event-stream :game-event-stream}
-                 tick-sleep-atom level-timer]
+                  game-event-stream :game-event-stream :as game-control}
+                 tick-sleep-atom]
+
 
   ;; A
   (let [{game-db-id :db/id
@@ -451,7 +453,7 @@
                                      (:remaining-in-seconds remaining)
                                      (if controlv controlv :running)
                                      short-circuit-game?))
-      (log/debug :game.games (format "game-loop %s:%s / %s"
+      (log/info :game.games (format "game-loop %s:%s / %s"
                                        (:remaining-in-minutes remaining)
                                        (:remaining-in-seconds remaining)
                                        (if controlv controlv :running)))
@@ -662,7 +664,7 @@
              (merge-with #(if %2 %2 %1)
                          game-control-replay
                          v
-                         {:game/level-timer (atom game-timer)})
+                         {:level-timer (atom game-timer)})
              (update-in v [:input-sequence] (fn [_]
                                               (->> (stocks->stocks-with-tick-data game-stocks data-sequence-fn data-generators)
                                                    stocks->stock-sequences
@@ -712,10 +714,10 @@
    ;; >> return historical data <<
 
 
-   (let [{:keys [tick-sleep-atom level-timer] :as game-control-live}
+   (let [{:keys [tick-sleep-atom] :as game-control-live}
          (resume-common! conn game-id user-db-id game-control data-sequence-fn)]
 
-     (run-game! conn game-control-live tick-sleep-atom level-timer))))
+     (run-game! conn game-control-live tick-sleep-atom))))
 
 (defn resume-workbench!
 

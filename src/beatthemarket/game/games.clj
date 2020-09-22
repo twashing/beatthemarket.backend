@@ -270,8 +270,7 @@
 
    ;; B
    (let [{:keys [control-channel
-                 tick-sleep-atom
-                 level-timer]} game-control
+                 tick-sleep-atom]} game-control
 
          [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
@@ -279,15 +278,16 @@
      (as-> inputs-at-position v
        (games.control/run-iteration v)
        (assoc game-control :iterations v)
-       (games.control/run-game! conn v tick-sleep-atom level-timer))
+       (games.control/run-game! conn v tick-sleep-atom))
 
      historical-data)))
 
 (defn game-workbench-loop [conn
                            {{game-id :game/id} :game
                             control-channel :control-channel
-                            game-event-stream :game-event-stream}
-                           tick-sleep-atom level-timer]
+                            game-event-stream :game-event-stream
+                            level-timer :level-timer}
+                           tick-sleep-atom]
 
    (core.async/go-loop [now (t/now)
                         end (t/plus now (t/seconds @level-timer))]
@@ -344,8 +344,7 @@
 
    ;; B
    (let [{:keys [control-channel
-                 tick-sleep-atom
-                 level-timer]} game-control
+                 tick-sleep-atom]} game-control
 
          [historical-data inputs-at-position] (->> (games.pipeline/market-stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
@@ -353,7 +352,7 @@
      (as-> inputs-at-position v
        (games.control/run-iteration v)
        (assoc game-control :iterations v)
-       (games.control/run-game! conn v tick-sleep-atom level-timer))
+       (games.control/run-game! conn v tick-sleep-atom))
 
      historical-data)))
 
@@ -369,8 +368,7 @@
 
    ;; B
    (let [{:keys [control-channel
-                 tick-sleep-atom
-                 level-timer]} game-control
+                 tick-sleep-atom]} game-control
 
          [historical-data inputs-at-position] (->> (games.pipeline/market-stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
