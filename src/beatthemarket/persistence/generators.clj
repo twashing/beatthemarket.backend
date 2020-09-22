@@ -100,7 +100,6 @@
   ;; TODO Fix this
   (let [temporary-kludge-toget-distinct-names
         (fn [jazz-name game]
-          (println jazz-name)
           (let [uname jazz-name
                 email (name->email uname)]
             (update-in game [:game/users 0 :game.user/user] #(assoc % :user/name uname :user/email email))))]

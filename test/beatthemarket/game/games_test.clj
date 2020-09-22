@@ -83,6 +83,9 @@
             :stocks-with-tick-data
             :control-channel
             :current-level
+            :game-level
+            :short-circuit-game?
+            :accounts
 
             :level-timer
             :tick-sleep-atom
@@ -158,7 +161,7 @@
          doall)
 
     (test-util/consume-messages stock-tick-stream container)
-    (Thread/sleep 2000)
+    (Thread/sleep 1000)
 
     (->> (take-last tick-amount @container)
          (map (fn [a] (map (comp double :game.stock.tick/close) a)))
@@ -1135,7 +1138,6 @@
                                 a)) %))
              (every? true?)
              is)))))
-
 
 (deftest pausing-game-stores-expected-data-test
 

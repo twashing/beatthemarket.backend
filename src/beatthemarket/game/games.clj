@@ -283,7 +283,10 @@
 
      historical-data)))
 
-(defn game-workbench-loop [conn {:keys [control-channel game-event-stream]}
+(defn game-workbench-loop [conn
+                           {{game-id :game/id} :game
+                            control-channel :control-channel
+                            game-event-stream :game-event-stream}
                            tick-sleep-atom level-timer]
 
    (core.async/go-loop [now (t/now)
@@ -295,11 +298,12 @@
            [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
            {message :event :as controlv} (if (nil? controlv) {:event :continue} controlv)
 
+           short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)
            [nowA endA] (match [message expired?]
                               [_ false] (games.control/handle-control-event conn game-event-stream controlv now end)
                               [_ true] (games.control/handle-control-event conn game-event-stream {:event :timeout} now end))]
 
-       (when (and nowA endA)
+       (when (and nowA endA (not short-circuit-game?))
          (recur nowA endA)))))
 
 (defn start-game!-workbench
@@ -318,7 +322,6 @@
     start-position]
 
    ;; A
-   ;; TODO apply unused payments
    (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
    (game-workbench-loop conn game-control tick-sleep-atom level-timer)

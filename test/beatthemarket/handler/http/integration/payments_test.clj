@@ -832,4 +832,3 @@
 
 ;; Apply additional 5 minutes
 ;; Notify client of applied purchases
-
