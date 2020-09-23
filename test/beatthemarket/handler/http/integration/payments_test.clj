@@ -349,7 +349,8 @@
 
         product-id "margin_trading_1month"
         provider "google"
-        token (-> "example-hash-apple.json" resource slurp)]
+        token (-> "example-hash-apple.json" resource slurp)
+        android-payload (-> "android.additional_100k.txt" resource slurp (json/read-str :key-fn keyword))]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
@@ -364,9 +365,7 @@
                                          provider
                                        }
                                      }"
-                           :variables {:productId product-id
-                                       :provider provider
-                                       :token token}}})
+                           :variables android-payload}})
 
      (util/ppi (test-util/<message!! 1000))
      (util/ppi (test-util/<message!! 1000))

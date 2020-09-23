@@ -545,9 +545,11 @@
 
   (let [client-id (check-client-id-exists context)
         conn (-> repl.state/system :persistence/datomic :opts :conn)
-        payment-config (-> repl.state/config :payment.provider/google)]
+        payment-config (-> repl.state/config :payment.provider/google)
 
-    ;; (util/ppi ["Sanity 2" payment-config args])
+        google-hash (json/read-str token :key-fn keyword)]
+
+    (util/ppi ["Sanity Google" google-hash])
     (->> (payments.google/verify-payment-workflow conn payment-config args)
          (map graphql.encoder/payment-purchase->graphql))
 

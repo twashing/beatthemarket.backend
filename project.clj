@@ -133,6 +133,7 @@
 
   :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
                                       "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
+                       :resource-paths ["test/resources"]
                        :dependencies [[org.clojure/test.check "1.1.0"]
                                       [datomic-client-memdb "1.1.1"
                                        :exclusions
