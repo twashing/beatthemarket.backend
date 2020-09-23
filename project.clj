@@ -108,7 +108,8 @@
                    org.slf4j/slf4j-api
                    ring/ring-codec
                    ring/ring-core]]
-                 [com.datomic/client-pro "0.9.63" #_"0.9.57"
+                 [com.datomic/client-cloud "0.8.102"]
+                 #_[com.datomic/client-pro "0.9.63" #_"0.9.57"
                   :exclusions
                   [com.cognitect/transit-clj
                    com.cognitect/transit-java

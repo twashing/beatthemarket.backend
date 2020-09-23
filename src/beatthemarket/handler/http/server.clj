@@ -63,12 +63,10 @@
 
     (println (format "\nCreating your server... %s" profile))
 
-    ;; (state.core/set-prep)
-    ;; (state.core/init-components)
-
-    (state.core/set-prep :development)
+    (state.core/set-prep profile)
     (state.core/init-components)
-    (migration.core/run-migrations)))
+    (when-not (= :production profile)
+      (migration.core/run-migrations))))
 
 
 (comment ;; Main

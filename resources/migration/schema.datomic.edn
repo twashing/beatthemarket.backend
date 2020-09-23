@@ -68,7 +68,7 @@
   :db/unique      :db.unique/value}
 
  {:db/ident       :payment.apple/token
-  :db/valueType   :db.type/bytes
+  :db/valueType   :db.type/string ;;:db.type/bytes
   :db/cardinality :db.cardinality/one}
 
  {:db/ident       :payment.apple/receipts
