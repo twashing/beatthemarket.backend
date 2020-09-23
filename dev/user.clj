@@ -35,6 +35,10 @@
     (state.core/init-components)
     (migration.core/run-migrations))
 
+  (do
+    (state.core/set-prep :production)
+    (state.core/init-components))
+
 
   (pprint integrant.repl.state/config)
   (pprint integrant.repl.state/system)

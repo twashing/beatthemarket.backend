@@ -80,14 +80,18 @@
   (f)
   (state.core/halt-components))
 
-(defn migration-fixture [f]
+(defn migration-fixture
 
-  (let [schema-norms (schema-init/load-norm)
-        sample-game-norms (persistence.generators/generate-games)]
+  ([f] (migration-fixture :test f))
 
-    (run! migration.core/apply-norms! [schema-norms sample-game-norms]))
+  ([profile f]
 
-  (f))
+   (let [schema-norms (schema-init/load-norm)
+         sample-game-norms (persistence.generators/generate-games)]
+
+     (run! (partial migration.core/apply-norms! profile) [schema-norms sample-game-norms]))
+
+   (f)))
 
 (defn login-assertion [service id-token]
 
