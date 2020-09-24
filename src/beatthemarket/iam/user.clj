@@ -13,10 +13,10 @@
 
 (defn add-user! [conn {:keys [email name uid]}]
 
-  (->> {:user/email        email
-        :user/name         name
-        :user/external-uid uid}
-       (persistence.datomic/transact-entities! conn)))
+  (cond-> {:user/email        email
+           :user/external-uid uid}
+    name (assoc :user/name name)
+    true (persistence.datomic/transact-entities! conn)))
 
 (defn conditionally-add-new-user! [conn {email :email :as checked-authentication}]
 

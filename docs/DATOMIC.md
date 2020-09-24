@@ -7,6 +7,12 @@ BeatTheMarket uses an AWS Datomic Cloud instance of [Datomic](https://www.datomi
 
 Development uses the [datomic-client-memdb](https://clojars.org/datomic-client-memdb) (`[datomic-client-memdb "1.1.1"]`) library to develop and run an in-memory database.
 
+Here's an example of Setting up a local proxy to the PROD database.
+
+```
+./datomic client access -p beatthemarket-datomic beatthemarket-datomic4
+```
+
 ## Production
 
 Cloud setup is outlined in these steps

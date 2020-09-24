@@ -41,8 +41,9 @@
      (catch FirebaseAuthException e
        (bean e)))))
 
-(defn authentication?-raw [{:keys [email name uid]}]
-  (util/truthy? (and email name uid)))
+(defn authentication?-raw [{:keys [email name uid user_id]}]
+  (util/truthy? (or (and email name uid)
+                    (and email user_id))))
 
 (defn authenticated?
   ([token]
@@ -58,8 +59,7 @@
     (map #(String. %) jwt) ;; byte array to string
     (map json/read-str jwt)))
 
-(defmethod ig/init-key :firebase/firebase [_ {:keys                             [firebase-database-url
-                                                                                 service-account-file-name] :as opts}]
+(defmethod ig/init-key :firebase/firebase [_ {:keys [firebase-database-url service-account-file-name] :as opts}]
   (initialize-firebase firebase-database-url service-account-file-name)
   opts)
 
@@ -125,3 +125,23 @@
       :idToken
       check-authentication ;; verify-id-token
       clojure.pprint/pprint))
+
+(comment
+
+  (require '[beatthemarket.test-util :as test-util])
+  (initialize-firebase "https://beatthemarket-c13f8.firebaseio.com" "beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json")
+
+  (def email-password-jwt "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFlNjYzOGY4NDlkODVhNWVkMGQ1M2NkNDI1MzE0Y2Q1MGYwYjY1YWUiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3NlY3VyZXRva2VuLmdvb2dsZS5jb20vYmVhdHRoZW1hcmtldC1jMTNmOCIsImF1ZCI6ImJlYXR0aGVtYXJrZXQtYzEzZjgiLCJhdXRoX3RpbWUiOjE2MDA5NTMxNDAsInVzZXJfaWQiOiI3a2Z0Y05iS2dOZG1MaFNyamQ2Uk5wREtLWjMyIiwic3ViIjoiN2tmdGNOYktnTmRtTGhTcmpkNlJOcERLS1ozMiIsImlhdCI6MTYwMDk1MzE0MCwiZXhwIjoxNjAwOTU2NzQwLCJlbWFpbCI6InJleWtqYXZpazE1MUBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsiZW1haWwiOlsicmV5a2phdmlrMTUxQGdtYWlsLmNvbSJdfSwic2lnbl9pbl9wcm92aWRlciI6InBhc3N3b3JkIn19.nBImIuJxAeRr-9nxjyt4GVypCptAUROFjgpQmXJCFuOmzzbU0uDfNx76aDN7HeITlFAt_7pzQYoox8BqHTyfwtaHh0m2Ow4m3bH46888vgb0D3xSJcrdeY-eAK7fiCj0DS_MDjgBdOLhnW79SX0obAvCuvLp2cMh9_pH358vhsAZZ9ugVgAb07L0_Kt4Lewaf1Uk8-jfgGXQqAE316x9tonF9P4h6oVHTxbyBPcMO6aTzwZi2lnv9RV4b9jqcVytsqXpMoCiCpiUy81bE-6IbTWCu5pVO8Wy0AXYYdFKRhWFS4ouM-IW4GMpe_HdvqXrR6Mgl8AKNcV1IsUVF3qL5g")
+
+  (def email-password-jwt id-token)
+  (def email-password-jwt (test-util/->id-token))
+  (pprint id-token)
+
+
+  (def ^FirebaseToken decodedToken (verify-id-token email-password-jwt))
+  (let [{:keys [email name uid]} (bean decodedToken)]
+    (util/ppi [email name uid]))
+
+  (util/ppi (bean decodedToken))
+
+  )
