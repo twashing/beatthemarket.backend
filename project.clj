@@ -109,15 +109,11 @@
                    ring/ring-codec
                    ring/ring-core]]
                  [com.datomic/client-cloud "0.8.102"]
-                 #_[com.datomic/client-pro "0.9.63" #_"0.9.57"
-                  :exclusions
-                  [com.cognitect/transit-clj
-                   com.cognitect/transit-java
-                   org.clojure/core.async
-                   org.eclipse.jetty/jetty-http
-                   org.eclipse.jetty/jetty-io
-                   org.eclipse.jetty/jetty-client
-                   org.eclipse.jetty/jetty-util]]
+
+                 ;; NOTE Addresses java.lang.NoClassDefFoundError: javax/xml/bind/DatatypeConverter
+                 ;; https://docs.datomic.com/cloud/troubleshooting.html#no-class-jaxb
+                 [javax.xml.bind/jaxb-api "2.4.0-b180830.0359"]
+
                  [com.rpl/specter "1.1.3"]
                  [rop "0.4.1"]
                  [orchestra "2018.12.06-2"]

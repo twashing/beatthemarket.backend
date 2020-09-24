@@ -14,6 +14,7 @@
 ;; COMPONENT
 (defn config->client [{:keys [db-name config env]}]
 
+  (util/ppi [db-name config env])
   (let [client (d/client config)]
 
     (hash-map
