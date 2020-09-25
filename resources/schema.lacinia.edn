@@ -75,7 +75,7 @@
   :GameStatus
   {:description "The status of a user's game, in the system"
    :fields
-   {:gameId {:type (non-null String)}
+   {:gameId {:type String}
     :status {:type :GameStatusType}
     :profitLoss {:type (list :ProfitLoss)}}}
 
@@ -84,7 +84,7 @@
    {:userEmail {:type String}
     :userName {:type String}
     :userExternalUid {:type String}
-    :game {:type :GameStatus}}}
+    :games {:type (list :GameStatus)}}}
 
   :Payment
   {:fields

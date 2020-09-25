@@ -60,6 +60,30 @@
     (lacinia.schema/tag-with-type a t)))
 
 
+#_[
+
+   {:user/name "Timothy Washington"
+    :user/games
+    [{:game/id nil :game/status nil :game.user/profit-loss ()}]
+    :user/external-uid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"
+    :user/email "twashing@gmail.com"}
+
+   {:user/name "Thelonious Monk"
+    :user/games
+    [{:game/id #uuid "6a6eda16-013c-4298-bd64-09aa558ee627"
+      :game/status :game-status/running
+      :game.user/profit-loss
+      ({:user-id nil
+        :tick-id nil
+        :game-id #uuid "6a6eda16-013c-4298-bd64-09aa558ee627"
+        :stock-id nil
+        :profit-loss-type :realized-profit-loss
+        :profit-loss 4.22})}]
+    :user/external-uid "843"
+    :user/email "thelonious.monk@foo.com"}
+
+   ]
+
 (defn user->graphql [user-with-games]
 
   (let [profit-loss->graphql #(-> (select-keys % [:stock-id :game-id :profit-loss :profit-loss-type])
@@ -74,13 +98,13 @@
                                                    :game.user/profit-loss :profitLoss})]
 
     (->> user-with-games
-         (transform [:user/game :game.user/profit-loss ALL] profit-loss->graphql)
-         (transform [:user/game :game/status] game-status->graphql)
-         (transform [:user/game] game->graphql)
+         (transform [:user/games ALL :game.user/profit-loss ALL] profit-loss->graphql)
+         (transform [:user/games ALL :game/status] game-status->graphql)
+         (transform [:user/games ALL] game->graphql)
          (#(clojure.set/rename-keys % {:user/email :userEmail
                                        :user/name :userName
                                        :user/external-uid :userExternalUid
-                                       :user/game :game})))))
+                                       :user/games :games})))))
 
 (defmulti game-event->graphql :event)
 
