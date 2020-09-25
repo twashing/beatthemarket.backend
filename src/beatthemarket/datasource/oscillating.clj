@@ -1,6 +1,6 @@
 (ns beatthemarket.datasource.oscillating
   (:require [beatthemarket.datasource.core :as datasource.core]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (defn price-swing-occurence-sequence [chunk-multiple beta-distribution]

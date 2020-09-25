@@ -4,7 +4,7 @@
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.datasource.sine :as datasource.sine]
             [beatthemarket.datasource.oscillating :as datasource.oscillating]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 ;; granularity

@@ -10,7 +10,7 @@
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.iam.persistence :as iam.persistence]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
             [datomic.client.api :as d])
   (:import [java.util UUID]))
 
@@ -208,7 +208,7 @@
   (do
     (def conn (-> integrant.repl.state/system :persistence/datomic :conn))
     (->> (d/pull (d/db conn) '[*] result-user-id)
-         util/ppi
+         ppi
          (def user-pulled)))
 
   ;; (cash-account-by-game-user user-pulled)
@@ -231,7 +231,7 @@
                               (d/db conn)
                               (-> stocks first :game.stock/id))))
   (->> (d/pull (d/db conn) '[*] result-stock-id)
-       util/ppi
+       ppi
        (def stock-pulled))
 
 
@@ -277,7 +277,7 @@
                                (d/db conn)
                                (:bookkeeping.tentry/id tentry))))
   (->> (d/pull (d/db conn) '[*] result-tentry-id)
-       util/ppi
+       ppi
        (def tentry-pulled))
 
 

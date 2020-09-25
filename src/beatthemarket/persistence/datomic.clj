@@ -5,7 +5,7 @@
             [integrant.core :as ig]
             [integrant.repl.state :as repl.state]
             [compute.datomic-client-memdb.core :as memdb]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
 
             ;; TODO Make configurable, loading of :data-processor namespaces
             [beatthemarket.game.persistence]))
@@ -14,7 +14,7 @@
 ;; COMPONENT
 (defn config->client [{:keys [db-name config env]}]
 
-  (util/ppi [db-name config env])
+  (ppi [db-name config env])
   (let [client (d/client config)]
 
     (hash-map

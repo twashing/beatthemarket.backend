@@ -7,7 +7,7 @@
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (defmethod ig/init-key :payments/feature-registry [_ _]
@@ -115,7 +115,7 @@
 
 (defn apply-payment-conditionally-on-running-game [conn email payment-entity game-entity]
 
-  ;; (util/ppi [conn email #_payment-entity game-entity])
+  ;; (ppi [conn email #_payment-entity game-entity])
 
   ;; TODO
   ;; [ok] subscription - turn on margin trading
@@ -224,7 +224,7 @@
        (map :subscriptions)
        ;; (group-by first)
        ;; (reduce-kv (fn [m k v]) {})
-       util/ppi)
+       ppi)
 
   (def feature-registry
     (let [extract-products-and-subscriptions (juxt :products :subscriptions)]
@@ -239,7 +239,7 @@
            (transform [ALL MAP-VALS] #(list %))
            (apply merge-with into)
            (transform [MAP-VALS] set)
-           util/ppi)))
+           ppi)))
 
 
   (filter (fn [[k v]]
@@ -249,16 +249,16 @@
   (->> feature-registry
        (filter (fn [[k v]]
                  (some v #{"prod_I1RDqXXxLnMXdb"})))
-       util/ppi
+       ppi
        (map first)
        #_(map #(apply hash-map %)))
 
   (->> repl.state/system
       :payments/feature-registry
-      ;; util/ppi
+      ;; ppi
       (filter (fn [[k v]]
                 (some v #{"prod_I1RDqXXxLnMXdb"})))
-      util/ppi
+      ppi
       ffirst)
 
 

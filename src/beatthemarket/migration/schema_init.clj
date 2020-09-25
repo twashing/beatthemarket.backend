@@ -4,7 +4,7 @@
             [datomic.client.api :as d]
             [integrant.repl.state :as state]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (defn load-norm

@@ -4,7 +4,7 @@
             [clojure.java.io :refer [resource input-stream]]
             [clojure.tools.logging :as log]
             [integrant.core :as ig]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [com.google.firebase FirebaseApp FirebaseOptions]
            [com.google.firebase.auth FirebaseAuth FirebaseAuthException FirebaseToken]
            [com.google.auth.oauth2 GoogleCredentials]
@@ -140,8 +140,8 @@
 
   (def ^FirebaseToken decodedToken (verify-id-token email-password-jwt))
   (let [{:keys [email name uid]} (bean decodedToken)]
-    (util/ppi [email name uid]))
+    (ppi [email name uid]))
 
-  (util/ppi (bean decodedToken))
+  (ppi (bean decodedToken))
 
   )

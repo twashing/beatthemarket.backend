@@ -27,7 +27,7 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.generators :as persistence.generators]
             [beatthemarket.state.core :as state.core]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [com.google.firebase.auth FirebaseAuth]
            [java.util UUID]))
 
@@ -208,7 +208,7 @@
 
   (log/debug :reason ::send-data :data data)
   (g/send-msg *session* (json/write-str data))
-  #_(g/send-msg *session* (json/write-str (util/ppi data)) ))
+  #_(g/send-msg *session* (json/write-str (ppi data)) ))
 
 (defn send-init
   ([]
@@ -224,7 +224,7 @@
 
    (alt!!
        *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out)
-   #_(util/ppi
+   #_(ppi
      (alt!!
        *messages-ch* ([message] message) (timeout timeout-ms) ::timed-out))))
 
@@ -355,9 +355,9 @@
 
     (<message!! 1000)
 
-    ;; (util/ppi "consume-subscriptions...")
+    ;; (ppi "consume-subscriptions...")
     (let [latest-tick (->> (consume-subscriptions)
-                           ;; util/ppi
+                           ;; ppi
                            (filter #(= 989 (:id %)))
                            last)
           [{stockTickId :stockTickId

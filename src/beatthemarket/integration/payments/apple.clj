@@ -13,7 +13,7 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.integration.payments.apple.persistence :as apple.persistence]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (defmethod ig/init-key :payment.provider/apple [_ {_verify-receipt-endpoint :verify-receipt-endpoint
@@ -51,18 +51,18 @@
 
 (defn verify-payment-workflow [conn client-id email verify-receipt-endpoint primary-shared-secret apple-hash]
 
-  (let [game-and-user-entities
+  (let [game-and-payments
         (->> (verify-payment verify-receipt-endpoint primary-shared-secret apple-hash)
              (apple.persistence/latest-receipts->entity apple-hash)
              (map #(integration.payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id %)))
 
         user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
                         ffirst
-                        (assoc :user/payments (map :payment game-and-user-entities)))]
+                        (assoc :user/payments (map :payment game-and-payments)))]
 
     (persistence.datomic/transact-entities! conn user-entity)
     (run! #(integration.payments.core/apply-payment-conditionally-on-running-game conn email (:payment %) (:game %))
-          game-and-user-entities)
+          game-and-payments)
     (payments.persistence/user-payments conn)))
 
 ;; Response keys: (:receipt :environment :latest_receipt_info :latest_receipt :status)

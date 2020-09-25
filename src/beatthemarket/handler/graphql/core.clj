@@ -27,7 +27,7 @@
             [beatthemarket.integration.payments.google :as payments.google]
             [beatthemarket.integration.payments.stripe :as payments.stripe]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 
@@ -97,7 +97,7 @@
 
 (defn check-user-device-has-paused-game? [conn email client-id]
 
-  (util/ppi [email client-id])
+  (ppi [email client-id])
 
   (when-not (ffirst
               (d/q '[:find ?g
@@ -184,7 +184,9 @@
         (assoc base-response :message :userexists)))
 
     (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+      (do
+        (ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
 
@@ -241,7 +243,7 @@
 
     (catch Exception e
       (do
-        ;; (util/ppi (bean e))
+        ;; (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-buy-stock [context args _]
@@ -393,7 +395,7 @@
 
     (catch Exception e
       (do
-        (util/ppi (bean e))
+        (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-resume-game [context {gameId :gameId} _]
@@ -433,7 +435,7 @@
 
     (catch Exception e
       (do
-        ;; (util/ppi (bean e))
+        ;; (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-join-game [context {gameId :gameId} _]
@@ -529,7 +531,7 @@
                                                     provider :provider
                                                     token :token :as args} _]
 
-  ;; (util/ppi args)
+  ;; (ppi args)
   (let [client-id (check-client-id-exists context)
         {{{email :email} :checked-authentication} :request} context
         conn (-> repl.state/system :persistence/datomic :opts :conn)
@@ -544,16 +546,12 @@
                                                      token :token :as args} _]
 
   (let [client-id (check-client-id-exists context)
+        {{{email :email} :checked-authentication} :request} context
         conn (-> repl.state/system :persistence/datomic :opts :conn)
-        payment-config (-> repl.state/config :payment.provider/google)
+        payment-config (-> repl.state/config :payment.provider/google :service)]
 
-        google-hash (json/read-str token :key-fn keyword)]
-
-    (util/ppi ["Sanity Google" google-hash])
-    (->> (payments.google/verify-payment-workflow conn payment-config args)
-         (map graphql.encoder/payment-purchase->graphql))
-
-    []))
+    (->> (payments.google/verify-payment-workflow conn client-id email payment-config args)
+         (map graphql.encoder/payment-purchase->graphql))))
 
 (defn valid-stripe-product-id? [product-id]
 
@@ -577,9 +575,9 @@
                                                      provider :provider
                                                      :as args} _]
 
-  ;; (util/ppi args)
-  ;; (util/ppi #_context (check-client-id-exists context))
-  ;; (util/ppi (-> context :request :checked-authentication))
+  ;; (ppi args)
+  ;; (ppi #_context (check-client-id-exists context))
+  ;; (ppi (-> context :request :checked-authentication))
 
   (let [client-id                                           (check-client-id-exists context)
         {{{email :email} :checked-authentication} :request} context
@@ -610,7 +608,7 @@
     (verify-payment-handler context args parent)
     (catch Exception e
       (do
-        (util/ppi (bean e))
+        (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 

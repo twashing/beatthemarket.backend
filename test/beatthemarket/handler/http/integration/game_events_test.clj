@@ -5,7 +5,7 @@
             ;; [com.rpl.specter :refer [transform ALL]]
 
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 

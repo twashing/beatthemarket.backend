@@ -9,7 +9,7 @@
             [aero.core :as aero]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.handler.authentication :as auth]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
 
             [beatthemarket.migration.core :as migration.core]))
 

@@ -1,7 +1,7 @@
 (ns beatthemarket.game.persistence
   (:require [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 
@@ -49,7 +49,7 @@
                                                stock-account-amount
                                                pershare-purchase-ratio] :as calculation}]
 
-  (util/ppi
+  (ppi
     [latest-price
      {:keys [price
              stock-account-amount

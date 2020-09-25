@@ -12,7 +12,7 @@
             [beatthemarket.game.games :as game.games]
             [beatthemarket.game.games.processing :as games.processing]
             [beatthemarket.game.games.control :as games.control]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.iam.persistence :as iam.persistence]))
 
@@ -28,8 +28,8 @@
     (state.core/init-components)
     (migration.core/run-migrations))
 
-  ;; (util/ppi integrant.repl.state/config)
-  ;; (util/ppi integrant.repl.state/system)
+  ;; (ppi integrant.repl.state/config)
+  ;; (ppi integrant.repl.state/system)
 
   ;; 2
   (do

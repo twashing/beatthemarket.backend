@@ -1,6 +1,6 @@
 (ns beatthemarket.persistence.core
   (:require [datomic.client.api :as d]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 

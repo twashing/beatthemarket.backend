@@ -19,7 +19,7 @@
             [beatthemarket.handler.http.service :as http.service]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.core :as persistence.core]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
             [clj-time.coerce :as c])
   (:import [java.util UUID]))
 
@@ -353,10 +353,10 @@
                               :game-id id}))
 
 
-        (util/ppi (test-util/<message!! 1000))
+        (ppi (test-util/<message!! 1000))
 
         (let [expected-result []
-              result (-> (test-util/<message!! 1000) util/ppi :payload :data :startGame)]
+              result (-> (test-util/<message!! 1000) ppi :payload :data :startGame)]
 
           (is (= expected-result result)))))))
 

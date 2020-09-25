@@ -14,7 +14,7 @@
             [beatthemarket.game.games :as game.games]
             [beatthemarket.game.games.control :as games.control]
 
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
             [beatthemarket.bookkeeping.core :as bookkeeping]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.migration.core :as migration.core]
@@ -360,7 +360,7 @@
   (do
     (def conn (-> repl.state/system :persistence/datomic :opts :conn))
     (->> (d/pull (d/db conn) '[*] result-user-id)
-         util/ppi
+         ppi
          (def user-pulled)))
 
   ;; (cash-account-by-game-user user-pulled)
@@ -383,7 +383,7 @@
                               (d/db conn)
                               (-> stocks first :game.stock/id))))
   (->> (d/pull (d/db conn) '[*] result-stock-id)
-       util/ppi
+       ppi
        (def stock-pulled))
 
 
@@ -426,5 +426,5 @@
                                (d/db conn)
                                (:bookkeeping.tentry/id tentry))))
   (->> (d/pull (d/db conn) '[*] result-tentry-id)
-       util/ppi
+       ppi
        (def tentry-pulled)))

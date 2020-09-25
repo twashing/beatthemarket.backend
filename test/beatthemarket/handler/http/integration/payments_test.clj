@@ -12,7 +12,7 @@
             [beatthemarket.integration.payments.persistence :as payments.persistence]
             [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 
@@ -349,7 +349,6 @@
 
         product-id "margin_trading_1month"
         provider "google"
-        token (-> "example-hash-apple.json" resource slurp)
         android-payload (-> "android.additional_100k.txt" resource slurp (json/read-str :key-fn keyword))]
 
     (test-util/send-init {:client-id (str client-id)})
@@ -367,11 +366,17 @@
                                      }"
                            :variables android-payload}})
 
-     (util/ppi (test-util/<message!! 1000))
-     (util/ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
 
-     ;; (test-util/<message!! 1000)
-     ;; (test-util/<message!! 1000)
+    #_{:type "data",
+       :id 987,
+       :payload
+       {:data
+        {:verifyPayment
+         [{:paymentId "07c135e7-f56f-452f-9e53-2c376f2043c4",
+           :productId "additional_100k",
+           :provider "google"}]}}}
 
     ))
 

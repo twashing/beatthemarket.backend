@@ -3,7 +3,7 @@
             [integrant.repl.state :as repl.state]
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.persistence.datomic :as persistence.datomic]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (defn user-exists? [result-entities]
@@ -11,12 +11,14 @@
         (every-pred util/exists? (partial every? util/exists?))]
     (set-and-subsets-not-empty? result-entities)))
 
-(defn add-user! [conn {:keys [email name uid]}]
+(defn add-user! [conn {:keys [email name uid user_id]}]
 
-  (cond-> {:user/email        email
-           :user/external-uid uid}
-    name (assoc :user/name name)
-    true (persistence.datomic/transact-entities! conn)))
+  (let [local-add-user! #(persistence.datomic/transact-entities! conn %)]
+
+    (cond-> {:user/email email}
+      (or uid user_id) (assoc :user/external-uid (or uid user_id))
+      name             (assoc :user/name name)
+      true             local-add-user!)))
 
 (defn conditionally-add-new-user! [conn {email :email :as checked-authentication}]
 
