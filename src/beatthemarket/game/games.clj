@@ -30,7 +30,7 @@
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
 
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 
@@ -142,7 +142,7 @@
                                    :close-sink-fn (partial sink-fn nil)
                                    :sink-fn       #(sink-fn {:event %})})]
 
-     ;; (util/ppi (dissoc game-control :input-sequence :stocks-with-tick-data))
+     ;; (ppi (dissoc game-control :input-sequence :stocks-with-tick-data))
      (games.core/register-game-control! game game-control)
      game-control)))
 
@@ -243,7 +243,7 @@
 
 (defn update-start-position! [conn game-id start-position]
 
-  ;; (util/ppi [game-id start-position])
+  ;; (ppi [game-id start-position])
 
   (let [{game-db-id :db/id
          old-start-position :game/start-position} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))

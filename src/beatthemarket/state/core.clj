@@ -4,7 +4,7 @@
             [integrant.core :as ig]
             [aero.core :as aero]
             [com.rpl.specter :refer [transform MAP-VALS]]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 ;; NOTE taken from a suggestion from an Integrant issue

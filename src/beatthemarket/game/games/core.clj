@@ -8,7 +8,7 @@
             ;; [beatthemarket.persistence.datomic :as persistence.datomic]
             ;; [beatthemarket.persistence.core :as persistence.core]
 
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 (defn register-game-control! [game game-control]
   (swap! (:game/games repl.state/system)

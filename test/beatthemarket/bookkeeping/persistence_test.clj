@@ -8,7 +8,7 @@
             [beatthemarket.bookkeeping.core :as bookkeeping.core]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
 
             [datomic.client.api :as d]))
 

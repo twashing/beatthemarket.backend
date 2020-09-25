@@ -8,7 +8,7 @@
             [beatthemarket.test-util :as test-util]
             [beatthemarket.handler.authentication :as auth]
             [beatthemarket.iam.persistence :as iam.persistence]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (use-fixtures :once (partial test-util/component-prep-fixture :test))

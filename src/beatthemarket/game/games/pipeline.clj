@@ -5,7 +5,7 @@
             [beatthemarket.game.games.processing :as games.processing]
             [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.persistence.core :as persistence.core]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (defn stream-account-balance-updates [conn
@@ -103,7 +103,7 @@
   (map (fn [{buy-or-sell :op :as maybe-tentry}]
 
          ;; (println "replay-stock-pipeline / A /")
-         ;; (util/ppi maybe-tentry)
+         ;; (ppi maybe-tentry)
 
          (if buy-or-sell
            (->> (list maybe-tentry)

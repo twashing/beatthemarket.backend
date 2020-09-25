@@ -3,7 +3,7 @@
             [clojure.core.async :as core.async]
             [integrant.repl.state :as repl.state]
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 
@@ -95,11 +95,11 @@
                  :variables {:gameId id}}})
 
 
-    (util/ppi (test-util/<message!! 1000))
-    (util/ppi (test-util/<message!! 1000))
-    (util/ppi (test-util/<message!! 1000))
-    (util/ppi (test-util/<message!! 1000))
-    (util/ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
 
     (let [latest-tick (->> (test-util/consume-subscriptions)
                            (filter #(= 989 (:id %)))
@@ -119,7 +119,7 @@
                                            message
                                          }
                                      }"
-                             :variables (util/ppi {:input {:gameId      id
+                             :variables (ppi {:input {:gameId      id
                                                                        :stockId     stockId
                                                                        :stockAmount 100
                                                                        :tickId      stockTickId

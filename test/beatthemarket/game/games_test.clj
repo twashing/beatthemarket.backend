@@ -22,7 +22,7 @@
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
 
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
             [beatthemarket.test-util :as test-util])
   (:import [java.util UUID]
            [clojure.lang ExceptionInfo]))
@@ -1338,7 +1338,7 @@
 
 
         ;; TODO Run the next :op, check P/L
-        ;; (util/ppi iterations)
+        ;; (ppi iterations)
 
         ;; TODO check values are streamed to the correct client
 
@@ -1412,11 +1412,11 @@
     (testing "After joining, getting correct status and P/L"
 
       (let [local-stream-stock-tick (fn [stock-ticks]
-                                      (util/ppi [:stock-ticks stock-ticks])
+                                      (ppi [:stock-ticks stock-ticks])
                                       stock-ticks)
 
             local-stream-portfolio-update! (fn [{:keys [profit-loss] :as data}]
-                                             (util/ppi [:profit-loss profit-loss])
+                                             (ppi [:profit-loss profit-loss])
                                              data)
 
             {iterations-after-join :iterations} (games.control/join-game!

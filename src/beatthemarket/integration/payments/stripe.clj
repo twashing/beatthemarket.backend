@@ -15,7 +15,7 @@
             [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
             [datomic.client.api :as d])
   (:import [java.util UUID]))
 
@@ -115,7 +115,7 @@
                                  source :source
                                  :as payload} :token :as args}]
 
-  ;; (util/ppi [conn client-id email client args])
+  ;; (ppi [conn client-id email client args])
 
   ;; TODO
   ;; check if customer already has source
@@ -223,7 +223,7 @@
   ;; X. Create a customer
   (def customer
     (let [create-customer-body {:email "foo@bar.com"}]
-      (util/ppi (payments.core/create-customer stripe-client create-customer-body))))
+      (ppi (payments.core/create-customer stripe-client create-customer-body))))
 
   (def customer-id (-> customer :customer :id))
   ;; (def payment-method-id "card_0HRqOOu4V08wojXsHiMnmpRv")
@@ -231,12 +231,12 @@
 
   (-> (payments.core/get-customer stripe-client customer-id)
       :customer
-      util/ppi)
+      ppi)
 
   (->> (payments.core/get-customer-payment-methods stripe-client customer-id "card" {})
        :payment-methods
        (filter #(= "pm_0HSR8iu4V08wojXsqTE17D9g" #_payment-method-id (:id %)))
-       util/ppi)
+       ppi)
 
   (def result (payments.core/attach-payment-method stripe-client payment-method-id customer-id))
 

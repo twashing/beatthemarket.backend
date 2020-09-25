@@ -25,7 +25,7 @@
             [beatthemarket.iam.persistence :as iam.persistence]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
 
             [io.pedestal.interceptor :as interceptor]
             [io.pedestal.interceptor.chain :as chain]

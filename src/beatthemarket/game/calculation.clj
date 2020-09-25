@@ -4,7 +4,7 @@
             [clojure.core.match :refer [match]]
 
             [beatthemarket.game.persistence :as game.persistence]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (defn ->profit-loss-event [user-id tick-id game-id stock-id profit-loss-type profit-loss]
@@ -105,7 +105,7 @@
 
   ([game-id profit-loss]
 
-   #_(util/ppi [game-id profit-loss])
+   #_(ppi [game-id profit-loss])
    (let [profit-loss-type :running-profit-loss]
      (for [[user-db-id pls] profit-loss
            [stock-id vs] pls
@@ -328,9 +328,9 @@
 
         realized-profit-loss (calculate-resolved-PL op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation)]
 
-    ;; (util/ppi "WTF / Resolved !!")
-    ;; (util/ppi profit-loss)
-    ;; (util/ppi profit-loss-calculation)
+    ;; (ppi "WTF / Resolved !!")
+    ;; (ppi profit-loss)
+    ;; (ppi profit-loss-calculation)
 
 
     (replace-trade-state-for-stock! user-id game-id game-stock-id [])
@@ -349,9 +349,9 @@
         realized-profit-loss (calculate-realized-PL op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation)
         running-profit-loss (collect-running-profit-loss game-id)]
 
-    #_(util/ppi "WTF / Crossover !!")
-    #_(util/ppi profit-loss)
-    #_(util/ppi profit-loss-calculation)
+    #_(ppi "WTF / Crossover !!")
+    #_(ppi profit-loss)
+    #_(ppi profit-loss-calculation)
 
     (replace-trade-state-for-stock! user-id game-id game-stock-id running-profit-loss-calculations)
 
@@ -363,7 +363,7 @@
 
   (let [direction (-> profit-loss last :counter-balance-direction)]
 
-    #_(util/ppi [:trade-opposite-of-counter-balance-direction? [op profit-loss]
+    #_(ppi [:trade-opposite-of-counter-balance-direction? [op profit-loss]
                              (and direction (not (= op direction)))])
 
     (and direction (not (= op direction)))))
@@ -427,7 +427,7 @@
         crossing-counter-balance-threshold? (crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
 
 
-    (util/ppi [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
+    (ppi [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
 
     (match [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?]
 

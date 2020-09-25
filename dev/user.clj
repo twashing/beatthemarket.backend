@@ -10,7 +10,7 @@
             [clojure.core.match :refer [match]]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.migration.core :as migration.core]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
 
             [magnet.payments.core :as core]
             [magnet.payments.stripe :as stripe]))

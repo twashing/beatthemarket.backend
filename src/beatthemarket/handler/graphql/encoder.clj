@@ -1,6 +1,6 @@
 (ns beatthemarket.handler.graphql.encoder
   (:require [com.walmartlabs.lacinia.schema :as lacinia.schema]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (def game-level-map

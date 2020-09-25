@@ -16,7 +16,7 @@
             [beatthemarket.game.games.core :as games.core]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.processing :as games.processing]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 
@@ -787,10 +787,10 @@
                   {{game-stocks :game/stocks :as game} :game :as game-control}
                   data-sequence-fn]
 
-  ;; (util/ppi "join-game! / A check-user-does-not-have-running-game /")
+  ;; (ppi "join-game! / A check-user-does-not-have-running-game /")
   (let [user-games (check-user-does-not-have-running-game conn user-db-id)]
 
-    ;; (util/ppi "join-game! / B user-joined-game? /")
+    ;; (ppi "join-game! / B user-joined-game? /")
     (when-not (user-joined-game? user-games game-id user-db-id)
 
       ;; Join

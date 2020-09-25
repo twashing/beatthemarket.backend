@@ -1,11 +1,13 @@
 (ns beatthemarket.iam.authentication-test
   (:require [clojure.test :refer :all]
             [io.pedestal.test :refer [response-for]]
+            [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
             [integrant.repl.state :as state]
-            [beatthemarket.util :as util]
+            [beatthemarket.util :refer [ppi] :as util]
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.iam.authentication :as sut]))
+            [beatthemarket.iam.authentication :as sut]
+            [clojure.data.json :as json]))
 
 
 (use-fixtures :once (partial test-util/component-prep-fixture :test))
@@ -56,6 +58,25 @@
 
       (testing "authenticated? function"
         (is (sut/authenticated? jwt verification-fn))))))
+
+(deftest check-authentication-email-password-test
+
+  (testing "JWT for an email/password authentication"
+
+    (let [jwt             "foobar"
+          user-id         "7kftcNbKgNdmLhSrjd6RNpDKKZ32"
+          verification-fn (constantly (-> "jwt-email-password.json" resource slurp (json/read-str :key-fn keyword)))
+
+          {:keys [email user_id]} (sut/check-authentication jwt verification-fn)
+          expectedEmail           "reykjavik151@gmail.com"
+          expectedUid             user-id]
+
+      (are [x y] (= x y)
+        email expectedEmail
+        user_id expectedUid)
+
+      (testing "authenticated? function"
+        (is (ppi (sut/authenticated? jwt verification-fn)))))))
 
 (deftest authentication-interceptor-test
 

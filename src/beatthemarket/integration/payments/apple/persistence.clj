@@ -1,6 +1,6 @@
 (ns beatthemarket.integration.payments.apple.persistence
   (:require [beatthemarket.persistence.core :as persistence.core]
-            [beatthemarket.util :as util])
+            [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
 

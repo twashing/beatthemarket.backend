@@ -6,7 +6,7 @@
 
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.bookkeeping.core :as bookkeeping]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 ;; BUY | SELL

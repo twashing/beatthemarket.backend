@@ -1,6 +1,6 @@
 (ns beatthemarket.integration.payments.stripe.persistence
   (:require [datomic.client.api :as d]
-            [beatthemarket.util :as util]))
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
 (defn customer-by-id [conn customer-id]
