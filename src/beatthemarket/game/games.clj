@@ -324,7 +324,7 @@
    ;; A
    (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
-   (game-workbench-loop conn game-control tick-sleep-atom level-timer)
+   (game-workbench-loop conn game-control tick-sleep-atom)
 
    ;; B
    (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)

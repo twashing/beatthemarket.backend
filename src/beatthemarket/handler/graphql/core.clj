@@ -316,18 +316,19 @@
 
 (defn resolve-users [context args _]
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        users (d/q '[:find (pull ?e [*])
-                     :in $
-                     :where
-                     [?e :user/email]]
-                   (d/db conn))]
+  (try
 
-    (->> (map first users)
-         (transform [ALL identity] #(dissoc % :db/id))
-         (transform [ALL identity] #(clojure.set/rename-keys % {:user/email :userEmail
-                                                                :user/name :userName
-                                                                :user/external-uid :userExternalUid})))))
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          group-by-stock? true]
+
+      (->> (game.calculation/collect-realized-profit-loss-all-users-allgames conn group-by-stock?)
+           (map graphql.encoder/user->graphql)
+           ppi))
+
+    (catch Throwable e
+      (do
+        (bean e)
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-user-personal-profit-loss [context {:keys [email gameId groupByStock] :as args} _]
 
@@ -480,7 +481,7 @@
     (-> (game.games/send-control-event! game-id event)
         (assoc :gameId gameId))))
 
-(defn resolve-list-games [context {gameId :gameId} _]
+(defn resolve-games [context {gameId :gameId} _]
 
   (let [{{{email :email :as checked-authentication} :checked-authentication}
          :request}                                   context]

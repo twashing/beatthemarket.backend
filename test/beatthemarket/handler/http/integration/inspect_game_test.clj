@@ -68,10 +68,23 @@
                                        userEmail
                                        userName
                                        userExternalUid
+                                       game {
+                                         gameId
+                                         status
+                                         profitLoss {
+                                           profitLoss
+                                           stockId
+                                           gameId
+                                           profitLossType
+                                         }
+                                       }
                                      }
                                    }"}})
 
-    (let [result-users (-> (test-util/<message!! 1000) :payload :data :users)]
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+
+    #_(let [result-users (-> (test-util/<message!! 1000) :payload :data :users)]
 
       (->> (map keys result-users)
            (map #(into #{} %))
