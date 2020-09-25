@@ -1,5 +1,6 @@
 (ns beatthemarket.handler.graphql.encoder
   (:require [com.walmartlabs.lacinia.schema :as lacinia.schema]
+            [com.rpl.specter :refer [transform ALL]]
             [beatthemarket.util :refer [ppi] :as util]))
 
 
@@ -15,6 +16,18 @@
    9 :game-level/nine
    10 :game-level/ten
    100 :game-level/market})
+
+(def game-status-map
+  {:game-status/created :created
+   :game-status/running :running
+   :game-status/paused :paused
+   :game-status/won :won
+   :game-status/lost :lost
+   :game-status/exited :exited})
+
+(def profit-loss-type-map
+  {"realized-profit-loss" "realized"
+   "running-profit-loss" "running"})
 
 (def payment-provider-map
   {:payment.provider/apple "apple"
@@ -46,6 +59,52 @@
   (let [t (:type a)]
     (lacinia.schema/tag-with-type a t)))
 
+
+#_[
+
+   {:user/name "Timothy Washington"
+    :user/games
+    [{:game/id nil :game/status nil :game.user/profit-loss ()}]
+    :user/external-uid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"
+    :user/email "twashing@gmail.com"}
+
+   {:user/name "Thelonious Monk"
+    :user/games
+    [{:game/id #uuid "6a6eda16-013c-4298-bd64-09aa558ee627"
+      :game/status :game-status/running
+      :game.user/profit-loss
+      ({:user-id nil
+        :tick-id nil
+        :game-id #uuid "6a6eda16-013c-4298-bd64-09aa558ee627"
+        :stock-id nil
+        :profit-loss-type :realized-profit-loss
+        :profit-loss 4.22})}]
+    :user/external-uid "843"
+    :user/email "thelonious.monk@foo.com"}
+
+   ]
+
+(defn user->graphql [user-with-games]
+
+  (let [profit-loss->graphql #(-> (select-keys % [:stock-id :game-id :profit-loss :profit-loss-type])
+                                  (update :profit-loss-type profit-loss-type-map)
+                                  (clojure.set/rename-keys {:stock-id :stockId
+                                                            :game-id :gameId
+                                                            :profit-loss :profitLoss
+                                                            :profit-loss-type :profitLossType}))
+        game-status->graphql game-status-map
+        game->graphql #(clojure.set/rename-keys % {:game/id :gameId
+                                                   :game/status :status
+                                                   :game.user/profit-loss :profitLoss})]
+
+    (->> user-with-games
+         (transform [:user/games ALL :game.user/profit-loss ALL] profit-loss->graphql)
+         (transform [:user/games ALL :game/status] game-status->graphql)
+         (transform [:user/games ALL] game->graphql)
+         (#(clojure.set/rename-keys % {:user/email :userEmail
+                                       :user/name :userName
+                                       :user/external-uid :userExternalUid
+                                       :user/games :games})))))
 
 (defmulti game-event->graphql :event)
 

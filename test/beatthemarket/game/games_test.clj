@@ -621,7 +621,7 @@
               expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
               expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
                                              :profit-loss (.floatValue 166.67)}
-              realized-profit-losses-allgames (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?)
+              realized-profit-losses-allgames (ppi (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?))
 
               realized-profit-losses-allgames-forgame (get realized-profit-losses-allgames game-id)]
 
@@ -655,6 +655,79 @@
               (select-keys [:profit-loss-type :profit-loss])
               (= expected-realized-profit-loss)
               is))))))
+
+(deftest collect-realized-profit-loss-all-users-allgames-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        user-db-id (:db/id user)
+        userId         (:user/external-uid user)
+        email          (:user/email user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 , 105.0 120.0 110.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        opts       {:level-timer-sec 5
+                    :user            {:db/id user-db-id}
+                    :accounts        (game.core/->game-user-accounts)
+                    :game-level      :game-level/one}
+
+
+        ;; D Launch Game
+        {{game-id    :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
+
+
+        ;; E Buy Stock
+        {stock-id   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  game-id
+              :stockId stock-id
+              :game-control game-control}
+
+        ops  [{:op :buy :stockAmount 100}
+              {:op :buy :stockAmount 200}
+              {:op :sell :stockAmount 200}
+              {:op :sell :stockAmount 100}]
+        ops-count (count ops)]
+
+
+    ;; Run Stock & Trade pipeline
+    (run-trades! iterations stock-id opts ops ops-count)
+
+
+    ;; (ppi (game.calculation/collect-realized-profit-loss-all-users-allgames conn false))
+    (ppi (game.calculation/collect-realized-profit-loss-all-users-allgames conn true))
+
+    ;; TODO complete
+    #_[#:user{:email "twashing@gmail.com",
+              :game
+              {:game/id #uuid "cd0c8980-96c7-4c8d-85fc-731dab4849c7",
+               :game/status :game-status/created,
+               :game.user/profit-loss
+               ({:user-id nil,
+                 :tick-id nil,
+                 :game-id #uuid "cd0c8980-96c7-4c8d-85fc-731dab4849c7",
+                 :stock-id #uuid "f86edd69-5bef-46e5-a5cb-77935be4f46e",
+                 :profit-loss-type :realized-profit-loss,
+                 :profit-loss -55.56})},
+              :name "Timothy Washington",
+              :external-uid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"}]))
 
 (deftest track-running-profit-loss-on-margin-trade-test
 

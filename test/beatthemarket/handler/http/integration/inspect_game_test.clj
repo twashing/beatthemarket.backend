@@ -20,36 +20,96 @@
 
 (deftest query-user-test
 
-  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)
-        email "twashing@gmail.com"]
+
+  ;; TODO complete
+  (testing "User without Game and P/L"
+
+    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+          id-token (test-util/->id-token)
+          email "twashing@gmail.com"]
 
 
-    (test-util/login-assertion service id-token)
+      (test-util/login-assertion service id-token)
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "query User($email: String!) {
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "query User($email: String!) {
                                      user(email: $email) {
                                        userEmail
                                        userName
                                        userExternalUid
+                                       games {
+                                         gameId status
+                                         profitLoss {
+                                           profitLoss
+                                           stockId
+                                           gameId
+                                           profitLossType
+                                         }
+                                       }
                                      }
                                    }"
-                           :variables {:email email}}})
+                             :variables {:email email}}})
+
+      (ppi (test-util/<message!! 1000))
+      (ppi (test-util/<message!! 1000))
+
+      #_(let [result-user (-> (test-util/<message!! 1000) :payload :data :user)]
+
+          (->> (keys result-user)
+               (into #{})
+               (= expected-user-keys)
+               is)
+
+          (->> (transform [identity] #(dissoc % :userExternalUid) result-user)
+               (= expected-user)
+               is))))
 
 
-    (let [result-user (-> (test-util/<message!! 1000) :payload :data :user)]
+  (testing "User with Game and P/L"
 
-      (->> (keys result-user)
-           (into #{})
-           (= expected-user-keys)
-           is)
+    (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+          id-token (test-util/->id-token)
+          email "sun.ra@foo.com"]
 
-      (->> (transform [identity] #(dissoc % :userExternalUid) result-user)
-           (= expected-user)
-           is))))
+
+      (test-util/login-assertion service id-token)
+
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "query User($email: String!) {
+                                     user(email: $email) {
+                                       userEmail
+                                       userName
+                                       userExternalUid
+                                       games {
+                                         gameId status
+                                         profitLoss {
+                                           profitLoss
+                                           stockId
+                                           gameId
+                                           profitLossType
+                                         }
+                                       }
+                                     }
+                                   }"
+                             :variables {:email email}}})
+
+      (ppi (test-util/<message!! 1000))
+      (ppi (test-util/<message!! 1000))
+
+      #_(let [result-user (-> (test-util/<message!! 1000) :payload :data :user)]
+
+          (->> (keys result-user)
+               (into #{})
+               (= expected-user-keys)
+               is)
+
+          (->> (transform [identity] #(dissoc % :userExternalUid) result-user)
+               (= expected-user)
+               is)))))
 
 (deftest query-users-test
 
@@ -68,10 +128,23 @@
                                        userEmail
                                        userName
                                        userExternalUid
+                                       games {
+                                         gameId
+                                         status
+                                         profitLoss {
+                                           profitLoss
+                                           stockId
+                                           gameId
+                                           profitLossType
+                                         }
+                                       }
                                      }
                                    }"}})
 
-    (let [result-users (-> (test-util/<message!! 1000) :payload :data :users)]
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+
+    #_(let [result-users (-> (test-util/<message!! 1000) :payload :data :users)]
 
       (->> (map keys result-users)
            (map #(into #{} %))

@@ -305,51 +305,56 @@
 
 (defn resolve-user [context {email :email :as args}_]
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)]
+  (try
 
-    (->> (iam.persistence/user-by-email conn email)
-         ffirst
-         (transform [identity] #(dissoc % :db/id))
-         (transform [identity] #(clojure.set/rename-keys % {:user/email :userEmail
-                                                            :user/name :userName
-                                                            :user/external-uid :userExternalUid})))))
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          group-by-stock? true]
+
+      (->> (game.calculation/collect-realized-profit-loss-for-user-allgames conn email group-by-stock?)
+           first
+           graphql.encoder/user->graphql))
+
+    (catch Throwable e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 (defn resolve-users [context args _]
 
-  (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-        users (d/q '[:find (pull ?e [*])
-                     :in $
-                     :where
-                     [?e :user/email]]
-                   (d/db conn))]
+  (try
 
-    (->> (map first users)
-         (transform [ALL identity] #(dissoc % :db/id))
-         (transform [ALL identity] #(clojure.set/rename-keys % {:user/email :userEmail
-                                                                :user/name :userName
-                                                                :user/external-uid :userExternalUid})))))
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          group-by-stock? true]
+
+      (->> (game.calculation/collect-realized-profit-loss-all-users-allgames conn group-by-stock?)
+           (map graphql.encoder/user->graphql)))
+
+    (catch Throwable e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 (defn resolve-user-personal-profit-loss [context {:keys [email gameId groupByStock] :as args} _]
 
-  (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
-        user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
-        group-by-stock? (if groupByStock groupByStock false)]
+  (try
 
+    (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
+          user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+          group-by-stock? (if groupByStock groupByStock false)]
 
-    ;; ? Snapshot (Running + Realized P/L)
-    ;; Realized P/L (all, per game)
-    ;; Realized P/L (per stock, per game)
-    ;; (highest score, most recent score)
+      ;; ? Snapshot (Running + Realized P/L)
+      ;; Realized P/L (all, per game)
+      ;; Realized P/L (per stock, per game)
+      ;; (highest score, most recent score)
 
-    (if gameId
+      (if gameId
 
-      (let [game-id (UUID/fromString gameId)]
+        (let [game-id (UUID/fromString gameId)]
 
-        (->> (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id group-by-stock?)
-             (map graphql.encoder/profit-loss->graphql)))
+          (->> (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id group-by-stock?)
+               (map graphql.encoder/profit-loss->graphql)))
 
-      (->> (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?)
-           (map graphql.encoder/profit-loss->graphql)))))
+        (->> (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?)
+             (map graphql.encoder/profit-loss->graphql))))
+
+    (catch Throwable e
+      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
 (defn resolve-user-market-profit-loss [context {email :email} _]
 
@@ -480,7 +485,7 @@
     (-> (game.games/send-control-event! game-id event)
         (assoc :gameId gameId))))
 
-(defn resolve-list-games [context {gameId :gameId} _]
+(defn resolve-games [context {gameId :gameId} _]
 
   (let [{{{email :email :as checked-authentication} :checked-authentication}
          :request}                                   context]

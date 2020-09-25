@@ -176,6 +176,9 @@
 
 (defn ^:private lacinia-schema []
 
+  #_{:reference :resolve-games,
+   :callbacks (:create-stripe-customer :resolve-create-game :resolve-buy-stock :resolve-user-personal-profit-loss :resolve-pause-game :resolve-account-balances :resolve-exit-game :resolve-login :delete-stripe-customer :user-payments :resolve-sell-stock :verify-payment :resolve-user :resolve-user-market-profit-loss :resolve-users :resolve-start-game :resolve-resume-game :resolve-list-games)}
+
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
       (lacinia.util/attach-resolvers {:resolve-login                     graphql.core/resolve-login
@@ -191,7 +194,7 @@
                                       :resolve-pause-game                graphql.core/resolve-pause-game
                                       :resolve-resume-game               graphql.core/resolve-resume-game
                                       :resolve-exit-game                 graphql.core/resolve-exit-game
-                                      :resolve-list-games                graphql.core/resolve-list-games
+                                      :resolve-games                     graphql.core/resolve-games
 
                                       :user-payments            graphql.core/user-payments
                                       :verify-payment           graphql.core/verify-payment

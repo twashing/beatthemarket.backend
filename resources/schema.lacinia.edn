@@ -25,13 +25,6 @@
    {:event {:type (non-null :ControlEventType)}
     :gameId {:type (non-null String)}}}
 
-
-  :User
-  {:fields
-   {:userEmail {:type String}
-    :userName {:type String}
-    :userExternalUid {:type String}}}
-
   :Stock
   {:fields
    {:id     {:type (non-null String)}
@@ -46,14 +39,13 @@
     :stockId        {:type (non-null String)}
     :stockName      {:type (non-null String)}}}
 
-
   :ProfitLoss
   {:description "Container for portfolio updates"
    :fields
    {:profitLoss {:type (non-null Float)}
-    :stockId    {:type (non-null String)}
+    :stockId    {:type String}
     :gameId     {:type (non-null String)}
-    :profitLossType {:type (non-null :ProfitLossType)}}}
+    :profitLossType {:type :ProfitLossType}}}
 
   :AccountBalance
   {:description "Account Balance message"
@@ -80,14 +72,19 @@
     :minutesRemaining {:type (non-null Int)}
     :secondsRemaining {:type (non-null Int)}}}
 
-
   :GameStatus
   {:description "The status of a user's game, in the system"
    :fields
-   {:gameId {:type (non-null String)}
-    :status {:type (non-null :GameStatusType)}
-    :profitLoss {:type (non-null Float)}}}
+   {:gameId {:type String}
+    :status {:type :GameStatusType}
+    :profitLoss {:type (list :ProfitLoss)}}}
 
+  :User
+  {:fields
+   {:userEmail {:type String}
+    :userName {:type String}
+    :userExternalUid {:type String}
+    :games {:type (list :GameStatus)}}}
 
   :Payment
   {:fields
@@ -120,7 +117,7 @@
   {:values [:win :lose]}
 
   :GameStatusType
-  {:values [:running :paused :won :lost :exited]}}
+  {:values [:created :running :paused :won :lost :exited]}}
 
 
  ;; //
@@ -188,9 +185,9 @@
    :resolve :resolve-user-market-profit-loss
    :description "Lists out a User's market Profit/Loss, per stock"}
 
-  :listGames
+  :games
   {:type (list :GameStatus)
-   :resolve :resolve-list-games
+   :resolve :resolve-games
    :description "Lists out a User's open, running and finished games, per device"}
 
   :userPayments
