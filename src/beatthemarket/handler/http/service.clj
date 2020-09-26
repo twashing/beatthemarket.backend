@@ -54,25 +54,6 @@
   (swap! ws-clients assoc ws-session send-ch)
   (log/info :ws-clients (format "WS Clients / %s / %s" (count @ws-clients) @ws-clients)))
 
-;; This is just for demo purposes
-#_(defn send-and-close! []
-    (let [[ws-session send-ch] (first @ws-clients)]
-      (async/put! send-ch "A message from the server")
-      ;; And now let's close it down...
-      (async/close! send-ch)
-      ;; And now clean up
-      (swap! ws-clients dissoc ws-session)))
-
-;; Also for demo purposes...
-#_(defn send-message-to-all!
-    [message]
-    (doseq [[^Session session channel] @ws-clients]
-      ;; The Pedestal Websocket API performs all defensive checks before sending,
-      ;;  like `.isOpen`, but this example shows you can make calls directly on
-      ;;  on the Session object if you need to
-      (when (.isOpen session)
-        (async/put! channel message))))
-
 (def ws-paths
   {"/ws" {:on-connect (ws/start-ws-connection new-ws-client)
           :on-text (fn [msg] (log/info :msg (str "A client sent - " msg)))
@@ -141,7 +122,6 @@
                                                    :payload payload})
                 (core.async/close! response-data-ch)))}))
 
-
 (defn options-builder
   [compiled-schema]
   {:subscription-interceptors
@@ -175,9 +155,6 @@
         (com.walmartlabs.lacinia.pedestal2/enable-subscriptions compiled-schema options))))
 
 (defn ^:private lacinia-schema []
-
-  #_{:reference :resolve-games,
-   :callbacks (:create-stripe-customer :resolve-create-game :resolve-buy-stock :resolve-user-personal-profit-loss :resolve-pause-game :resolve-account-balances :resolve-exit-game :resolve-login :delete-stripe-customer :user-payments :resolve-sell-stock :verify-payment :resolve-user :resolve-user-market-profit-loss :resolve-users :resolve-start-game :resolve-resume-game :resolve-list-games)}
 
   (-> "schema.lacinia.edn"
       resource slurp edn/read-string
@@ -218,7 +195,9 @@
                  ;;
                  ;; "http://localhost:8080"
                  ;;
-                 ;;::http/allowed-origins ["scheme://host:port"]
+                 ;; ::http/allowed-origins ["scheme://host:port"]
+                 ::http/allowed-origins {:creds true :allowed-origins (constantly true)}
+
 
                  ;; Root for resource interceptor that is available by default.
                  ::http/resource-path     "/public"
@@ -233,23 +212,3 @@
                         (options-builder compiled-schema))]
 
     (default-service compiled-schema options')))
-
-#_(defn coerce-to-client [[time price]]
-    (json/write-str (vector (c/to-long time) price)))
-
-#_(defn stream-stock-data []
-    (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
-         (datasource/combined-data-sequence-with-datetime (t/now))
-         (map coerce-to-client)
-         (take 100)
-         (run! send-message-to-all!)))
-
-#_(comment
-
-    (->> (datasource/->combined-data-sequence datasource.core/beta-configurations)
-         (datasource/combined-data-sequence-with-datetime (t/now))
-         (map coerce-to-client)
-         (take 30)
-         clojure.pprint/pprint)
-
-    (stream-stock-data))
