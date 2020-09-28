@@ -36,6 +36,11 @@
     (migration.core/run-migrations))
 
   (do
+    (state.core/set-prep :test)
+    (state.core/init-components)
+    (migration.core/run-migrations))
+
+  (do
     (state.core/set-prep :production)
     (state.core/init-components))
 
