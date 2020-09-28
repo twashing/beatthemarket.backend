@@ -63,8 +63,12 @@
           :on-close (fn [_num-code reason-text]
                       (log/info :msg "WS Closed:" :reason reason-text))}})
 
+(def ^:private health-check-path "/health")
 (def ^:private default-api-path "/api")
 (def ^:private default-asset-path "/assets/graphiql")
+
+(defn health-handler [request]
+  {:status 200 :body "ok"})
 
 (defn auth-request-handler-ws [context]
 
@@ -138,19 +142,24 @@
   "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
   See docs there."
   [compiled-schema options]
-  (let [{:keys [api-path ide-path asset-path app-context port]
-         :or {api-path default-api-path
+  (let [{:keys [health-path api-path ide-path asset-path app-context port]
+         :or {health-path health-check-path
+              api-path default-api-path
               ide-path "/ide"
               asset-path default-asset-path}} options
 
         interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
 
+        _ (println "A /")
         full-routes (route/expand-routes
-                      (into #{[api-path :post interceptors :route-name ::graphql-api]
-                              [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
-                            (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path)))]
+                      (ppi (into #{[health-path :get [health-handler] :route-name :health]
+                                   [api-path :post interceptors :route-name ::graphql-api]
+                                   [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+                                 (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
 
+    (println "B /")
     (-> (merge options {::http/routes full-routes})
+        ppi
         com.walmartlabs.lacinia.pedestal2/enable-graphiql
         (com.walmartlabs.lacinia.pedestal2/enable-subscriptions compiled-schema options))))
 
