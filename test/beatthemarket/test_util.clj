@@ -82,10 +82,9 @@
 
 (defn migration-fixture [f]
 
-  (let [schema-norms (schema-init/load-norm)
-        sample-game-norms (persistence.generators/generate-games)]
-
-    (run! migration.core/apply-norms! [schema-norms sample-game-norms]))
+  (migration.core/run-migrations
+    (-> repl.state/system :persistence/datomic :opts :conn)
+    #{:default :development})
 
   (f))
 

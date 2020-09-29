@@ -59,7 +59,7 @@
       (testing "authenticated? function"
         (is (sut/authenticated? jwt verification-fn))))))
 
-(deftest check-authentication-email-password-test
+#_(deftest check-authentication-email-password-test
 
   (testing "JWT for an email/password authentication"
 
@@ -78,7 +78,7 @@
       (testing "authenticated? function"
         (is (ppi (sut/authenticated? jwt verification-fn)))))))
 
-(deftest authentication-interceptor-test
+#_(deftest authentication-interceptor-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         {status :status

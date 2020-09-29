@@ -43,13 +43,13 @@
 
 (def custom-formatter (f/formatter "yyyy.MM.dd.kk.mm.ss.SSS"))
 
-(defn create-database! [client db-name]
+#_(defn create-database! [client db-name]
   (d/create-database client {:db-name db-name}))
 
-(defn connect-to-database [client db-name]
+#_(defn connect-to-database [client db-name]
   (d/connect client {:db-name db-name}))
 
-(defn apply-norms!
+#_(defn apply-norms!
 
   ([]
    (let [norms (schema-init/load-norm)]
@@ -63,12 +63,15 @@
   ([conn norms]
    (persistence.datomic/transact! conn norms)))
 
-(def run-migrations apply-norms!)
+#_(def run-migrations apply-norms!)
 
-
-(defn initialize-production []
+#_(defn initialize-production []
   (run-migrations))
 
+
+(defn conditionally-apply-migration-schema! [conn migration-schema]
+  (when-not (persistence.datomic/entity-exists? conn :migration/id)
+    (beatthemarket.persistence.datomic/transact-entities! conn migration-schema)))
 
 (defn migration-label->file-anme [migration-label]
   (format "resources/migration/%s.edn" migration-label))
@@ -108,10 +111,6 @@
   (def sample-game-norms (persistence.generators/generate-games))
   (create-migration! "sample-games" sample-game-norms :development))
 
-
-;; (->default-migrations)
-;; (->migrations-by-tag)
-
 (defn migration-tag->time-string [migration-tag]
 
   (-> migration-tag
@@ -132,13 +131,29 @@
        butlast
        (clojure.string/join "-")))
 
-(defn migration-ran? [tag]
-  false)
+(defn migration-ran? [conn migration-tag]
+  (util/exists?
+    (d/q '[:find ?m
+           :in $ ?migration-tag ?applied-comparator
+           :where
+           [?m :migration/tag ?migration-tag]
+           [?m :migration/applied ?applied]
+           [(> ?applied-comparator ?applied)]]
+         (d/db conn)
+         migration-tag
+         (c/to-date (t/now)))))
+
+(comment
+  (ppi
+    (d/q '[:find (pull ?m [*])
+           :where
+           [?m :migration/id]]
+         (d/db conn))))
 
 (defn conditionally-apply-migration! [conn migration]
 
   (let [tag (ffirst migration)]
-    (when-not (migration-ran? tag)
+    (when-not (migration-ran? conn tag)
       (let [migration-data (-> migration first second)
             migration-entity
             {:migration/id (UUID/randomUUID)
@@ -147,15 +162,11 @@
              :migration/created (c/to-date (migration-tag->creation-date tag))
              :migration/applied (c/to-date (t/now))}]
 
-        #_(ppi [migration-data migration-entity])
-
         (->> (list migration-entity)
              (concat migration-data)
              (beatthemarket.persistence.datomic/transact-entities! conn))))))
 
 (defn apply-migrations [conn tags migrations]
-
-  ;; TODO check if migration ran
 
   (let [sort-by-migration-creation
         #(-> % ffirst migration-tag->time-string)]
@@ -167,23 +178,6 @@
          flatten
          (sort-by sort-by-migration-creation)
          (map (partial conditionally-apply-migration! conn)))))
-
-(defn entity-exists? [conn ident]
-
-  (try
-
-    (d/q '[:find ?e
-           :in $ ?ident
-           :where
-           [?e ?ident]]
-         (d/db conn) ident)
-
-    (catch Exception e
-      false)))
-
-(defn conditionally-apply-migration-schema! [conn migration-schema]
-  (when-not (entity-exists? conn :migration/id)
-    (beatthemarket.persistence.datomic/transact-entities! conn migration-schema)))
 
 (defn load-migrations
 
@@ -198,6 +192,19 @@
           (map #(.getAbsolutePath %))
           (map slurp)
           (map read-string)))))
+
+(defn run-migrations
+
+  ([] (run-migrations (-> state/system :persistence/datomic :opts :conn)))
+
+  ([conn] (run-migrations conn #{:default}))
+
+  ([conn tags]
+
+   (conditionally-apply-migration-schema! conn migration-schema)
+   (->> (load-migrations)
+        (apply-migrations conn tags)
+        doall)))
 
 (comment
 
@@ -272,3 +279,12 @@
     (pprint schema-datomic))
 
   )
+
+
+;; Run default
+;; Run default + development
+;;
+;; Migration run?
+;;
+;; Run development
+;; Run production

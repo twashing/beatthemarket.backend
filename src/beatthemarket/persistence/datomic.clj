@@ -4,7 +4,7 @@
             [clojure.edn :refer [read-string]]
             [integrant.core :as ig]
             [integrant.repl.state :as repl.state]
-            #_[compute.datomic-client-memdb.core :as memdb]
+            [compute.datomic-client-memdb.core :as memdb]
             [beatthemarket.util :refer [ppi] :as util]
 
             ;; TODO Make configurable, loading of :data-processor namespaces
@@ -24,7 +24,7 @@
 
 (defn ->datomic-client-local [{:keys [db-name config env]}]
 
-  #_(let [url    (format "datomic:mem://%s" db-name)
+  (let [url    (format "datomic:mem://%s" db-name)
         client (memdb/client config)]
 
     (d/create-database client {:db-name url})
@@ -36,7 +36,7 @@
       :conn (d/connect client {:db-name url}))))
 
 (defn close-db-connection-local! [client]
-  #_(memdb/close client))
+  (memdb/close client))
 
 (defmulti close-db-connection! :env)
 
@@ -196,6 +196,16 @@
 
 
 ;; HELPERs
+(defn entity-exists? [conn ident]
+  (try
+    (d/q '[:find ?e
+           :in $ ?ident
+           :where
+           [?e ?ident]]
+         (d/db conn) ident)
+    (catch Exception e
+      false)))
+
 (defn conditionially-wrap-in-sequence [entity]
   (if (and (sequential? entity) ((comp not empty?) entity))
     entity
