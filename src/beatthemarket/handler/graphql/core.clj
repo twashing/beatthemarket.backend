@@ -536,7 +536,6 @@
                                                     provider :provider
                                                     token :token :as args} _]
 
-  ;; (ppi args)
   (let [client-id (check-client-id-exists context)
         {{{email :email} :checked-authentication} :request} context
         conn (-> repl.state/system :persistence/datomic :opts :conn)

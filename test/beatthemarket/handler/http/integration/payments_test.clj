@@ -341,6 +341,46 @@
         (is (= expected-user-payments-response
                (map #(select-keys % [:productId :provider]) user-payments-response)))))))
 
+(deftest verify-payment-apple-subscription-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "margin_trading_1month.1"
+        provider "apple"
+        apple-payload (-> "ios.margin_trading.txt" resource slurp (json/read-str :key-fn keyword))]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                           :variables apple-payload}})
+
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+
+    ;; TODO complete
+    #_{:type "data",
+       :id 987,
+       :payload
+       {:data
+        {:verifyPayment
+         [{:paymentId "07c135e7-f56f-452f-9e53-2c376f2043c4",
+           :productId "additional_100k",
+           :provider "google"}]}}}
+
+    ))
+
 (deftest verify-payment-google-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
