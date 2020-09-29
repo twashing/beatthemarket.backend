@@ -122,16 +122,8 @@
                  [clj-http "3.10.1"]
                  [com.google.api-client/google-api-client "1.30.10"]
                  [com.google.apis/google-api-services-androidpublisher "v3-rev20200817-1.30.10"]
-                 [magnet/payments.stripe "0.3.4"]]
-
-  :min-lein-version "2.0.0"
-  :resource-paths ["config" "resources"]
-
-  :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
-                                      "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
-                       :resource-paths ["test/resources"]
-                       :dependencies [[org.clojure/test.check "1.1.0"]
-                                      [datomic-client-memdb "1.1.1"
+                 [magnet/payments.stripe "0.3.4"]
+                 [datomic-client-memdb "1.1.1"
                                        :exclusions
                                        [org.slf4j/slf4j-nop
                                         com.cognitect/transit-clj
@@ -146,7 +138,15 @@
                                         org.eclipse.jetty/jetty-client
                                         org.eclipse.jetty/jetty-http
                                         org.eclipse.jetty/jetty-io
-                                        org.eclipse.jetty/jetty-util]]
+                                        org.eclipse.jetty/jetty-util]]]
+
+  :min-lein-version "2.0.0"
+  :resource-paths ["config" "resources"]
+
+  :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
+                                      "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
+                       :resource-paths ["test/resources"]
+                       :dependencies [[org.clojure/test.check "1.1.0"]
                                       [stylefruits/gniazdo "1.1.3"
                                        :exclusions [org.eclipse.jetty.websocket/websocket-client]]
                                       [expound "0.8.4"]]

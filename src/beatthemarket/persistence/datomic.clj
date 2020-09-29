@@ -56,7 +56,6 @@
 
 
 (defmethod ig/init-key :persistence/datomic [_ {datomic-opts :datomic :as opts}]
-
   {:opts (->datomic-client (assoc datomic-opts :env (:env opts)))})
 
 (defmethod ig/halt-key! :persistence/datomic [_ {datomic-component-map :opts}]
@@ -197,6 +196,16 @@
 
 
 ;; HELPERs
+(defn entity-exists? [conn ident]
+  (try
+    (d/q '[:find ?e
+           :in $ ?ident
+           :where
+           [?e ?ident]]
+         (d/db conn) ident)
+    (catch Exception e
+      false)))
+
 (defn conditionially-wrap-in-sequence [entity]
   (if (and (sequential? entity) ((comp not empty?) entity))
     entity

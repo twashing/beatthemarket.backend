@@ -29,7 +29,7 @@
 (def default-environment "production")
 (def cli-options
   [["-p" "--profile NAME"
-    (format "Environment profile name must be `development`, or `production`.
+    (format "Environment profile name must be `production`, `development`, or `test`.
              Order of precedence is below:
 
              A. Checks command line argument
@@ -37,7 +37,7 @@
              C. If not provided, will default to `%s`."
             default-environment)
     :parse-fn keyword
-    :validate [#{:development :production}]]
+    :validate [#{:production :development :test}]]
 
    ["-m" "--market-trading" "Run with Market Trading mode enabled"]])
 
@@ -65,8 +65,7 @@
 
     (state.core/set-prep profile)
     (state.core/init-components)
-    (when-not (= :production profile)
-      (migration.core/run-migrations))))
+    (migration.core/run-migrations)))
 
 
 (comment ;; Main
@@ -79,7 +78,6 @@
       resource
       (aero.core/read-config {:profile :development})
       :integrant)
-
 
   (binding [*data-readers* {'ig/ref ig/ref}]
     (-> "integrant-config.edn"

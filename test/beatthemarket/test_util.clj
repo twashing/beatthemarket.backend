@@ -82,10 +82,9 @@
 
 (defn migration-fixture [f]
 
-  (let [schema-norms (schema-init/load-norm)
-        sample-game-norms (persistence.generators/generate-games)]
-
-    (run! migration.core/apply-norms! [schema-norms sample-game-norms]))
+  (migration.core/run-migrations
+    (-> repl.state/system :persistence/datomic :opts :conn)
+    #{:default :development})
 
   (f))
 
@@ -270,11 +269,28 @@
 
 
 ;; Datomic
+(defn ->datomic-client-test [{:keys [db-name config env]}]
+
+  (let [url    (format "datomic:mem://%s" db-name)
+        client (memdb/client config)]
+
+    (d/create-database client {:db-name url})
+
+    (hash-map
+      :env env
+      :url url
+      :client client
+      :conn (d/connect client {:db-name url}))))
+
+(defn close-db-connection-local! [client]
+  (memdb/close client))
+
 (defmethod persistence.datomic/->datomic-client :test [opts]
-  (persistence.datomic/->datomic-client-local opts))
+  (->datomic-client-test opts))
 
 (defmethod persistence.datomic/close-db-connection! :test [{client :client}]
-  (persistence.datomic/close-db-connection-local! client))
+  (close-db-connection-local! client))
+
 
 
 ;; Miscellaneous
