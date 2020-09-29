@@ -150,16 +150,13 @@
 
         interceptors (com.walmartlabs.lacinia.pedestal2/default-interceptors compiled-schema app-context)
 
-        _ (println "A /")
         full-routes (route/expand-routes
-                      (ppi (into #{[health-path :get [health-handler] :route-name :health]
-                                   [api-path :post interceptors :route-name ::graphql-api]
-                                   [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
-                                 (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path))))]
+                      (into #{[health-path :get [health-handler] :route-name :health]
+                              [api-path :post interceptors :route-name ::graphql-api]
+                              [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+                            (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path)))]
 
-    (println "B /")
     (-> (merge options {::http/routes full-routes})
-        ppi
         com.walmartlabs.lacinia.pedestal2/enable-graphiql
         (com.walmartlabs.lacinia.pedestal2/enable-subscriptions compiled-schema options))))
 

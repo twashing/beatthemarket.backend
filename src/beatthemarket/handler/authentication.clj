@@ -18,9 +18,6 @@
 
   (log/debug :auth-request request)
 
-  ;; :uri "/health"
-  ;; :request-method :get
-
   (if (= {:uri "/health"
           :request-method :get}
          (select-keys request [:uri :request-method]))
@@ -28,8 +25,6 @@
     request
 
     (let [{:keys [errorCode message] :as checked-authentication} (iam.auth/check-authentication (request->token request))]
-
-      ;; (println "auth-request-handler CALLED / " checked-authentication)
 
       (if (every? exists? [errorCode message])
         (throw (ex-info message checked-authentication))

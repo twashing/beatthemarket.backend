@@ -1,6 +1,7 @@
 (ns user
-  (:require [integrant.repl :refer [clear go halt prep init reset reset-all]]
-            [integrant.core :as ig]
+  (:require [integrant.core :as ig]
+            [integrant.repl :refer [clear go halt prep init reset reset-all]]
+            [integrant.repl.state :as repl.state]
             [clojure.edn :as edn]
             [clojure.data.json :as json]
             [clojure.java.io :refer [resource]]
@@ -44,6 +45,13 @@
   (do
     (state.core/set-prep :test)
     (state.core/init-components))
+
+  (do
+    (state.core/set-prep :development)
+    (state.core/init-components)
+    (migration.core/run-migrations
+      (-> repl.state/system :persistence/datomic :opts :conn)
+      #{:default :development}))
 
   (do
     (state.core/set-prep :production)
