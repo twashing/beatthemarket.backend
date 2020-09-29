@@ -1,0 +1,311 @@
+{:development
+ {:sample-games-2020.09.29.02.07.57.540
+  ({:game/id #uuid "88c3c8f9-5377-40ba-b278-6d3c79d011b2",
+    :game/start-time #inst "1970-01-01T00:00:00.000-00:00",
+    :game/users
+    [{:game.user/user
+      {:user/email "charles.mingus@foo.com",
+       :user/name "Charles Mingus",
+       :user/external-uid "",
+       :db/id "abd25c9e-305c-434d-9f72-cf734647a92a"},
+      :game.user/accounts
+      [{:bookkeeping.account/id
+        #uuid "4280c8e3-eb30-4cf1-a495-399fc9062c46",
+        :bookkeeping.account/name "Cash",
+        :bookkeeping.account/type :bookkeeping.account.type/asset,
+        :bookkeeping.account/balance -1.0,
+        :db/id "b59300ff-2758-4fa3-a99a-87dfc3ca2577"}],
+      :game.user/user-client
+      #uuid "7ee96b44-672f-4330-9e22-992cb2193d1d",
+      :game.user/profit-loss
+      [{:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "625e9dbb-e2fb-4931-a6c5-bb0fce029150"}
+       {:game.user.profit-loss/amount -2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "bb7e3291-036e-4593-a115-18d693fdf3b8"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "1c490293-ce6b-4241-a277-c08796c62515"}
+       {:game.user.profit-loss/amount -2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "2de8de34-9d19-4a74-9f0b-ebba35ba5138"}
+       {:game.user.profit-loss/amount 1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "3af365ca-369f-4268-846d-b512c9df0a9c"}
+       {:game.user.profit-loss/amount 0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "893e0597-e24a-492a-939f-66b11348619b"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "1bf0d842-e1d9-4853-bcf3-af958ff8bd5b"}
+       {:game.user.profit-loss/amount -1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "cab7b195-2184-408a-ba95-b7491d4d6742"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "e673fef7-c677-49d9-aafd-4d86b9fc6a6c"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "686d7508-b572-468b-bf4a-78effe6ac1af"}],
+      :db/id "0b2d5a06-119a-4da3-be9a-f3d53b503857"}],
+    :game/start-position 3,
+    :game/status :game-status/lost,
+    :game/level :game-level/three,
+    :db/id "9ecb2559-9aa7-424a-a121-f785fc327350"}
+   {:game/id #uuid "39d6d571-ff48-4c79-b100-fda64b35dc4f",
+    :game/start-time #inst "1969-12-31T23:59:59.999-00:00",
+    :game/users
+    [{:game.user/user
+      {:user/email "john.coltrane@foo.com",
+       :user/name "John Coltrane",
+       :user/external-uid "",
+       :db/id "2bfbe226-e525-48b0-9ed1-27a3b71c87ba"},
+      :game.user/accounts
+      [{:bookkeeping.account/id
+        #uuid "09ebceb5-e526-4a56-a989-b01c5179bd45",
+        :bookkeeping.account/name "Cash",
+        :bookkeeping.account/type :bookkeeping.account.type/liability,
+        :bookkeeping.account/balance 1.0,
+        :db/id "f0eb140c-438e-4b68-8a74-71882e9105d3"}],
+      :game.user/user-client
+      #uuid "8b15723b-6962-4f5f-a46b-548e7db4998c",
+      :game.user/profit-loss
+      [{:game.user.profit-loss/amount 0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "85c6bd49-d78d-46aa-b8a1-20dd035d8422"}
+       {:game.user.profit-loss/amount 1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "de50e1ba-9204-4151-ad8c-b2cc713906d6"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "a1248115-5cbf-496a-a519-64c60348985a"}
+       {:game.user.profit-loss/amount -0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "b61ce6ec-63f6-4420-9f50-55962c693e32"}
+       {:game.user.profit-loss/amount 0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "c6ddfa46-0aba-416e-bc9b-a260476a499b"}
+       {:game.user.profit-loss/amount 1.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "280f837c-531b-43bb-a3c7-b5452b7fed2c"}
+       {:game.user.profit-loss/amount -0.75,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "863e4841-2d43-4563-a720-62f00c2e91cc"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "1e9b0b35-f973-4bb9-ae78-15c177dbd0cc"}
+       {:game.user.profit-loss/amount 1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "4f8033c2-bca8-47f8-b55f-f4f55997e7fd"}],
+      :db/id "d2776976-e993-44ce-b4f8-1b218d9b4e4b"}],
+    :game/start-position 23,
+    :game/status :game-status/exited,
+    :game/level :game-level/one,
+    :db/id "fc8e868b-10d3-4d0c-ab45-95763309aae0"}
+   {:game/id #uuid "f5eb0049-0480-4e03-bce9-b51c59919d1d",
+    :game/start-time #inst "1970-01-01T00:00:00.000-00:00",
+    :game/users
+    [{:game.user/user
+      {:user/email "herbie.hancock@foo.com",
+       :user/name "Herbie Hancock",
+       :user/external-uid "",
+       :db/id "9d1dc52a-9458-434a-87c4-d90c551170ea"},
+      :game.user/accounts
+      [{:bookkeeping.account/id
+        #uuid "b32ec570-9157-40e9-ac35-433aae07d889",
+        :bookkeeping.account/name "Cash",
+        :bookkeeping.account/type :bookkeeping.account.type/asset,
+        :bookkeeping.account/balance 2.0,
+        :db/id "b40da736-9670-46ec-8459-a8fd0f7702be"}],
+      :game.user/user-client
+      #uuid "e9a5d08e-3cf1-4eb9-9750-9650f856e470",
+      :game.user/profit-loss
+      [{:game.user.profit-loss/amount 0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "a2bec052-9592-4da3-b325-faec59c5814f"}
+       {:game.user.profit-loss/amount 1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "bb8b0623-6b8e-4010-acc6-0b58e89e95f2"}
+       {:game.user.profit-loss/amount -3.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "91da6739-2b69-4d40-a8ce-10daf79f3170"}
+       {:game.user.profit-loss/amount -1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "6ce574e3-3c00-40bc-9373-24f3732639ca"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "7b08ecd6-4ebe-4865-a4a1-119c7ae9e343"}
+       {:game.user.profit-loss/amount -0.75,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "a2f29e2a-3044-4362-91b4-2453e532cef7"}],
+      :db/id "d648cd9e-21d8-480a-8dd0-f701ff2b6adc"}],
+    :game/start-position 92,
+    :game/status :game-status/exited,
+    :game/level :game-level/four,
+    :db/id "007c8c49-e54d-46f1-806c-8df1157bbf7b"}
+   {:game/id #uuid "f77c8241-4d16-4d96-a263-ecc00655b910",
+    :game/start-time #inst "1969-12-31T23:59:59.998-00:00",
+    :game/users
+    [{:game.user/user
+      {:user/email "miles.davis@foo.com",
+       :user/name "Miles Davis",
+       :user/external-uid "Y",
+       :db/id "d53ccf67-8be2-42dd-abe1-a113dbccb5ea"},
+      :game.user/accounts
+      [{:bookkeeping.account/id
+        #uuid "9cbbd445-6a17-4ce6-8eaa-33246e149326",
+        :bookkeeping.account/name "Cash",
+        :bookkeeping.account/type :bookkeeping.account.type/liability,
+        :bookkeeping.account/balance -3.0,
+        :db/id "e4b94088-255a-4c3f-b67b-0da12a5662d0"}],
+      :game.user/user-client
+      #uuid "b8c62b95-ab55-4879-a82f-56eb9ea18cd8",
+      :game.user/profit-loss
+      [{:game.user.profit-loss/amount 0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "84db4d50-844c-4d17-809d-8eb332201d52"}
+       {:game.user.profit-loss/amount -1.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "e0133c51-bccd-4660-b172-2cf7d643a9f3"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "1f593181-1bd7-40bf-932c-b31fa4c14802"}
+       {:game.user.profit-loss/amount -2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "b8e3d107-8660-4222-bbab-6d0c1cfb333f"}
+       {:game.user.profit-loss/amount 1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "625f9fc5-1af0-4125-9a2a-541541fe56c2"}
+       {:game.user.profit-loss/amount 1.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "4bf7bad2-9dd2-407c-a102-c977f33fee86"}
+       {:game.user.profit-loss/amount 0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "8e29357e-c44e-4a50-be73-2f5c205fa356"}
+       {:game.user.profit-loss/amount 1.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "b1fa8b9a-f487-4279-a10a-c458836344e2"}
+       {:game.user.profit-loss/amount -1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "cfedb194-7f94-4cbf-8d0f-1b927401ac91"}
+       {:game.user.profit-loss/amount 1.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "d6caf2c4-ebea-41de-95ce-6c88c0893aaa"}
+       {:game.user.profit-loss/amount -1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "3cdce962-c487-4616-b842-4ebc8c876422"}
+       {:game.user.profit-loss/amount -1.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "38520304-724c-4f47-b69f-ebbd53ab8e2e"}
+       {:game.user.profit-loss/amount 1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "76d6968b-3d22-4f42-94be-48cff101e655"}
+       {:game.user.profit-loss/amount -3.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "9cfa1e33-24bb-4d38-affc-eb50925ac98e"}
+       {:game.user.profit-loss/amount -0.75,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "6c3110b7-804b-405c-9cb2-fc7eedb12240"}
+       {:game.user.profit-loss/amount -0.75,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "f89be9e6-cf9d-415f-92b0-6594aafdc620"}
+       {:game.user.profit-loss/amount -0.75,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "7e10667c-99d8-4129-a8af-44f57e934674"}
+       {:game.user.profit-loss/amount -1.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "9485cee2-5a9d-474d-abd6-0e88fa897612"}
+       {:game.user.profit-loss/amount -1.25,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "566bedb2-af59-4a75-9e32-bfd1468fba63"}],
+      :db/id "c4c056fe-40d5-4f00-a428-7cfd5195a1bd"}],
+    :game/start-position 7,
+    :game/status :game-status/won,
+    :game/level :game-level/two,
+    :db/id "6145237e-4aac-44a7-9c8a-519d8a6d7233"}
+   {:game/id #uuid "b25c21a1-7d0c-4aa1-97eb-ecadd1c83b64",
+    :game/start-time #inst "1970-01-01T00:00:00.000-00:00",
+    :game/users
+    [{:game.user/user
+      {:user/email "sun.ra@foo.com",
+       :user/name "Sun Ra",
+       :user/external-uid "",
+       :db/id "dfbb9f4a-1591-42fc-80b5-33f0159be4f5"},
+      :game.user/accounts
+      [{:bookkeeping.account/id
+        #uuid "367d517b-abaa-40f9-9506-7401aefe169b",
+        :bookkeeping.account/name "Cash",
+        :bookkeeping.account/type :bookkeeping.account.type/liability,
+        :bookkeeping.account/balance ##-Inf,
+        :db/id "e5a5b118-e7d4-4013-9825-967c00a19e6e"}],
+      :game.user/user-client
+      #uuid "df6e0f15-fdf1-427b-b258-c3fa857db14b",
+      :game.user/profit-loss
+      [{:game.user.profit-loss/amount 0.6875,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "439ff642-2168-4307-b1dc-78ab06c8efd2"}],
+      :db/id "e9219f8a-52fa-404d-9c82-6c9cc930ef86"}],
+    :game/start-position 84,
+    :game/status :game-status/won,
+    :game/level :game-level/three,
+    :db/id "d1838084-52d6-4625-a178-4ffe4f231b44"}
+   {:game/id #uuid "36ccc46c-d175-4acb-9e7a-b11857a62a87",
+    :game/start-time #inst "1970-01-01T00:00:00.002-00:00",
+    :game/users
+    [{:game.user/user
+      {:user/email "thelonious.monk@foo.com",
+       :user/name "Thelonious Monk",
+       :user/external-uid "tqN",
+       :db/id "0e4d3fe2-fc16-49e8-b622-0b9279d88590"},
+      :game.user/accounts
+      [{:bookkeeping.account/id
+        #uuid "04e389d9-f7c5-410a-b7c5-97356b098ec7",
+        :bookkeeping.account/name "Cash",
+        :bookkeeping.account/type :bookkeeping.account.type/asset,
+        :bookkeeping.account/balance ##NaN,
+        :db/id "9e14994e-14c9-4d41-b94f-a9aa7bbd2167"}],
+      :game.user/user-client
+      #uuid "aaa20cf4-cf6b-4b9f-b84f-a46c7c59ebdf",
+      :game.user/profit-loss
+      [{:game.user.profit-loss/amount 0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "728780ec-1c23-4825-a9bf-e79aa5208755"}
+       {:game.user.profit-loss/amount -0.5,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "aec7b307-3a40-4535-84f2-5c02008edcd2"}
+       {:game.user.profit-loss/amount 1.25,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "0871977c-cdee-4bd4-9eb5-8a43680d325c"}
+       {:game.user.profit-loss/amount 0.75,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "1ae2ffda-5fb8-4cf7-9b65-8466ccafb5df"}
+       {:game.user.profit-loss/amount 3.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "e02afb0e-5329-4bf7-b72b-14db78e8f74d"}
+       {:game.user.profit-loss/amount -2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "6c9374df-ce12-4148-9a68-0be1a9282a2f"}
+       {:game.user.profit-loss/amount 2.0,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "7f690459-889a-4767-aa94-4e436e7bb658"}
+       {:game.user.profit-loss/amount -2.25,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "d00e5b86-b215-42a7-93eb-380bf8090d8c"}
+       {:game.user.profit-loss/amount 1.75,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "d6e44480-5c55-4309-9929-5b0be1f20b7a"}
+       {:game.user.profit-loss/amount -1.5625,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "60866ebc-e6fe-4eea-9d6d-704566f4b7b9"}
+       {:game.user.profit-loss/amount 1.9375,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "44c0c29b-2906-438c-96b7-74c2f3dcb047"}
+       {:game.user.profit-loss/amount ##Inf,
+        :game.user.profit-loss/type :profit-loss/realized,
+        :db/id "adb305e9-137a-4f70-85ef-7168b6a3684e"}],
+      :db/id "11479b3f-0c0a-40a9-b2b1-cc037c9d3ab2"}],
+    :game/start-position 32,
+    :game/status :game-status/won,
+    :game/level :game-level/four,
+    :db/id "d3c335f2-f387-40bc-96ac-b9c6dac9cbdb"})}}

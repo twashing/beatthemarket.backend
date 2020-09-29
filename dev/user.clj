@@ -13,7 +13,8 @@
             [beatthemarket.util :refer [ppi] :as util]
 
             [magnet.payments.core :as core]
-            [magnet.payments.stripe :as stripe]))
+            [magnet.payments.stripe :as stripe]
+            [beatthemarket.test-util :as test-util]))
 
 
 (comment ;; Convenience fns
@@ -39,6 +40,10 @@
     (state.core/set-prep :test)
     (state.core/init-components)
     (migration.core/run-migrations))
+
+  (do
+    (state.core/set-prep :test)
+    (state.core/init-components))
 
   (do
     (state.core/set-prep :production)
