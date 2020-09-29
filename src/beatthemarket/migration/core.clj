@@ -8,7 +8,6 @@
             [clj-time.coerce :as c]
 
             [beatthemarket.state.core :as state.core]
-            [beatthemarket.persistence.generators :as persistence.generators]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.migration.schema-init :as schema-init]
             [beatthemarket.util :as util :refer [ppi]])
@@ -108,6 +107,7 @@
   (create-migration! "schema-init" schema-datomic)
 
   ;; B
+  (require '[beatthemarket.persistence.generators :as persistence.generators])
   (def sample-game-norms (persistence.generators/generate-games))
   (create-migration! "sample-games" sample-game-norms :development))
 
