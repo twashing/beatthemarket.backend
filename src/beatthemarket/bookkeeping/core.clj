@@ -246,22 +246,32 @@
       (rop/succeed (assoc inputs :stock-pulled stock-pulled))
       (rop/fail (ex-info "No stock bound to id" inputs)))))
 
+(defn- check-within-margin-bounds [inputs cash-account-balance debit-value]
+  (> debit-value (* 10 cash-account-balance)))
+
 (defn- cash-account-has-sufficient-funds-OR-trades-on-margin? [conn
                                                                debit-value
                                                                {{user-db-id :db/id :as user-pulled} :user-pulled
                                                                 game-pulled :game-pulled :as inputs}]
 
-  (if (integration.payments.core/margin-trading? conn user-db-id)
+  (let [{cash-account-balance :bookkeeping.account/balance :as cash-account}
+        (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
 
-    (rop/succeed inputs)
+    (if (integration.payments.core/margin-trading? conn user-db-id)
 
-    (let [{cash-account-starting-balance :bookkeeping.account/balance :as cash-account}
-          (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
+      (if (check-within-margin-bounds inputs cash-account-balance debit-value)
 
-      (if (> cash-account-starting-balance debit-value)
+        (rop/fail (ex-info (format "Margin account (10x Cash) is still Insufficient Funds [%s] for purchase value [%s]"
+                                   cash-account-balance
+                                   debit-value)
+                           inputs))
+
+        (rop/succeed inputs))
+
+      (if (> cash-account-balance debit-value)
         (rop/succeed inputs)
-        (rop/fail (ex-info (format "Insufficient funds [%s] for purchase value [%s]"
-                                   cash-account-starting-balance
+        (rop/fail (ex-info (format "Insufficient Funds [%s] for purchase value [%s]"
+                                   cash-account-balance
                                    debit-value)
                            inputs))))))
 
