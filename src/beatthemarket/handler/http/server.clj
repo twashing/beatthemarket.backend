@@ -65,7 +65,7 @@
 
     (state.core/set-prep profile)
     (state.core/init-components)
-    (migration.core/run-migrations)))
+    #_(migration.core/run-migrations)))
 
 
 (comment ;; Main
