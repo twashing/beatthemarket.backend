@@ -868,12 +868,128 @@
         (testing "DELETEING test customer"
           (delete-test-customer! result-id))))))
 
+(defn buy-sell-workflow [game-id target-buy-value]
+
+  (test-util/send-data {:id   989
+                        :type :start
+                        :payload
+                        {:query "subscription StockTicks($gameId: String!) {
+                                           stockTicks(gameId: $gameId) {
+                                             stockTickId
+                                             stockTickTime
+                                             stockTickClose
+                                             stockId
+                                             stockName
+                                         }
+                                       }"
+                         :variables {:gameId game-id}}})
+
+  (test-util/<message!! 1000)
+
+  (let [latest-tick (->> (test-util/consume-subscriptions)
+                         (filter #(= 989 (:id %)))
+                         last)
+        [{stockTickId :stockTickId
+          stockTickTime :stockTickTime
+          stockTickClose :stockTickClose
+          stockId :stockId
+          stockName :stockName}]
+        (-> latest-tick :payload :data :stockTicks ppi)
+
+        amount-to-buy (->> (/ target-buy-value stockTickClose)
+                           (format "%.0f")
+                           (#(Integer/parseInt %)))]
+
+    (test-util/send-data {:id   990
+                          :type :start
+                          :payload
+                          {:query "mutation BuyStock($input: BuyStock!) {
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                           :variables {:input {:gameId      game-id
+                                               :stockId     stockId
+                                               :stockAmount amount-to-buy
+                                               :tickId      stockTickId
+                                               :tickPrice   stockTickClose}}}})))
+
+;; TODO Fix subscription workflwo
+#_(deftest margin-trading-allows-upto-10x-cash-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+
+    (testing "Purchase Product and Subscription before game start"
+
+      (let [provider "stripe"
+
+            product-id-subscription "prod_I1RAoB8UK5GDab" ;; Margin Trading
+            token-subscription (-> "example-payload-stripe-subscription-valid.json"
+                                   resource
+                                   slurp
+                                   (json/read-str :key-fn keyword))
+
+            conn (-> repl.state/system :persistence/datomic :opts :conn)
+            email "foo@bar.com"
+
+            user-email "twashing@gmail.com"
+            user-entity (ffirst (iam.persistence/user-by-email conn user-email '[:db/id]))
+
+            [{result-id :id}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+            token-subscription-json (json/write-str
+                                      (assoc token-subscription
+                                             :customerId result-id
+                                             :paymentMethodId "pm_card_visa"))]
+
+        (verify-payment-workflow client-id product-id-subscription provider token-subscription-json)
+
+
+        (testing "Purchses are applied after game start"
+
+          (let [game-id (:id (ppi (start-game-workflow)))
+                game-id-uuid (UUID/fromString game-id)]
+
+            ;; (ppi (test-util/<message!! 1000))
+            ;; (ppi (test-util/<message!! 1000))
+            ;; (ppi (test-util/<message!! 1000))
+            ;; (ppi (test-util/<message!! 1000))
+            #_(testing "Make purchase, greater than Cash, less than Margin threshold"
+
+              (let [target-buy-value 250000.0
+                    expected-buy-ack {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}]
+
+                (buy-sell-workflow game-id target-buy-value)
+
+                (->> (test-util/<message!! 1000)
+                     (= expected-buy-ack)
+                     is)
+                (test-util/<message!! 1000)))
+
+            (testing "Make purchase, greater than Margin threshold"
+
+              (let [target-buy-value 1850000.0
+                    expected-error-message (-> (test-util/<message!! 1000) ppi :payload :errors :message)]
+
+                (buy-sell-workflow game-id target-buy-value)
+
+                (is (clojure.string/starts-with? expected-error-message "Margin account (10x Cash) is still Insufficient Funds [100000.0] for purchase value"))
+
+                #_(ppi (test-util/<message!! 1000))
+                #_(ppi (test-util/<message!! 1000))
+                #_(ppi (test-util/<message!! 1000))))
+
+            (games.control/update-short-circuit-game! game-id-uuid true)))
+
+        (testing "DELETEING test customer"
+          (delete-test-customer! result-id))))))
+
 
 ;; TODO
-
-;; [~] Apply purchases on Google (ask on Codementor)
-
-;; Margin Trading should only allow up to 10x Cash level
-
 ;; Apply additional 5 minutes
 ;; Notify client of applied purchases
