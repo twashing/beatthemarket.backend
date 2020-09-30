@@ -123,7 +123,7 @@
                  [com.google.api-client/google-api-client "1.30.10"]
                  [com.google.apis/google-api-services-androidpublisher "v3-rev20200817-1.30.10"]
                  [magnet/payments.stripe "0.3.4"]
-                 #_[datomic-client-memdb "1.1.1"
+                 [datomic-client-memdb "1.1.1"
                                        :exclusions
                                        [org.slf4j/slf4j-nop
                                         com.cognitect/transit-clj
