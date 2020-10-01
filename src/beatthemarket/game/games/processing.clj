@@ -51,7 +51,7 @@
 
 (defn profit-loss->entity [conn {:keys [user-id tick-id game-id stock-id profit-loss-type profit-loss]}]
 
-  (let [{{game-user-db-id :db/id} :game.user/_user} (ffirst (iam.persistence/game-user-by-user conn user-id))
+  (let [{game-user-db-id :db/id} (ffirst (ppi (iam.persistence/game-user-by-user conn user-id game-id)))
 
         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tick-id))
         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stock-id))
@@ -99,8 +99,7 @@
             :profit-loss
             ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
-    ;; (ppi updated-profit-loss-calculations)
-
+    #_(ppi [:updated-profit-loss-calculations updated-profit-loss-calculations])
     (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
     (hash-map :stock-ticks stock-ticks
               :profit-loss (game.calculation/collect-running-profit-loss game-id updated-profit-loss-calculations))))
@@ -120,13 +119,12 @@
 ;; B.ii
 (defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
 
-  (println (format ">> TRANSACT :profit-loss / " (pr-str data)))
+  (println (format ">> TRANSACT :profit-loss / %s" (pr-str data)))
   ;; (ppi data)
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn)))]
 
-    (ppi realized-profit-loss)
-
+    (ppi [:realized-profit-loss realized-profit-loss])
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
   data)
@@ -175,7 +173,7 @@
 
 (defn check-level-complete [conn user-db-id game-id control-channel {:keys [profit-loss] :as data}]
 
-  (println (format ">> CHECK level-complete / " (pr-str data)))
+  (println (format ">> CHECK level-complete / %s" (pr-str data)))
   ;; (println [:check-level-complete user-db-id game-id control-channel data])
   ;; (ppi profit-loss)
 
