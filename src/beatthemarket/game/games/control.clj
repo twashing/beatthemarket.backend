@@ -388,7 +388,7 @@
         profit-loss (reduce (fn [ac {profit-loss :profit-loss}]
                               (+ ac profit-loss))
                             0
-                            (ppi (game.calculation/realized-profit-loss-for-game conn user-id game-id)))
+                            (game.calculation/realized-profit-loss-for-game conn user-id game-id))
 
         lose-event (games.processing/->level-status :lose game-id profit-loss current-level)]
 

@@ -125,7 +125,7 @@
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn)))]
 
-    ;; (ppi realized-profit-loss)
+    (ppi realized-profit-loss)
 
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
@@ -206,14 +206,15 @@
                              lose-threshold-met? (assoc :event :lose
                                                         :profit-loss running-pl))]
 
-    #_(ppi [:running running-pl (* -1 lose-threshold) lose-threshold-met?
-                           :realized realized-pl (> realized-pl profit-threshold)
-                           :current-level (deref current-level)])
+    (ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
+          [:realized realized-pl (> realized-pl profit-threshold)]
+          [:current-level (deref current-level)]])
 
 
     (when (:event game-event-message)
-      ;; (ppi game-event-message)
-      (update-inmemory-game-level!* game-id level)
+      ;;(ppi game-event-message)
+      (when (= :win (:event game-event-message))
+        (update-inmemory-game-level!* game-id level))
       (core.async/go (core.async/>! control-channel game-event-message))))
 
   (assoc data :level-update {}))
