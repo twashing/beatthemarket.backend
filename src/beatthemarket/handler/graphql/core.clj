@@ -270,7 +270,9 @@
         (resolve-as nil {:message "Error / resolve-buy-stock / INCOMPLETE /"}))
 
       (catch Throwable e
-        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
+        (do
+          (ppi (bean e))
+          (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))))
 
 (defn resolve-sell-stock [context args _]
 

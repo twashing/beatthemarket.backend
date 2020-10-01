@@ -763,14 +763,14 @@
 
 (defn connect-to-game! [])
 
-(defn check-user-does-not-have-running-game [conn user-db-id]
+(defn check-user-does-not-have-running-game [conn user-db-id game-id]
 
-  (when-let [user-games (flatten (iam.persistence/game-user-by-user conn user-db-id '[{:game.user/_user
-                                                                                       [{:game/_users
-                                                                                         [:db/id
-                                                                                          :game/id
-                                                                                          :game/status
-                                                                                          :game/users]}]}]))]
+  (when-let [user-games (flatten (iam.persistence/game-user-by-user
+                                   conn user-db-id game-id '[{:game/_users
+                                                              [:db/id
+                                                               :game/id
+                                                               :game/status
+                                                               :game/users]}]))]
 
     (when (->> (map (comp :db/ident :game/status :game/_users :game.user/_user) user-games)
                (into #{})
@@ -796,7 +796,7 @@
                   data-sequence-fn]
 
   ;; (ppi "join-game! / A check-user-does-not-have-running-game /")
-  (let [user-games (check-user-does-not-have-running-game conn user-db-id)]
+  (let [user-games (check-user-does-not-have-running-game conn user-db-id game-id)]
 
     ;; (ppi "join-game! / B user-joined-game? /")
     (when-not (user-joined-game? user-games game-id user-db-id)

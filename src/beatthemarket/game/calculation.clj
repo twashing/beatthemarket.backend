@@ -287,7 +287,18 @@
 
 (defn realized-profit-loss-for-game [conn user-id game-id]
 
-  (->> (d/q '[:find (pull ?pls [*])
+  (ppi [:realized-profit-loss-for-game user-id game-id])
+
+  (->> (d/q '[:find (pull ?pls [:db/id
+                                :game.user.profit-loss/amount
+                                {:game.user.profit-loss/tick
+                                 [:game.stock.tick/id]}
+                                {:game.user.profit-loss/stock
+                                 [:game.stock/id
+                                  :game.stock/name
+                                  :game.stock/data-seed
+                                  :game.stock/symbol
+                                  {:game.user.profit-loss/type [*]}]}])
               :in $ ?gameId ?user-id
               :where
               [?g :game/id ?gameId]
@@ -296,7 +307,7 @@
               [?gus :game.user/profit-loss ?pls]]
             (d/db conn)
             game-id user-id)
-       (map first)
+       ppi (map first)
        (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
                  {stock-id :game.stock/id} :game.user.profit-loss/stock
                  amount :game.user.profit-loss/amount}]
