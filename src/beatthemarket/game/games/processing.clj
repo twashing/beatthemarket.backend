@@ -12,6 +12,12 @@
             [beatthemarket.util :refer [ppi] :as util]))
 
 
+(defn ->level-status [event gameId profitLoss level]
+  {:event event
+   :game-id gameId
+   :profit-loss profitLoss
+   :level level})
+
 (defn group-stock-tick-pairs [stock-tick-pairs]
   (->> (partition 2 stock-tick-pairs)
        (map (fn [[tick stock]]
@@ -194,8 +200,7 @@
         profit-threshold-met? (> realized-pl profit-threshold)
         lose-threshold-met? (< running-pl (* -1 lose-threshold))
 
-        game-event-message (cond-> {:game-id game-id
-                                    :level level}
+        game-event-message (cond-> (->level-status nil game-id nil level)
                              profit-threshold-met? (assoc :event :win
                                                           :profit-loss realized-pl)
                              lose-threshold-met? (assoc :event :lose

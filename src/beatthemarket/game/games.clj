@@ -289,22 +289,31 @@
                             level-timer :level-timer}
                            tick-sleep-atom]
 
-   (core.async/go-loop [now (t/now)
-                        end (t/plus now (t/seconds @level-timer))]
+  (core.async/go-loop [now (t/now)
+                       end (t/plus now (t/seconds @level-timer))]
 
-     (let [remaining (games.control/calculate-remaining-time now end)
-           expired? (games.control/time-expired? remaining)
+    (let [remaining (games.control/calculate-remaining-time now end)]
 
-           [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
-           {message :event :as controlv} (if (nil? controlv) {:event :continue} controlv)
+      (log/info :game.games (format "game-workbench-loop %s:%s"
+                                    (:remaining-in-minutes remaining)
+                                    (:remaining-in-seconds remaining)))
 
-           short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)
-           [nowA endA] (match [message expired?]
-                              [_ false] (games.control/handle-control-event conn game-event-stream controlv now end)
-                              [_ true] (games.control/handle-control-event conn game-event-stream {:event :timeout} now end))]
+      (let [remaining (games.control/calculate-remaining-time now end)
+            expired? (games.control/time-expired? remaining)
 
-       (when (and nowA endA (not short-circuit-game?))
-         (recur nowA endA)))))
+            [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
+            {message :event :as controlv} (if (nil? controlv) {:event :continue} controlv)
+
+            short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)
+            [nowA endA] (match [message expired?]
+                               [_ false] (games.control/handle-control-event conn game-event-stream controlv now end)
+                               [_ true] (games.control/handle-control-event conn game-event-stream {:game-id game-id
+                                                                                                    :event :timeout} now end))]
+
+        (when (and nowA
+                   endA
+                   (not short-circuit-game?))
+          (recur nowA endA))))))
 
 (defn start-game!-workbench
 
