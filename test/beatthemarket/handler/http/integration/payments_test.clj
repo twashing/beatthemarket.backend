@@ -785,6 +785,44 @@
 
       (games.control/update-short-circuit-game! game-id-uuid true))))
 
+(deftest verify-stripe-charge-test-with-example-payload
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        payload (-> "example-payload-stripe-charge2.json" resource slurp (json/read-str :key-fn keyword) ppi)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (test-util/<message!! 1000)
+
+
+    (testing "Charge a valid card"
+
+      (test-util/send-init {:client-id (str client-id)})
+      (test-util/send-data {:id   987
+                            :type :start
+                            :payload
+                            {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                             :variables payload}})
+
+      (test-util/<message!! 1000)
+
+      (let [{product-id :productId
+             provider :provider} payload
+            payment-response (-> (test-util/<message!! 3000) ppi :payload :data :verifyPayment)]
+
+        (verify-payment-response payment-response product-id provider)))))
+
+
 (deftest apply-product-and-subscription-payments-on-game-start-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
