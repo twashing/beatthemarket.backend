@@ -65,7 +65,8 @@
 
     (state.core/set-prep profile)
     (state.core/init-components)
-    #_(migration.core/run-migrations)))
+    (when-not (= :production profile)
+      (migration.core/run-migrations))))
 
 
 (comment ;; Main

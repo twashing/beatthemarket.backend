@@ -866,6 +866,7 @@
             expected-running-profit-loss expected-running-profit-loss
             realized-profit-loss expected-realized-profit-loss))))))
 
+
 ;; GameEvents & Streaming
 (deftest win-level-test
 
@@ -1080,6 +1081,64 @@
           (are [x y] (= x y)
             expected-game-event (core.async/<!! game-event-stream)
             expected-game-level level))))))
+
+(deftest timeout-game-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        user-db-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 1500100.0 100.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+
+        game-event-stream (core.async/chan)
+        opts       {:level-timer-sec 2
+                    :user            {:db/id user-db-id}
+                    :accounts        (game.core/->game-user-accounts)
+                    :game-level      :game-level/ten
+                    :game-event-stream game-event-stream}
+
+
+        ;; D Launch Game
+        {{game-id    :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         level-timer :level-timer
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)]
+
+    (with-redefs [games.control/lose-game! (constantly true)
+                  game.calculation/realized-profit-loss-for-game
+                  (constantly
+                    [{:user-id 17592186045535
+                      :tick-id #uuid "61edaa6b-1e7b-43ab-af25-7523aa315ac3"
+                      :game-id game-id
+                      :stock-id #uuid "f3a47490-5792-42ca-8747-ef3ac9420d39"
+                      :profit-loss-type :realized-profit-loss
+                      :profit-loss 509.37}])]
+
+      (let [now (t/now)
+            end (t/plus now (t/seconds @level-timer))]
+
+        (games.control/handle-control-event
+          conn game-event-stream {:event :timeout
+                                  :game-id game-id} now end)))
+
+    (is (= (core.async/<!! game-event-stream)
+           {:event :continue :game-id game-id :level :game-level/ten :minutesRemaining 0 :secondsRemaining 0 :type :LevelTimer}))
+
+    (is (= (core.async/<!! game-event-stream)
+           {:event :lose :game-id game-id :profit-loss 509.37 :level :game-level/ten :type :LevelStatus}))))
 
 
 ;; TODO

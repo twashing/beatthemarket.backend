@@ -3,12 +3,8 @@
             [integrant.repl.state :as repl.state]
 
             [beatthemarket.game.games.processing :as games.processing]
-            ;; [clj-time.core :as t]
-            ;; [io.pedestal.log :as log]
-            ;; [beatthemarket.persistence.datomic :as persistence.datomic]
-            ;; [beatthemarket.persistence.core :as persistence.core]
-
             [beatthemarket.util :refer [ppi] :as util]))
+
 
 (defn register-game-control! [game game-control]
   (swap! (:game/games repl.state/system)
