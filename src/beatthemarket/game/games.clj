@@ -25,6 +25,7 @@
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.core :as games.core]
+            [beatthemarket.game.games.state :as games.state]
             [beatthemarket.integration.payments.core :as integration.payments.core]
 
             [beatthemarket.persistence.core :as persistence.core]
@@ -143,7 +144,7 @@
                                    :sink-fn       #(sink-fn {:event %})})]
 
      ;; (ppi (dissoc game-control :input-sequence :stocks-with-tick-data))
-     (games.core/register-game-control! game game-control)
+     (games.state/register-game-control! game game-control)
      game-control)))
 
 (defn create-game!

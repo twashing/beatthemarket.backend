@@ -1,11 +1,13 @@
 (ns beatthemarket.integration.payments.core
-  (:require [integrant.repl.state :as repl.state]
+  (:require [clojure.core.async :as core.async]
+            [integrant.repl.state :as repl.state]
             [integrant.core :as ig]
             [datomic.client.api :as d]
             [clj-time.core :as t]
             [clj-time.coerce :as c]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.game.persistence :as game.persistence]
+            [beatthemarket.game.games.state :as game.games.state]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.util :refer [ppi] :as util]))
 
@@ -96,8 +98,13 @@
        (credit-cash-account 400000.0)
        (persistence.datomic/transact-entities! conn)))
 
-;; TODO
-(defmethod apply-feature :additional_5_minutes [_ conn email payment-entity game-entity])
+(defmethod apply-feature :additional_5_minutes [feature _ _ _ {game-id :game/id :as game-entity}]
+
+  (let [control-channel (:control-channel (game.games.state/inmemory-game-by-id game-id))
+        game-event-message {:event feature
+                            :game-id game-id}]
+
+    (core.async/go (core.async/>! control-channel game-event-message))))
 
 
 (defn mark-payment-applied-conditionally-on-running-game [conn email client-id payment]
@@ -114,8 +121,6 @@
       (hash-map :payment payment))))
 
 (defn apply-payment-conditionally-on-running-game [conn email payment-entity game-entity]
-
-  ;; (ppi [conn email #_payment-entity game-entity])
 
   ;; TODO
   ;; [ok] subscription - turn on margin trading

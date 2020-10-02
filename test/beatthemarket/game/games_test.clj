@@ -1750,3 +1750,191 @@
         (are [x y] (= x y)
           expected-game-status game-status
           expected-profit-loss profit-loss)))))
+
+
+;; Game Timing
+#_(let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        user-db-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 112.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+
+        opts {:level-timer-sec 5
+              :user            {:db/id user-db-id}
+              :accounts        (game.core/->game-user-accounts)
+              :game-level      :game-level/one}
+
+
+        ;; D Launch Game
+        {{game-id     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+
+
+        ;; E Buy Stock
+        {stock-id   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  game-id
+              :stockId stock-id
+              :game-control game-control}
+
+        ops-before-pause  [{:op :buy :stockAmount 100}
+                           {:op :buy :stockAmount 200}
+                           {:op :sell :stockAmount 200}]
+        ops-before-pause-count (count ops-before-pause)
+
+        ops-after-pause  [{:op :sell :stockAmount 100}]
+      ops-after-pause-count (count ops-after-pause)
+      ]
+
+
+    ;; BEFORE :pause
+    (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
+
+
+    ;; :pause
+    (games.control/pause-game! conn game-id)
+
+    ;; AFTER :pause
+    (testing "On Pause, we are setting :game/status to :game-status/paused"
+
+      (let [game-status (-> (persistence.core/entity-by-domain-id conn :game/id game-id)
+                            ffirst
+                            :game/status
+                            :db/ident)
+
+            expected-game-status :game-status/paused]
+
+        (is (= expected-game-status game-status))))
+
+    ;; AFTER resume
+    (println "\n")
+    (println "RESUME Game!!")
+    (testing "On Resume, i. we are setting :game/status to :game-status/running.
+                         ii. replay reconstructs running profit loss test."
+
+      (let [{iterations :iterations} (games.control/resume-workbench! conn game-id user-db-id game-control data-sequence-fn)
+            game-status (-> (persistence.core/entity-by-domain-id conn :game/id game-id)
+                            ffirst
+                            :game/status
+                            :db/ident)
+
+            expected-game-status :game-status/running
+
+            expected-profit-loss {user-db-id
+                                  {stock-id
+                                    #{{:amount 200
+                                       :counter-balance-direction :buy
+                                       :stock-account-amount 300
+                                       :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                       :op :buy
+                                       :shrinkage 1/3
+                                       :latest-price->price [(.floatValue 120.0) (.floatValue 110.0)]
+                                       :counter-balance-amount 100
+                                       :pershare-gain-or-loss 10.0
+                                       :running-profit-loss 666.6666666666667
+                                       :price (.floatValue 110.0)
+                                       :pershare-purchase-ratio 2/9}
+                                      {:amount 100
+                                       :counter-balance-direction :buy
+                                       :stock-account-amount 100
+                                       :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                       :op :buy
+                                       :shrinkage 1/3
+                                       :latest-price->price [(.floatValue 120.0) (.floatValue 100.0)]
+                                       :counter-balance-amount 100
+                                       :pershare-gain-or-loss 20.0
+                                       :running-profit-loss 222.22222222222223
+                                       :price (.floatValue 100.0)
+                                       :pershare-purchase-ratio 1/9}}}}
+
+            profit-loss (-> (games.control/get-inmemory-profit-loss game-id)
+                            (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
+                            (update-in [user-db-id stock-id] (fn [x] (into #{} x))))]
+
+        (are [x y] (= x y)
+          expected-game-status game-status
+          expected-profit-loss profit-loss)
+
+
+        ;; TODO Run the next :op, check P/L
+        ;; (ppi iterations)
+
+        ;; TODO check values are streamed to the correct client
+
+        )))
+
+(deftest apply-additional-5-minutes-test
+
+  (let [;; A
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
+        user (test-util/generate-user! conn)
+        user-db-id (:db/id user)
+        userId         (:user/external-uid user)
+
+        ;; B
+        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 112.0 125.0 130.0])
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+
+        original-timer-seconds 5
+        opts {:level-timer-sec original-timer-seconds
+              :user            {:db/id user-db-id}
+              :accounts        (game.core/->game-user-accounts)
+              :game-level      :game-level/one}
+
+
+        ;; D Launch Game
+        {{game-id     :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         control-channel :control-channel
+         game-event-stream :game-event-stream
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+
+        payment-entity {:payment/product-id "additional_5_minutes"}
+        game-entity (:game game-control)]
+
+    (testing "Game event returns timer with an additional 5 minutes"
+
+      (integration.payments.core/apply-payment-conditionally-on-running-game conn nil payment-entity game-entity)
+
+      (core.async/go
+        (let [[event ch] (core.async/alts! [(core.async/timeout 2000) game-event-stream])
+
+              expected-event {:remaining-in-minutes 5
+                              :remaining-in-seconds original-timer-seconds
+                              :event :continue
+                              :game-id game-id}]
+
+          (is (= expected-event event)))))))
+
+
+;; beatthemarket.game.games.control
+;; handle-control-event :additional_5_minutes [conn game-event-stream {:keys [game-id] :as control} now end]
+;; - now end should have an additional 5 minutes

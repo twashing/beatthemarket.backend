@@ -14,7 +14,9 @@
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.calculation :as game.calculation]
+            [beatthemarket.game.games.state :as games.state]
             [beatthemarket.game.games.core :as game.games.core]
+            [beatthemarket.game.games.state :as game.games.state]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.processing :as games.processing]
             [beatthemarket.util :refer [ppi] :as util])
@@ -314,7 +316,7 @@
 
 (defn transition-level! [conn game-id level]
 
-  (let [source-and-destination (game.games.core/level->source-and-destination level)]
+  (let [source-and-destination (game.games.state/level->source-and-destination level)]
 
     (conditionally-level-up! conn game-id source-and-destination)
     #_(conditionally-reset-level-time! conn game-id source-and-destination)))
@@ -356,7 +358,6 @@
     (conditionally-win-game! conn game-id)
 
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
-    (println (format "Win %s" (format-remaining-time remaining)))
     (core.async/>!! game-event-stream (assoc control :type :LevelStatus))
 
     [now end]))
@@ -413,6 +414,8 @@
 
   (let [remaining-time (calculate-remaining-time now end)]
 
+    (log/info :game.games (format "Continue %s" remaining-time))
+
     ;; A
     (update-inmemory-game-timer! game-id (-> remaining-time :interval t/in-seconds))
 
@@ -424,6 +427,16 @@
 
   [(t/now) end])
 
+(defmethod handle-control-event :additional_5_minutes [conn game-event-stream {:keys [game-id] :as control} now end]
+
+  (let [additional-time 5
+        end' (t/plus end (t/minutes additional-time))
+        remaining-time (calculate-remaining-time now end')]
+
+    (update-inmemory-game-timer! game-id (-> remaining-time :interval t/in-seconds))
+    (log/info :game.games (format "Additional 5 minutes %s" (format-remaining-time remaining-time)))
+
+    (handle-control-event conn game-event-stream (assoc control :event :continue) now end')))
 
 
 (defn run-game! [conn
@@ -456,11 +469,6 @@
           short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)]
 
       ;; TODO i. If this is a market, and ii. there are no players, :pause
-      #_(println (format "game-loop %s:%s / %s / short-circuit-game? %s"
-                                     (:remaining-in-minutes remaining)
-                                     (:remaining-in-seconds remaining)
-                                     (if controlv controlv :running)
-                                     short-circuit-game?))
       (log/info :game.games (format "game-loop %s:%s / %s"
                                     (:remaining-in-minutes remaining)
                                     (:remaining-in-seconds remaining)
@@ -475,7 +483,7 @@
                                                                 (assoc controlv :message "< Paused >")
                                                                 (t/now) end)
 
-                               [(_ :guard #{:exit :win :lose}) _] (handle-control-event conn game-event-stream controlv now end)
+                               [(_ :guard #{:exit :win :lose :additional_5_minutes}) _] (handle-control-event conn game-event-stream controlv now end)
 
                                [_ false] (let [current-level (-> repl.state/system :game/games deref
                                                                  (get game-id)
@@ -483,7 +491,7 @@
                                                controlv {:event   :continue
                                                          :game-id game-id
                                                          :level   (:level current-level)
-                                                         :type :LevelTimer}]
+                                                         :type    :LevelTimer}]
 
                                            (handle-control-event conn game-event-stream controlv now end))
 
@@ -545,7 +553,7 @@
 
 
     ;; X. Update :game/level
-    (game.games.core/update-inmemory-game-level! game-id game-level)
+    (game.games.state/update-inmemory-game-level! game-id game-level)
 
     (merge-with #(if %2 %2 %1)
                 game-control
@@ -686,7 +694,7 @@
                                   (#(assoc % :profit-loss (get-inmemory-profit-loss game-id))))]
 
 
-       (game.games.core/register-game-control! game game-control-live)
+       (games.state/register-game-control! game game-control-live)
        game-control-live))))
 
 (defn resume-game!

@@ -8,6 +8,7 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.persistence :as game.persistence]
+            [beatthemarket.game.games.state :as game.games.state]
             [clojure.core.async :as core.async]
             [beatthemarket.util :refer [ppi] :as util]))
 
@@ -93,9 +94,7 @@
 
   (println (format ">> calculate-profit-loss on TICK / " (pr-str stock-ticks)))
   (let [updated-profit-loss-calculations
-        (-> repl.state/system :game/games
-            deref
-            (get game-id)
+        (-> (game.games.state/inmemory-game-by-id game-id)
             :profit-loss
             ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
@@ -177,10 +176,7 @@
   ;; (println [:check-level-complete user-db-id game-id control-channel data])
   ;; (ppi profit-loss)
 
-  (let [current-level (-> repl.state/system :game/games
-                          deref
-                          (get game-id)
-                          :current-level)
+  (let [current-level (:current-level (game.games.state/inmemory-game-by-id game-id))
 
         {profit-threshold :profit-threshold
          lose-threshold :lose-threshold

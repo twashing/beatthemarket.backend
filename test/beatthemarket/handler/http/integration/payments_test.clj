@@ -421,7 +421,7 @@
 
     ))
 
-(deftest X-test
+#_(deftest X-test
 
     #_(testing "Basic verify payment"
 
@@ -952,7 +952,21 @@
                                                :tickId      stockTickId
                                                :tickPrice   stockTickClose}}}})))
 
-;; TODO Fix subscription workflwo
+;; in live game
+;; additional 5 minutes
+;; then consume timer events
+;;
+;; in paused game
+;; additional 5 minutes
+;; resume, then consume timer events
+;;
+;; after game end
+;; game restart and join
+;; additional 5 minutes
+;; then consume timer events
+
+
+;; TODO Fix subscription workflow
 #_(deftest margin-trading-allows-upto-10x-cash-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
