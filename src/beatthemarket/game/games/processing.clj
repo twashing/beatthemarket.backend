@@ -51,7 +51,7 @@
 
 (defn profit-loss->entity [conn {:keys [user-id tick-id game-id stock-id profit-loss-type profit-loss]}]
 
-  (let [{game-user-db-id :db/id} (ffirst (ppi (iam.persistence/game-user-by-user conn user-id game-id)))
+  (let [{game-user-db-id :db/id} (ffirst (iam.persistence/game-user-by-user conn user-id game-id))
 
         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tick-id))
         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stock-id))
@@ -124,7 +124,7 @@
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn)))]
 
-    (ppi [:realized-profit-loss realized-profit-loss])
+    ;; (ppi [:realized-profit-loss realized-profit-loss])
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
   data)
@@ -204,7 +204,7 @@
                              lose-threshold-met? (assoc :event :lose
                                                         :profit-loss running-pl))]
 
-    (ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
+    #_(ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
           [:realized realized-pl (> realized-pl profit-threshold)]
           [:current-level (deref current-level)]])
 

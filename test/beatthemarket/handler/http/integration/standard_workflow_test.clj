@@ -559,106 +559,7 @@
           (reset! latest-tick r)
           (recur (test-util/<message!! 1000)))))))
 
-(deftest buy-stock-test
-
-  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)
-        gameLevel 1
-
-        client-id (UUID/randomUUID)]
-
-      (test-util/send-init {:client-id (str client-id)})
-
-      (test-util/login-assertion service id-token)
-
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "mutation CreateGame($gameLevel: Int!) {
-                                       createGame(gameLevel: $gameLevel) {
-                                         id
-                                         stocks { id name symbol }
-                                       }
-                                     }"
-                             :variables {:gameLevel gameLevel}}})
-
-      (test-util/<message!! 1000)
-
-      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
-
-        (test-util/send-data {:id   988
-                              :type :start
-                              :payload
-                              {:query "mutation StartGame($id: String!) {
-                                         startGame(id: $id) {
-                                           stockTickId
-                                           stockTickTime
-                                           stockTickClose
-                                           stockId
-                                           stockName
-                                         }
-                                       }"
-                               :variables {:id id}}})
-
-        (test-util/<message!! 1000)
-        (test-util/<message!! 1000)
-
-        (test-util/send-data {:id   989
-                              :type :start
-                              :payload
-                              {:query "subscription StockTicks($gameId: String!) {
-                                           stockTicks(gameId: $gameId) {
-                                             stockTickId
-                                             stockTickTime
-                                             stockTickClose
-                                             stockId
-                                             stockName
-                                         }
-                                       }"
-                               :variables {:gameId id}}})
-
-        (test-util/<message!! 1000)
-
-        (as-> (:game/games repl.state/system) gs
-          (deref gs)
-          (get gs (UUID/fromString id))
-          (:control-channel gs)
-          (core.async/>!! gs {:type :ControlEvent
-                              :event :exit
-                              :game-id id}))
-
-
-        (let [latest-tick (->> (test-util/consume-subscriptions)
-                               (filter #(= 989 (:id %)))
-                               last)
-              [{stockTickId :stockTickId
-                stockTickTime :stockTickTime
-                stockTickClose :stockTickClose
-                stockId :stockId
-                stockName :stockName}]
-              (-> latest-tick :payload :data :stockTicks)]
-
-          (test-util/send-data {:id   990
-                                :type :start
-                                :payload
-                                {:query "mutation BuyStock($input: BuyStock!) {
-                                           buyStock(input: $input) {
-                                             message
-                                           }
-                                         }"
-                                 :variables {:input {:gameId      id
-                                                     :stockId     stockId
-                                                     :stockAmount 100
-                                                     :tickId      stockTickId
-                                                     :tickPrice   stockTickClose}}}})
-
-
-          (let [ack (test-util/<message!! 1000)]
-
-            (is (= {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}
-                   ack)))))))
-
-(deftest sell-stock-test
+(defn start-game-workflow []
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -683,7 +584,7 @@
 
     (test-util/<message!! 1000)
 
-    (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+    (let [{:keys [stocks id] :as create-game-result} (-> (test-util/<message!! 1000) :payload :data :createGame)]
 
       (test-util/send-data {:id   988
                             :type :start
@@ -718,30 +619,149 @@
 
       (test-util/<message!! 1000)
 
-      (as-> (:game/games repl.state/system) gs
-        (deref gs)
-        (get gs (UUID/fromString id))
-        (:control-channel gs)
-        (core.async/>!! gs {:type :ControlEvent
-                            :event :exit
-                            :game-id id}))
+      create-game-result)))
+
+(deftest buy-stock-test
+
+  (let [{:keys [stocks id]} (start-game-workflow)]
+
+    (as-> (:game/games repl.state/system) gs
+      (deref gs)
+      (get gs (UUID/fromString id))
+      (:control-channel gs)
+      (core.async/>!! gs {:type :ControlEvent
+                          :event :exit
+                          :game-id id}))
 
 
-      (let [latest-tick (->> (test-util/consume-subscriptions)
-                             (filter #(= 989 (:id %)))
-                             last)
-            [{stockTickId :stockTickId
-              stockTickTime :stockTickTime
-              stockTickClose :stockTickClose
-              stockId :stockId
-              stockName :stockName}]
-            (-> latest-tick :payload :data :stockTicks)]
+    (let [latest-tick (->> (test-util/consume-subscriptions)
+                           (filter #(= 989 (:id %)))
+                           last)
+          [{stockTickId :stockTickId
+            stockTickTime :stockTickTime
+            stockTickClose :stockTickClose
+            stockId :stockId
+            stockName :stockName}]
+          (-> latest-tick :payload :data :stockTicks)]
 
-        (test-util/send-data {:id   990
+      (test-util/send-data {:id   990
+                            :type :start
+                            :payload
+                            {:query "mutation BuyStock($input: BuyStock!) {
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                             :variables {:input {:gameId      id
+                                                 :stockId     stockId
+                                                 :stockAmount 100
+                                                 :tickId      stockTickId
+                                                 :tickPrice   stockTickClose}}}})
+
+
+      (let [ack (test-util/<message!! 1000)]
+
+        (is (= {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}
+               ack))))))
+
+(deftest buy-stock-insufficient-funds-test
+
+  (let [{:keys [stocks id]} (start-game-workflow)]
+
+    (as-> (:game/games repl.state/system) gs
+      (deref gs)
+      (get gs (UUID/fromString id))
+      (:control-channel gs)
+      (core.async/>!! gs {:type :ControlEvent
+                          :event :exit
+                          :game-id id}))
+
+
+    (let [latest-tick (->> (test-util/consume-subscriptions)
+                           (filter #(= 989 (:id %)))
+                           last)
+          [{stockTickId :stockTickId
+            stockTickTime :stockTickTime
+            stockTickClose :stockTickClose
+            stockId :stockId
+            stockName :stockName}]
+          (-> latest-tick :payload :data :stockTicks)]
+
+      (test-util/send-data {:id   990
+                            :type :start
+                            :payload
+                            {:query "mutation BuyStock($input: BuyStock!) {
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                             :variables {:input {:gameId      id
+                                                 :stockId     stockId
+                                                 :stockAmount 10000
+                                                 :tickId      stockTickId
+                                                 :tickPrice   stockTickClose}}}})
+
+      (testing "We are recieving the correct InsufficientFunds error message"
+
+        (let [expected-error-message {:message "InsufficientFunds"
+                                      :locations [{:line 2 :column 44}]
+                                      :path ["buyStock"]
+                                      :extensions {:arguments {:input "$input"}}}]
+
+          (->> (test-util/<message!! 1000)
+               :payload
+               :errors
+               (filter #(= "InsufficientFunds" (:message %)))
+               first
+               (= expected-error-message)
+               is))))))
+
+(deftest sell-stock-test
+
+  (let [{:keys [stocks id]} (start-game-workflow)]
+
+    (as-> (:game/games repl.state/system) gs
+      (deref gs)
+      (get gs (UUID/fromString id))
+      (:control-channel gs)
+      (core.async/>!! gs {:type :ControlEvent
+                          :event :exit
+                          :game-id id}))
+
+
+    (let [latest-tick (->> (test-util/consume-subscriptions)
+                           (filter #(= 989 (:id %)))
+                           last)
+          [{stockTickId :stockTickId
+            stockTickTime :stockTickTime
+            stockTickClose :stockTickClose
+            stockId :stockId
+            stockName :stockName}]
+          (-> latest-tick :payload :data :stockTicks)]
+
+      (test-util/send-data {:id   990
+                            :type :start
+                            :payload
+                            {:query "mutation BuyStock($input: BuyStock!) {
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                             :variables {:input {:gameId      id
+                                                 :stockId     stockId
+                                                 :stockAmount 100
+                                                 :tickId      stockTickId
+                                                 :tickPrice   stockTickClose}}}})
+
+      (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
+      (test-util/<message!! 1000) ;;{:type "complete", :id 990}
+
+      (testing "Selling the stock"
+        (test-util/send-data {:id   991
                               :type :start
                               :payload
-                              {:query "mutation BuyStock($input: BuyStock!) {
-                                           buyStock(input: $input) {
+                              {:query "mutation SellStock($input: SellStock!) {
+                                           sellStock(input: $input) {
                                              message
                                            }
                                          }"
@@ -751,27 +771,9 @@
                                                    :tickId      stockTickId
                                                    :tickPrice   stockTickClose}}}})
 
-        (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
-        (test-util/<message!! 1000) ;;{:type "complete", :id 990}
-
-        (testing "Selling the stock"
-          (test-util/send-data {:id   991
-                                :type :start
-                                :payload
-                                {:query "mutation SellStock($input: SellStock!) {
-                                           sellStock(input: $input) {
-                                             message
-                                           }
-                                         }"
-                                 :variables {:input {:gameId      id
-                                                     :stockId     stockId
-                                                     :stockAmount 100
-                                                     :tickId      stockTickId
-                                                     :tickPrice   stockTickClose}}}})
-
-          (let [ack (test-util/<message!! 1000)]
-            (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
-                   ack))))))))
+        (let [ack (test-util/<message!! 1000)]
+          (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
+                 ack)))))))
 
 (deftest stream-portfolio-updates-test
 

@@ -270,9 +270,14 @@
         (resolve-as nil {:message "Error / resolve-buy-stock / INCOMPLETE /"}))
 
       (catch Throwable e
-        (do
-          (ppi (bean e))
-          (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))))
+        (let [conditionally-add-insufficient-funds-error-code
+              (fn [message]
+                (cond->> (hash-map :message message)
+                  (clojure.string/starts-with? message "Insufficient Funds ") (conj [{:message "InsufficientFunds"}])))]
+
+          (->> e bean :localizedMessage
+               conditionally-add-insufficient-funds-error-code
+               (resolve-as nil)))))))
 
 (defn resolve-sell-stock [context args _]
 
