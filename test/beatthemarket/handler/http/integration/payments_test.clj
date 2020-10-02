@@ -73,6 +73,7 @@
 
         (test-util/<message!! 5000)
         (-> (test-util/<message!! 1000) :payload :data :startGame)
+        (test-util/<message!! 1000)
 
         create-game))))
 
@@ -955,7 +956,109 @@
 ;; in live game
 ;; additional 5 minutes
 ;; then consume timer events
-;;
+
+;; start-game-workflow
+
+(deftest additional-5-minutes-test-with-game
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1REIJ0bKeXG37" ;; Additional 5 minutes
+        provider "stripe"
+        token (-> "example-payload-stripe-charge-5-minutes.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (let [game-id (:id (start-game-workflow))
+          game-id-uuid (UUID/fromString game-id)]
+
+
+      ;;A
+      (test-util/send-data {:id   992
+                            :type :start
+                            :payload
+                            {:query "subscription GameEvents($gameId: String!) {
+                                       gameEvents(gameId: $gameId) {
+                                         ... on LevelTimer {
+                                           gameId
+                                           level
+                                           minutesRemaining
+                                           secondsRemaining
+                                         }
+                                       }
+                                     }"
+                             :variables {:gameId game-id}}})
+
+      ;; B
+      (testing "Charge a valid card"
+
+        (test-util/send-init {:client-id (str client-id)})
+        (test-util/send-data {:id   989
+                              :type :start
+                              :payload
+                              {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                               :variables {:productId product-id
+                                           :provider provider
+                                           :token token}}})
+
+        (let [payment-response (->> (test-util/consume-subscriptions 1000)
+                                    (filter #(= 989 (:id %)))
+                                    (filter #(= "data" (:type %)))
+                                    last
+                                    :payload :data :verifyPayment)]
+
+          (verify-payment-response payment-response product-id provider)
+
+          (testing "With a running game, charge is applied"
+
+            (let [[{payment-id :paymentId}] payment-response
+                  conn (-> repl.state/system :persistence/datomic :opts :conn)
+                  email "twashing@gmail.com"
+
+                  expected-cash-account-balance (.floatValue 200000.0)
+
+                  {payment-applied :payment.applied/applied}
+                  (ffirst (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))
+
+                  {cash-account-balance :bookkeeping.account/balance}
+                  (game.persistence/cash-account-for-user-game conn email game-id-uuid)]
+
+              (is payment-applied)
+              (is expected-cash-account-balance cash-account-balance)))))
+
+      ;; C
+      (testing "Game timer has been extended by 5 minutes"
+
+        (let [payment-response (->> (test-util/consume-subscriptions 1000)
+                                    (filter #(= 992 (:id %)))
+                                    last
+                                    trace)
+
+              expected-timer-response
+              {:type "data"
+               :id 992
+               :payload {:data
+                         {:gameEvents
+                          {:gameId game-id
+                           :level 1
+                           :minutesRemaining 9
+                           :secondsRemaining 58}}}}]
+
+          (is (= expected-timer-response payment-response))))
+
+      (Thread/sleep 1500)
+      (games.control/update-short-circuit-game! game-id-uuid true))))
+
+
 ;; in paused game
 ;; additional 5 minutes
 ;; resume, then consume timer events

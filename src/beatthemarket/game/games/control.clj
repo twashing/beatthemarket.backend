@@ -414,7 +414,7 @@
 
   (let [remaining-time (calculate-remaining-time now end)]
 
-    (log/info :game.games (format "Continue %s" remaining-time))
+    (log/info :game.games (format "Continue %s" (select-keys remaining-time [:remaining-in-minutes :remaining-in-seconds])))
 
     ;; A
     (update-inmemory-game-timer! game-id (-> remaining-time :interval t/in-seconds))

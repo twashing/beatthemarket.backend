@@ -1933,8 +1933,3 @@
                               :game-id game-id}]
 
           (is (= expected-event event)))))))
-
-
-;; beatthemarket.game.games.control
-;; handle-control-event :additional_5_minutes [conn game-event-stream {:keys [game-id] :as control} now end]
-;; - now end should have an additional 5 minutes
