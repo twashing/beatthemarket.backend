@@ -176,6 +176,7 @@
                                       :resolve-user-market-profit-loss   graphql.core/resolve-user-market-profit-loss
                                       :resolve-pause-game                graphql.core/resolve-pause-game
                                       :resolve-resume-game               graphql.core/resolve-resume-game
+                                      :resolve-restart-game              graphql.core/resolve-restart-game
                                       :resolve-exit-game                 graphql.core/resolve-exit-game
                                       :resolve-games                     graphql.core/resolve-games
 

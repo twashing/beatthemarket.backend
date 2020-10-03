@@ -17,6 +17,7 @@
             [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.games.trades :as games.trades]
             [beatthemarket.game.games :as game.games]
+            [beatthemarket.game.games.core :as games.core]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.bookkeeping.core :as bookkeeping]
@@ -97,8 +98,6 @@
 
 (defn check-user-device-has-paused-game? [conn email client-id]
 
-  (ppi [email client-id])
-
   (when-not (ffirst
               (d/q '[:find ?g
                      :in $ ?email ?client-id
@@ -114,6 +113,27 @@
                    (d/db conn)
                    email client-id))
     (throw (Exception. (format "User device doesn't have a paused game / email %s / client-id %s" email client-id)))))
+
+(defn check-user-device-by-game-status [conn email client-id game-status]
+
+  (when-not (ffirst
+              (d/q '[:find ?g
+                     :in $ ?email ?client-id ?game-status
+                     :where
+                     [?g :game/start-time]
+                     [(missing? $ ?g :game/end-time)]
+                     [?g :game/status ?game-status]
+                     [?g :game/users ?us]
+                     [?us :game.user/user-client ?client-id]
+                     [?us :game.user/user ?u]
+                     [?u :user/email ?email]]
+                   (d/db conn)
+                   email client-id game-status))
+    (throw (Exception. (format "User device doesn't have a game with status: %s / email: %s / client-id: %s" game-status email client-id)))))
+
+#_(defn check-user-device-has-lost-game? [conn email client-id]
+  (check-user-device-by-game-status conn email client-id :game-status/lost))
+
 
 (defn check-user-device-not-already-joined? [conn email client-id game-id]
 
@@ -438,7 +458,6 @@
 
 
         ;; Resume Game
-        ;; (games.control/resume-game! conn game-id user-db-id game-control data-sequence-fn)
         (games.control/resume-game! conn user-db-id game-control)
 
         ;; Response
@@ -448,6 +467,50 @@
     (catch Exception e
       (do
         ;; (ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
+
+(defn resolve-restart-game [context {gameId :gameId} _]
+
+  (try
+
+    (let [client-id (check-client-id-exists context)
+          conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {{{email :email} :checked-authentication} :request} context]
+
+      (let [data-sequence-fn games.control/->data-sequence
+            user-db-id       (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+            game-id          (UUID/fromString gameId)
+
+            {{saved-game-level :db/ident} :game/level
+             level-timer :game/level-timer}
+            (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+
+            {:keys [profit-threshold lose-threshold]}
+            (-> integrant.repl.state/config :game/game :levels
+                (get saved-game-level))
+
+            current-level (atom {:level            saved-game-level
+                                 :profit-threshold profit-threshold
+                                 :lose-threshold   lose-threshold})
+
+            game-control (merge-with #(if %2 %2 %1)
+                                     (games.core/default-game-control conn game-id {})
+                                     {:game                  {:game/id game-id}
+                                      :short-circuit-game? (atom false)
+                                      :tick-sleep-atom (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
+                                      :level-timer     (atom level-timer)
+                                      :current-level   current-level})]
+
+        ;; NOTE game status is updated in: resume-game -> run-game
+        (games.control/resume-game! conn user-db-id game-control)
+
+        {:type   :ControlEvent
+         :event  :restart
+         :gameId gameId}))
+
+    (catch Exception e
+      (do
+        (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-join-game [context {gameId :gameId} _]
@@ -485,9 +548,9 @@
 (defn resolve-exit-game [context {gameId :gameId} _]
 
   (let [game-id (UUID/fromString gameId)
-        event {:type :ControlEvent
-               :event  :exit
-               :game-id game-id}]
+        event   {:type    :ControlEvent
+                 :event   :exit
+                 :game-id game-id}]
 
     (-> (game.games/send-control-event! game-id event)
         (assoc :gameId gameId))))

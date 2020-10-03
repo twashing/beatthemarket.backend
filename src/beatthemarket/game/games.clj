@@ -143,7 +143,6 @@
                                    :close-sink-fn (partial sink-fn nil)
                                    :sink-fn       #(sink-fn {:event %})})]
 
-     ;; (ppi (dissoc game-control :input-sequence :stocks-with-tick-data))
      (games.state/register-game-control! game game-control)
      game-control)))
 
@@ -293,13 +292,13 @@
   (core.async/go-loop [now (t/now)
                        end (t/plus now (t/seconds @level-timer))]
 
-    (let [remaining (games.control/calculate-remaining-time now end)]
+    (let [remaining (games.state/calculate-remaining-time now end)]
 
       (log/info :game.games (format "game-workbench-loop %s:%s"
                                     (:remaining-in-minutes remaining)
                                     (:remaining-in-seconds remaining)))
 
-      (let [remaining (games.control/calculate-remaining-time now end)
+      (let [remaining (games.state/calculate-remaining-time now end)
             expired? (games.control/time-expired? remaining)
 
             [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])

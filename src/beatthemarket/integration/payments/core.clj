@@ -100,6 +100,25 @@
 
 (defmethod apply-feature :additional_5_minutes [feature _ _ _ {game-id :game/id :as game-entity}]
 
+  (let [additional-time 5
+        level-timer (:level-timer (game.games.state/inmemory-game-by-id game-id))
+        now (t/now)
+
+        end (t/plus now (t/seconds @level-timer))
+        end' (t/plus end (t/minutes additional-time))
+
+        ;; _ (ppi [:now now])
+        ;; _ (ppi [:end end'])
+
+        remaining-time (game.games.state/calculate-remaining-time now end')]
+
+    ;; TODO Redo these ugly kludges
+    ;; Done to make updating time work, either in a running game B, or an exited game A
+
+    ;; A. Kludge
+    (game.games.state/update-inmemory-game-timer! game-id (-> remaining-time :interval t/in-seconds)))
+
+  ;; B. Kludge
   (let [control-channel (:control-channel (game.games.state/inmemory-game-by-id game-id))
         game-event-message {:event feature
                             :game-id game-id}]
@@ -205,7 +224,8 @@
             (persistence.datomic/transact-entities! conn %))]
 
      (->> (map #(assoc % :payment.applied/applied (c/to-date (t/now))) payment-entities)
-          transact-entities-when-exists))
+          transact-entities-when-exists
+          doall))
 
    (let [lookup-feature (fn [{product-id :payment/product-id :as payment-entity}]
                           (let [feature (->> repl.state/system
@@ -217,6 +237,7 @@
 
      (->> (map lookup-feature payment-entities)
           (map #(apply-feature (:feature %) conn email % game-entity))
+          ;; ppi
           doall))))
 
 (comment

@@ -907,57 +907,37 @@
         (testing "DELETEING test customer"
           (delete-test-customer! result-id))))))
 
-(defn buy-sell-workflow [game-id target-buy-value]
+(defn subscribe-to-game-events [subscription-id game-id]
 
+  (test-util/send-data {:id   subscription-id
+                        :type :start
+                        :payload
+                        {:query "subscription GameEvents($gameId: String!) {
+                                       gameEvents(gameId: $gameId) {
+                                         ... on LevelTimer {
+                                           gameId
+                                           level
+                                           minutesRemaining
+                                           secondsRemaining
+                                         }
+                                       }
+                                     }"
+                         :variables {:gameId game-id}}}))
+
+(defn verify-payment [client-id payload]
+
+  (test-util/send-init {:client-id (str client-id)})
   (test-util/send-data {:id   989
                         :type :start
                         :payload
-                        {:query "subscription StockTicks($gameId: String!) {
-                                           stockTicks(gameId: $gameId) {
-                                             stockTickId
-                                             stockTickTime
-                                             stockTickClose
-                                             stockId
-                                             stockName
-                                         }
-                                       }"
-                         :variables {:gameId game-id}}})
-
-  (test-util/<message!! 1000)
-
-  (let [latest-tick (->> (test-util/consume-subscriptions)
-                         (filter #(= 989 (:id %)))
-                         last)
-        [{stockTickId :stockTickId
-          stockTickTime :stockTickTime
-          stockTickClose :stockTickClose
-          stockId :stockId
-          stockName :stockName}]
-        (-> latest-tick :payload :data :stockTicks ppi)
-
-        amount-to-buy (->> (/ target-buy-value stockTickClose)
-                           (format "%.0f")
-                           (#(Integer/parseInt %)))]
-
-    (test-util/send-data {:id   990
-                          :type :start
-                          :payload
-                          {:query "mutation BuyStock($input: BuyStock!) {
-                                           buyStock(input: $input) {
-                                             message
-                                           }
-                                         }"
-                           :variables {:input {:gameId      game-id
-                                               :stockId     stockId
-                                               :stockAmount amount-to-buy
-                                               :tickId      stockTickId
-                                               :tickPrice   stockTickClose}}}})))
-
-;; in live game
-;; additional 5 minutes
-;; then consume timer events
-
-;; start-game-workflow
+                        {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                         :variables payload}}))
 
 (deftest additional-5-minutes-test-with-game
 
@@ -995,20 +975,9 @@
       ;; B
       (testing "Charge a valid card"
 
-        (test-util/send-init {:client-id (str client-id)})
-        (test-util/send-data {:id   989
-                              :type :start
-                              :payload
-                              {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"
-                               :variables {:productId product-id
-                                           :provider provider
-                                           :token token}}})
+        (verify-payment client-id {:productId product-id
+                                   :provider provider
+                                   :token token})
 
         (let [payment-response (->> (test-util/consume-subscriptions 1000)
                                     (filter #(= 989 (:id %)))
@@ -1055,7 +1024,7 @@
 
           (is (= expected-timer-response payment-response))))
 
-      (Thread/sleep 1500)
+      (Thread/sleep 3000)
       (games.control/update-short-circuit-game! game-id-uuid true))))
 
 
@@ -1067,6 +1036,151 @@
 ;; game restart and join
 ;; additional 5 minutes
 ;; then consume timer events
+
+(defn exit-game [game-id]
+
+  (test-util/send-data {:id   993
+                        :type :start
+                        :payload
+                        {:query "mutation exitGame($gameId: String!) {
+                                       exitGame(gameId: $gameId) {
+                                         event
+                                         gameId
+                                       }
+                                     }"
+                         :variables {:gameId game-id}}}))
+
+(deftest additional-5-minutes-test-after-game-end
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1REIJ0bKeXG37" ;; Additional 5 minutes
+        provider "stripe"
+        token (-> "example-payload-stripe-charge-5-minutes.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (let [game-id (:id (start-game-workflow))
+          game-id-uuid (UUID/fromString game-id)]
+
+
+      ;;A
+      ;; (subscribe-to-game-events 1000 game-id)
+
+      ;; B
+      (verify-payment client-id {:productId product-id
+                                 :provider provider
+                                 :token token})
+      ;; C
+      (exit-game game-id)
+
+
+      (Thread/sleep 4000)
+
+      (testing "Restart the game"
+
+        (let [expected-restart-game {:type "data"
+                                     :id 990
+                                     :payload {:data {:restartGame
+                                                      {:event "restart"
+                                                       :gameId game-id}}}}]
+
+          (test-util/send-data {:id   990
+                                :type :start
+                                :payload
+                                {:query "mutation RestartGame($gameId: String!) {
+                                           restartGame(gameId: $gameId) {
+                                             event
+                                             gameId
+                                           }
+                                         }"
+                                 :variables {:gameId game-id}}})
+
+          (->> (test-util/consume-subscriptions 1000)
+               (filter #(= 990 (:id %)))
+               (filter #(= "data" (:type %)))
+               last
+               (= expected-restart-game)
+               is)))
+
+
+      (subscribe-to-game-events 992 game-id)
+
+
+      (testing "Game timer has been extended by 5 minutes"
+
+        ;; (Thread/sleep 2000)
+
+        ;; D
+        (let [payment-response (->> (test-util/consume-subscriptions 1000)
+                                    trace (filter #(= 992 (:id %)))
+                                    last
+                                    trace)
+
+              expected-timer-response
+              {:type "data"
+               :id 992
+               :payload {:data
+                         {:gameEvents
+                          {:gameId game-id
+                           :level 1
+                           :minutesRemaining 10
+                           :secondsRemaining 00}}}}]
+
+          (is (= expected-timer-response payment-response))))
+
+
+      (games.control/update-short-circuit-game! game-id-uuid true))))
+
+(defn buy-sell-workflow [game-id target-buy-value]
+
+  (test-util/send-data {:id   989
+                        :type :start
+                        :payload
+                        {:query "subscription StockTicks($gameId: String!) {
+                                           stockTicks(gameId: $gameId) {
+                                             stockTickId
+                                             stockTickTime
+                                             stockTickClose
+                                             stockId
+                                             stockName
+                                         }
+                                       }"
+                         :variables {:gameId game-id}}})
+
+  (test-util/<message!! 1000)
+
+  (let [latest-tick (->> (test-util/consume-subscriptions)
+                         (filter #(= 989 (:id %)))
+                         last)
+        [{stockTickId :stockTickId
+          stockTickTime :stockTickTime
+          stockTickClose :stockTickClose
+          stockId :stockId
+          stockName :stockName}]
+        (-> latest-tick :payload :data :stockTicks ppi)
+
+        amount-to-buy (->> (/ target-buy-value stockTickClose)
+                           (format "%.0f")
+                           (#(Integer/parseInt %)))]
+
+    (test-util/send-data {:id   990
+                          :type :start
+                          :payload
+                          {:query "mutation BuyStock($input: BuyStock!) {
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                           :variables {:input {:gameId      game-id
+                                               :stockId     stockId
+                                               :stockAmount amount-to-buy
+                                               :tickId      stockTickId
+                                               :tickPrice   stockTickClose}}}})))
+
 
 
 ;; TODO Fix subscription workflow
