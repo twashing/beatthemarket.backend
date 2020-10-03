@@ -18,6 +18,7 @@
             [beatthemarket.game.games.processing :as games.processing]
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
+            [beatthemarket.game.games.state :as games.state]
             [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.handler.graphql.encoder :as graphql.encoder]
@@ -919,6 +920,12 @@
                      {:op :noop}]
         ops-before-count (count ops-before)]
 
+    (testing "Tick sleep is 1000 me before leveling up"
+
+      (let [tick-sleep-atom (:tick-sleep-atom (games.state/inmemory-game-by-id game-id))
+            expected-tick-sleep 1000]
+        (is (= expected-tick-sleep @tick-sleep-atom))))
+
     (testing "Testing the correct level win message is shown"
 
       (run-trades! iterations stock-id opts ops-before ops-before-count)
@@ -936,7 +943,13 @@
 
         (are [x y] (= x y)
           expected-game-event (core.async/<!! game-event-stream)
-          expected-game-level level)))))
+          expected-game-level level)))
+
+    (testing "Tick sleep is 950 me after leveling up"
+
+      (let [tick-sleep-atom (:tick-sleep-atom (games.state/inmemory-game-by-id game-id))
+            expected-tick-sleep 950]
+        (is (= expected-tick-sleep @tick-sleep-atom))))))
 
 (deftest lose-level-test
 

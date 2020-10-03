@@ -106,10 +106,6 @@
 
         end (t/plus now (t/seconds @level-timer))
         end' (t/plus end (t/minutes additional-time))
-
-        ;; _ (ppi [:now now])
-        ;; _ (ppi [:end end'])
-
         remaining-time (game.games.state/calculate-remaining-time now end')]
 
     ;; TODO Redo these ugly kludges

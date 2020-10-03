@@ -291,11 +291,12 @@
     (persistence.datomic/transact-entities! conn data)))
 
 (defn conditionally-level-up! [conn game-id [[source-level-name _ :as source]
-                                             [dest-level-name dest-level-config :as dest]]]
+                                             [dest-level-name
+                                              {tick-sleep :tick-sleep-ms} :as dest]]]
 
   (when dest
 
-    ;; (game.games.core/update-inmemory-game-level! game-id source-level-name)
+    (games.state/update-inmemory-tick-sleep-atom! game-id tick-sleep)
 
     (let [{game-db-id :db/id} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
           data [[:db/retract  game-db-id :game/level source-level-name]
@@ -445,7 +446,7 @@
                   iterations :iterations
                   control-channel :control-channel
                   game-event-stream :game-event-stream :as game-control}
-                 tick-sleep-atom]
+                 _tick-sleep-atom]
 
   ;; A
   (let [{game-db-id :db/id
@@ -462,6 +463,7 @@
                        iters iterations]
 
     (let [remaining             (games.state/calculate-remaining-time now end)
+          tick-sleep-atom (:tick-sleep-atom (game.games.state/inmemory-game-by-id game-id))
 
           [{event :event
             :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
@@ -743,7 +745,7 @@
 
   ([conn game-id user-db-id game-control]
 
-   (resume-game! conn game-id user-db-id game-control ->data-sequence))
+   (resume-workbench! conn game-id user-db-id game-control ->data-sequence))
 
   ([conn game-id user-db-id {:keys [control-channel
                                     stock-tick-stream
@@ -767,7 +769,15 @@
    ;; TODO
    ;; >> return historical data <<
 
-   (resume-common! conn game-id user-db-id game-control data-sequence-fn)))
+   (resume-common! conn game-id user-db-id game-control data-sequence-fn)
+
+   ;; NOTE Kludged duplicate of setting status in run-game!
+   (let [{game-db-id :db/id
+          game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+         data [[:db/retract  game-db-id :game/status (:db/ident game-status)]
+               [:db/add      game-db-id :game/status :game-status/running]]]
+
+     (persistence.datomic/transact-entities! conn data))))
 
 
 
