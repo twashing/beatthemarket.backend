@@ -1,11 +1,13 @@
 (ns beatthemarket.integration.payments.core
-  (:require [integrant.repl.state :as repl.state]
+  (:require [clojure.core.async :as core.async]
+            [integrant.repl.state :as repl.state]
             [integrant.core :as ig]
             [datomic.client.api :as d]
             [clj-time.core :as t]
             [clj-time.coerce :as c]
             [com.rpl.specter :refer [transform ALL MAP-VALS]]
             [beatthemarket.game.persistence :as game.persistence]
+            [beatthemarket.game.games.state :as game.games.state]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.util :refer [ppi] :as util]))
 
@@ -96,8 +98,32 @@
        (credit-cash-account 400000.0)
        (persistence.datomic/transact-entities! conn)))
 
-;; TODO
-(defmethod apply-feature :additional_5_minutes [_ conn email payment-entity game-entity])
+(defmethod apply-feature :additional_5_minutes [feature _ _ _ {game-id :game/id :as game-entity}]
+
+  (let [additional-time 5
+        level-timer (:level-timer (game.games.state/inmemory-game-by-id game-id))
+        now (t/now)
+
+        end (t/plus now (t/seconds @level-timer))
+        end' (t/plus end (t/minutes additional-time))
+
+        ;; _ (ppi [:now now])
+        ;; _ (ppi [:end end'])
+
+        remaining-time (game.games.state/calculate-remaining-time now end')]
+
+    ;; TODO Redo these ugly kludges
+    ;; Done to make updating time work, either in a running game B, or an exited game A
+
+    ;; A. Kludge
+    (game.games.state/update-inmemory-game-timer! game-id (-> remaining-time :interval t/in-seconds)))
+
+  ;; B. Kludge
+  (let [control-channel (:control-channel (game.games.state/inmemory-game-by-id game-id))
+        game-event-message {:event feature
+                            :game-id game-id}]
+
+    (core.async/go (core.async/>! control-channel game-event-message))))
 
 
 (defn mark-payment-applied-conditionally-on-running-game [conn email client-id payment]
@@ -114,8 +140,6 @@
       (hash-map :payment payment))))
 
 (defn apply-payment-conditionally-on-running-game [conn email payment-entity game-entity]
-
-  ;; (ppi [conn email #_payment-entity game-entity])
 
   ;; TODO
   ;; [ok] subscription - turn on margin trading
@@ -200,7 +224,8 @@
             (persistence.datomic/transact-entities! conn %))]
 
      (->> (map #(assoc % :payment.applied/applied (c/to-date (t/now))) payment-entities)
-          transact-entities-when-exists))
+          transact-entities-when-exists
+          doall))
 
    (let [lookup-feature (fn [{product-id :payment/product-id :as payment-entity}]
                           (let [feature (->> repl.state/system
@@ -212,6 +237,7 @@
 
      (->> (map lookup-feature payment-entities)
           (map #(apply-feature (:feature %) conn email % game-entity))
+          ;; ppi
           doall))))
 
 (comment

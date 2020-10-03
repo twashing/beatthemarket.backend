@@ -73,6 +73,7 @@
 
         (test-util/<message!! 5000)
         (-> (test-util/<message!! 1000) :payload :data :startGame)
+        (test-util/<message!! 1000)
 
         create-game))))
 
@@ -421,7 +422,7 @@
 
     ))
 
-(deftest X-test
+#_(deftest X-test
 
     #_(testing "Basic verify payment"
 
@@ -906,6 +907,234 @@
         (testing "DELETEING test customer"
           (delete-test-customer! result-id))))))
 
+(defn subscribe-to-game-events [subscription-id game-id]
+
+  (test-util/send-data {:id   subscription-id
+                        :type :start
+                        :payload
+                        {:query "subscription GameEvents($gameId: String!) {
+                                       gameEvents(gameId: $gameId) {
+                                         ... on LevelTimer {
+                                           gameId
+                                           level
+                                           minutesRemaining
+                                           secondsRemaining
+                                         }
+                                       }
+                                     }"
+                         :variables {:gameId game-id}}}))
+
+(defn verify-payment [client-id payload]
+
+  (test-util/send-init {:client-id (str client-id)})
+  (test-util/send-data {:id   989
+                        :type :start
+                        :payload
+                        {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                         :variables payload}}))
+
+(deftest additional-5-minutes-test-with-game
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1REIJ0bKeXG37" ;; Additional 5 minutes
+        provider "stripe"
+        token (-> "example-payload-stripe-charge-5-minutes.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (let [game-id (:id (start-game-workflow))
+          game-id-uuid (UUID/fromString game-id)]
+
+
+      ;;A
+      (test-util/send-data {:id   992
+                            :type :start
+                            :payload
+                            {:query "subscription GameEvents($gameId: String!) {
+                                       gameEvents(gameId: $gameId) {
+                                         ... on LevelTimer {
+                                           gameId
+                                           level
+                                           minutesRemaining
+                                           secondsRemaining
+                                         }
+                                       }
+                                     }"
+                             :variables {:gameId game-id}}})
+
+      ;; B
+      (testing "Charge a valid card"
+
+        (verify-payment client-id {:productId product-id
+                                   :provider provider
+                                   :token token})
+
+        (let [payment-response (->> (test-util/consume-subscriptions 1000)
+                                    (filter #(= 989 (:id %)))
+                                    (filter #(= "data" (:type %)))
+                                    last
+                                    :payload :data :verifyPayment)]
+
+          (verify-payment-response payment-response product-id provider)
+
+          (testing "With a running game, charge is applied"
+
+            (let [[{payment-id :paymentId}] payment-response
+                  conn (-> repl.state/system :persistence/datomic :opts :conn)
+                  email "twashing@gmail.com"
+
+                  expected-cash-account-balance (.floatValue 200000.0)
+
+                  {payment-applied :payment.applied/applied}
+                  (ffirst (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))
+
+                  {cash-account-balance :bookkeeping.account/balance}
+                  (game.persistence/cash-account-for-user-game conn email game-id-uuid)]
+
+              (is payment-applied)
+              (is expected-cash-account-balance cash-account-balance)))))
+
+      ;; C
+      (testing "Game timer has been extended by 5 minutes"
+
+        (let [payment-response (->> (test-util/consume-subscriptions 1000)
+                                    (filter #(= 992 (:id %)))
+                                    last
+                                    trace)
+
+              expected-timer-response
+              {:type "data"
+               :id 992
+               :payload {:data
+                         {:gameEvents
+                          {:gameId game-id
+                           :level 1
+                           :minutesRemaining 9
+                           :secondsRemaining 58}}}}]
+
+          (is (= expected-timer-response payment-response))))
+
+      (Thread/sleep 3000)
+      (games.control/update-short-circuit-game! game-id-uuid true))))
+
+
+;; in paused game
+;; additional 5 minutes
+;; resume, then consume timer events
+;;
+;; after game end
+;; game restart and join
+;; additional 5 minutes
+;; then consume timer events
+
+(defn exit-game [game-id]
+
+  (test-util/send-data {:id   993
+                        :type :start
+                        :payload
+                        {:query "mutation exitGame($gameId: String!) {
+                                       exitGame(gameId: $gameId) {
+                                         event
+                                         gameId
+                                       }
+                                     }"
+                         :variables {:gameId game-id}}}))
+
+(deftest additional-5-minutes-test-after-game-end
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1REIJ0bKeXG37" ;; Additional 5 minutes
+        provider "stripe"
+        token (-> "example-payload-stripe-charge-5-minutes.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (let [game-id (:id (start-game-workflow))
+          game-id-uuid (UUID/fromString game-id)]
+
+
+      ;;A
+      ;; (subscribe-to-game-events 1000 game-id)
+
+      ;; B
+      (verify-payment client-id {:productId product-id
+                                 :provider provider
+                                 :token token})
+      ;; C
+      (exit-game game-id)
+
+
+      (Thread/sleep 4000)
+
+      (testing "Restart the game"
+
+        (let [expected-restart-game {:type "data"
+                                     :id 990
+                                     :payload {:data {:restartGame
+                                                      {:event "restart"
+                                                       :gameId game-id}}}}]
+
+          (test-util/send-data {:id   990
+                                :type :start
+                                :payload
+                                {:query "mutation RestartGame($gameId: String!) {
+                                           restartGame(gameId: $gameId) {
+                                             event
+                                             gameId
+                                           }
+                                         }"
+                                 :variables {:gameId game-id}}})
+
+          (->> (test-util/consume-subscriptions 1000)
+               (filter #(= 990 (:id %)))
+               (filter #(= "data" (:type %)))
+               last
+               (= expected-restart-game)
+               is)))
+
+
+      (subscribe-to-game-events 992 game-id)
+
+
+      (testing "Game timer has been extended by 5 minutes"
+
+        ;; (Thread/sleep 2000)
+
+        ;; D
+        (let [payment-response (->> (test-util/consume-subscriptions 1000)
+                                    trace (filter #(= 992 (:id %)))
+                                    last
+                                    trace)
+
+              expected-timer-response
+              {:type "data"
+               :id 992
+               :payload {:data
+                         {:gameEvents
+                          {:gameId game-id
+                           :level 1
+                           :minutesRemaining 10
+                           :secondsRemaining 00}}}}]
+
+          (is (= expected-timer-response payment-response))))
+
+
+      (games.control/update-short-circuit-game! game-id-uuid true))))
+
 (defn buy-sell-workflow [game-id target-buy-value]
 
   (test-util/send-data {:id   989
@@ -952,7 +1181,9 @@
                                                :tickId      stockTickId
                                                :tickPrice   stockTickClose}}}})))
 
-;; TODO Fix subscription workflwo
+
+
+;; TODO Fix subscription workflow
 #_(deftest margin-trading-allows-upto-10x-cash-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)

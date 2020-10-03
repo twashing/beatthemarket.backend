@@ -111,7 +111,7 @@
   {:values [:running :realized]}
 
   :ControlEventType
-  {:values      [:pause :resume :join :exit]}
+  {:values      [:pause :resume :join :exit :restart]}
 
   :LevelStatusType
   {:values [:win :lose]}
@@ -239,6 +239,12 @@
   :resumeGame
   {:type :ControlEvent
    :resolve :resolve-resume-game
+   :args
+   {:gameId {:type (non-null String)}}}
+
+  :restartGame
+  {:type :ControlEvent
+   :resolve :resolve-restart-game
    :args
    {:gameId {:type (non-null String)}}}
 

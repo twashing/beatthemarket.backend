@@ -6,32 +6,6 @@
             [beatthemarket.util :refer [ppi] :as util]))
 
 
-(defn register-game-control! [game game-control]
-  (swap! (:game/games repl.state/system)
-         assoc (:game/id game) game-control))
-
-(defn level->source-and-destination [level]
-
-  (->> repl.state/config :game/game :levels seq
-       (sort-by (comp :order second))
-       (partition 2 1)
-       (filter (fn [[[level-name _] r]] (= level level-name)))
-       first))
-
-(defn update-inmemory-game-level! [game-id level]
-
-  (let [[[source-level-name _ :as source]
-         [dest-level-name dest-level-config :as dest]] (level->source-and-destination level)]
-
-    (println "Site B: Updating new level in memory / " dest-level-name)
-    (swap! (:game/games repl.state/system)
-           (fn [gs]
-             (update-in gs [game-id :current-level] (-> dest-level-config
-                                                        (assoc :level dest-level-name)
-                                                        (dissoc :order)
-                                                        atom
-                                                        constantly))))))
-
 (defn default-game-control [conn game-id
                             {{user-db-id :db/id} :user
                              current-level :current-level

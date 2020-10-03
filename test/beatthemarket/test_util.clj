@@ -302,15 +302,18 @@
         coll
         (recur (conj coll v))))))
 
-(defn consume-subscriptions []
+(defn consume-subscriptions
 
-  (let [subscriptions (atom [])]
-    (loop [r (<message!! 1000)]
-      (if (= ::timed-out r)
-        @subscriptions
-        (do
-          (swap! subscriptions #(conj % r))
-          (recur (<message!! 1000)))))))
+  ([] (consume-subscriptions 1000))
+
+  ([timeout]
+   (let [subscriptions (atom [])]
+     (loop [r (<message!! timeout)]
+       (if (= ::timed-out r)
+         @subscriptions
+         (do
+           (swap! subscriptions #(conj % r))
+           (recur (<message!! timeout))))))))
 
 (defn stock-buy-happy-path []
 

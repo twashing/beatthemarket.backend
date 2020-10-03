@@ -25,6 +25,7 @@
             [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.core :as games.core]
+            [beatthemarket.game.games.state :as games.state]
             [beatthemarket.integration.payments.core :as integration.payments.core]
 
             [beatthemarket.persistence.core :as persistence.core]
@@ -142,8 +143,7 @@
                                    :close-sink-fn (partial sink-fn nil)
                                    :sink-fn       #(sink-fn {:event %})})]
 
-     ;; (ppi (dissoc game-control :input-sequence :stocks-with-tick-data))
-     (games.core/register-game-control! game game-control)
+     (games.state/register-game-control! game game-control)
      game-control)))
 
 (defn create-game!
@@ -292,13 +292,13 @@
   (core.async/go-loop [now (t/now)
                        end (t/plus now (t/seconds @level-timer))]
 
-    (let [remaining (games.control/calculate-remaining-time now end)]
+    (let [remaining (games.state/calculate-remaining-time now end)]
 
       (log/info :game.games (format "game-workbench-loop %s:%s"
                                     (:remaining-in-minutes remaining)
                                     (:remaining-in-seconds remaining)))
 
-      (let [remaining (games.control/calculate-remaining-time now end)
+      (let [remaining (games.state/calculate-remaining-time now end)
             expired? (games.control/time-expired? remaining)
 
             [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])

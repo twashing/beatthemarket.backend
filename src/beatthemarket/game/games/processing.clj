@@ -8,6 +8,7 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.persistence :as game.persistence]
+            [beatthemarket.game.games.state :as game.games.state]
             [clojure.core.async :as core.async]
             [beatthemarket.util :refer [ppi] :as util]))
 
@@ -70,14 +71,14 @@
 ;; A
 (defn process-transact! [conn data]
 
-  (println (format ">> TRANSACT / " (pr-str data)))
+  (log/debug :game.games.processing (format ">> TRANSACT / " (pr-str data)))
   (persistence.datomic/transact-entities! conn data)
   data)
 
 (defn stream-stock-tick [stock-tick-stream stock-ticks]
 
-  (log/debug :game.games (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
-  (println (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
+  (log/debug :game.games.processing (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
+  (log/debug :game.games.processing (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
   ;; (ppi stock-tick-stream)
   ;; (ppi stock-ticks)
   (core.async/go (core.async/>! stock-tick-stream stock-ticks))
@@ -91,11 +92,9 @@
 
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
-  (println (format ">> calculate-profit-loss on TICK / " (pr-str stock-ticks)))
+  (log/debug :game.games.processing (format ">> calculate-profit-loss on TICK / " (pr-str stock-ticks)))
   (let [updated-profit-loss-calculations
-        (-> repl.state/system :game/games
-            deref
-            (get game-id)
+        (-> (game.games.state/inmemory-game-by-id game-id)
             :profit-loss
             ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
@@ -106,20 +105,20 @@
 
 (defmethod calculate-profit-loss :buy [op user-id game-id tentry]
 
-  (println (format ">> calculate-profit-loss on BUY / " (keys tentry)))
+  (log/debug :game.games.processing (format ">> calculate-profit-loss on BUY / " (keys tentry)))
   (let [profit-loss (game.calculation/calculate-profit-loss! op user-id tentry)]
     {:tentry tentry :profit-loss profit-loss}))
 
 (defmethod calculate-profit-loss :sell [op user-id game-id tentry]
 
-  (println (format ">> calculate-profit-loss on SELL / " (keys tentry)))
+  (log/debug :game.games.processing (format ">> calculate-profit-loss on SELL / " (keys tentry)))
   (let [profit-loss (game.calculation/calculate-profit-loss! op user-id tentry)]
     {:tentry tentry :profit-loss profit-loss}))
 
 ;; B.ii
 (defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
 
-  (println (format ">> TRANSACT :profit-loss / %s" (pr-str data)))
+  (log/debug :game.games.processing (format ">> TRANSACT :profit-loss / " (pr-str data)))
   ;; (ppi data)
   (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (map (partial profit-loss->entity conn)))]
@@ -132,7 +131,7 @@
 ;; B.iii
 (defn stream-portfolio-update! [portfolio-update-stream {:keys [profit-loss] :as data}]
 
-  (println (format ">> STREAM portfolio-update / " (pr-str data)))
+  (log/debug :game.games.processing (format ">> STREAM portfolio-update / " (pr-str data)))
   (let [profit-loss (->> data
                          :profit-loss
                          flatten
@@ -142,7 +141,7 @@
 
     (when (not (empty? profit-loss))
 
-      (log/debug :game.games (format ">> STREAM portfolio-update / " (pr-str profit-loss)))
+      (log/debug :game.games.processing (format ">> STREAM portfolio-update / " (pr-str profit-loss)))
       (core.async/go (core.async/>! portfolio-update-stream profit-loss)))
 
     (update data :profit-loss (constantly profit-loss))))
@@ -162,7 +161,7 @@
   (let [[[source-level-name _ :as source]
          [dest-level-name dest-level-config :as dest]] (level->source-and-destination* level)]
 
-    ;; (println "Site B: Updating new level in memory / " dest-level-name)
+    ;; (log/debug :game.games.processing "Site B: Updating new level in memory / " dest-level-name)
     (swap! (:game/games repl.state/system)
            (fn [gs]
              (update-in gs [game-id :current-level] (-> dest-level-config
@@ -173,14 +172,11 @@
 
 (defn check-level-complete [conn user-db-id game-id control-channel {:keys [profit-loss] :as data}]
 
-  (println (format ">> CHECK level-complete / %s" (pr-str data)))
-  ;; (println [:check-level-complete user-db-id game-id control-channel data])
+  (log/debug :game.games.processing (format ">> CHECK level-complete / " (pr-str data)))
+  ;; (log/debug :game.games.processing [:check-level-complete user-db-id game-id control-channel data])
   ;; (ppi profit-loss)
 
-  (let [current-level (-> repl.state/system :game/games
-                          deref
-                          (get game-id)
-                          :current-level)
+  (let [current-level (:current-level (game.games.state/inmemory-game-by-id game-id))
 
         {profit-threshold :profit-threshold
          lose-threshold :lose-threshold
@@ -219,7 +215,7 @@
 
 (defn process-transact-level-update! [conn {level-update :level-update :as data}]
 
-  ;; (println (format ">> TRANSACT :level-update / " (pr-str level-update)))
+  ;; (log/debug :game.games.processing (format ">> TRANSACT :level-update / " (pr-str level-update)))
   ;; (ppi level-update)
   #_(when (not (empty? level-update))
     (persistence.datomic/transact-entities! conn level-update))
@@ -227,6 +223,6 @@
 
 (defn stream-level-update! [game-event-stream data]
 
-  (println (format ">> STREAM level-update! / " (pr-str data)))
-  ;; (log/debug :game.games (format ">> stream-level-update! /" data))
+  (log/debug :game.games.processing (format ">> STREAM level-update! / " (pr-str data)))
+  ;; (log/debug :game.games.processing (format ">> stream-level-update! /" data))
   data)
