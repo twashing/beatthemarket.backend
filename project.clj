@@ -29,10 +29,12 @@
                  ;; [io.pedestal/pedestal.immutant "0.5.5"]
                  ;; [io.pedestal/pedestal.tomcat "0.5.5"]
 
-                 [ch.qos.logback/logback-classic "1.2.3" :exclusions [org.slf4j/slf4j-api]]
+                 [ch.qos.logback/logback-classic "1.2.3"
+                  ;; :exclusions [org.slf4j/slf4j-api]
+                  ]
                  [org.slf4j/jul-to-slf4j "1.7.25"]
                  [org.slf4j/jcl-over-slf4j "1.7.25"]
-                 [org.slf4j/log4j-over-slf4j "1.7.25"]
+                 ;; [org.slf4j/log4j-over-slf4j "1.7.25"]
                  [org.apache.commons/commons-math3 "3.6.1"]
                  [integrant "0.8.0"]
                  [aero "1.1.6"]
@@ -108,7 +110,6 @@
                    org.slf4j/slf4j-api
                    ring/ring-codec
                    ring/ring-core]]
-                 [com.datomic/client-cloud "0.8.102"]
 
                  ;; NOTE Addresses java.lang.NoClassDefFoundError: javax/xml/bind/DatatypeConverter
                  ;; https://docs.datomic.com/cloud/troubleshooting.html#no-class-jaxb
@@ -123,7 +124,11 @@
                  [com.google.api-client/google-api-client "1.30.10"]
                  [com.google.apis/google-api-services-androidpublisher "v3-rev20200817-1.30.10"]
                  [magnet/payments.stripe "0.3.4"]
-                 #_[datomic-client-memdb "1.1.1"
+
+                 [com.datomic/client-cloud "0.8.102"]
+                 [com.datomic/dev-local    "0.9.203"]
+                 ;; [com.datomic/datomic-free "0.9.5697"]
+                 [datomic-client-memdb "1.1.1"
                                        :exclusions
                                        [org.slf4j/slf4j-nop
                                         com.cognitect/transit-clj
@@ -150,11 +155,18 @@
                        :dependencies [[stylefruits/gniazdo "1.1.3"
                                        :exclusions [org.eclipse.jetty.websocket/websocket-client]]
                                       [expound "0.8.4"]]
-                       :plugins      [[com.jakemccrary/lein-test-refresh "0.24.1"]
+                       :plugins      [[s3-wagon-private "1.3.4"]
+                                      [com.jakemccrary/lein-test-refresh "0.24.1"]
                                       [venantius/yagni "0.1.7"]
                                       [lein-kibit "0.1.8"]
                                       [lein-nvd "1.4.0"]]}
              :uberjar {:aot [beatthemarket.handler.http.server]}}
 
-  :aliases {"slamhound" ["run" "-m" "slam.hound"]}
+  :repositories [["private" {:url "s3p://beatthemarket2/repository/"
+                             :checksum :ignore}]]
+
+  ;; export AWS_ACCESS_KEY_ID=AKIASW4RAQ2QR5SZY775
+  ;; export AWS_SECRET_ACCESS_KEY=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
+
+  ;; :aliases {"slamhound" ["run" "-m" "slam.hound"]}
   :main ^{:skip-aot true} beatthemarket.handler.http.server)

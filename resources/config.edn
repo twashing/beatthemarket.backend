@@ -134,8 +134,10 @@
                                                 :keep-alive-ms 10000}
                 :server/server                 {:service #ig/ref :service/service}
                 :firebase/firebase             #ref [:secrets :firebase]
-                :persistence/datomic           {:datomic         {:db-name "beaththemarket"
-                                                                  :config  {}}}
+                :persistence/datomic           {:datomic         {:db-name "beatthemarket"
+                                                                  :config  {:server-type :dev-local
+                                                                            :system "dev"
+                                                                            :storage-dir "/tmp/data"}}}
                 :payment.provider/apple                {:service #ref [:secrets :development :payment.provider/apple]
                                                         :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
                                                         :products {:additional_balance_100k "additional_balance_100k"
@@ -173,8 +175,10 @@
                                          :keep-alive-ms 10000}
          :server/server                 {:service #ig/ref :service/service}
          :firebase/firebase             #ref [:secrets :firebase]
-         :persistence/datomic           {:datomic         {:db-name "beaththemarket"
-                                                           :config  {}}}
+         :persistence/datomic           {:datomic         {:db-name "beatthemarket"
+                                                           :config  {:server-type :dev-local
+                                                                     :system "dev"
+                                                                     :storage-dir "/tmp/data"}}}
          :payment.provider/apple                {:service #ref [:secrets :test :payment.provider/apple]
                                                  :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
                                                  :products {:additional_balance_100k "additional_balance_100k"
