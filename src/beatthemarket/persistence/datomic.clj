@@ -69,6 +69,25 @@
   (->datomic-client-local opts))
 
 
+(defn create-database
+
+  ([]
+   (create-database
+     (-> integrant.repl.state/config :persistence/datomic :datomic :config d/client)
+     (-> integrant.repl.state/config :persistence/datomic :datomic :db-name)))
+
+  ([client db-name]
+   (d/create-database client {:db-name db-name})))
+
+(defn delete-database
+
+  ([]
+   (delete-database
+     (-> integrant.repl.state/config :persistence/datomic :datomic :config d/client)
+     (-> integrant.repl.state/config :persistence/datomic :datomic :db-name)))
+
+  ([client db-name]
+   (d/delete-database client {:db-name db-name})))
 
 
 (defmethod ig/init-key :persistence/datomic [_ {datomic-opts :datomic :as opts}]
@@ -77,6 +96,7 @@
 (defmethod ig/halt-key! :persistence/datomic [_ {datomic-component-map :opts}]
   (println "Closing database...")
   (datomic.environments/close-db-connection! datomic-component-map))
+
 
 
 ;; DATABASE

@@ -10,8 +10,9 @@
                           (as-> token v
                             (hash-map
                               :payment.apple/id (java.util.UUID/randomUUID)
-                              ;; :payment.apple/token (.getBytes (str v))
-                              :payment.apple/token (str v))
+                              :payment.apple/token (.getBytes (str v))
+                              ;; :payment.apple/token (str v)
+                              )
                             (persistence.core/bind-temporary-id v)
                             (hash-map
                               :payment/id (java.util.UUID/randomUUID)

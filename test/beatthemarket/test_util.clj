@@ -25,6 +25,7 @@
             [beatthemarket.migration.schema-init :as schema-init]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.persistence.datomic.environments :as datomic.environments]
             [beatthemarket.persistence.generators :as persistence.generators]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.util :refer [ppi] :as util])
@@ -269,7 +270,7 @@
 
 
 ;; Datomic
-(defn ->datomic-client-test [{:keys [db-name config env]}]
+#_(defn ->datomic-client-test [{:keys [db-name config env]}]
 
   (let [url    (format "datomic:mem://%s" db-name)
         client (memdb/client config)]
@@ -282,13 +283,13 @@
       :client client
       :conn (d/connect client {:db-name url}))))
 
-(defn close-db-connection-local! [client]
+#_(defn close-db-connection-local! [client]
   (memdb/close client))
 
-(defmethod persistence.datomic/->datomic-client :test [opts]
-  (->datomic-client-test opts))
+#_(defmethod persistence.datomic/->datomic-client :test [opts]
+  (datomic.environments/->datomic-client-test opts))
 
-(defmethod persistence.datomic/close-db-connection! :test [{client :client}]
+#_(defmethod persistence.datomic/close-db-connection! :test [{client :client}]
   (close-db-connection-local! client))
 
 
