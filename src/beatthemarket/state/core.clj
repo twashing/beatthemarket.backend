@@ -1,6 +1,6 @@
 (ns beatthemarket.state.core
   (:require [clojure.java.io :refer [resource]]
-            [integrant.repl :refer [go halt]]
+            [integrant.repl :refer [go halt init]]
             [integrant.core :as ig]
             [aero.core :as aero]
             [com.rpl.specter :refer [transform MAP-VALS]]
@@ -49,7 +49,7 @@
 
 (defn init-components []
 
-  (halt)
+  ;; (halt)
   (go))
 
 (def halt-components halt)

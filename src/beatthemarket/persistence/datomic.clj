@@ -1,10 +1,6 @@
 (ns beatthemarket.persistence.datomic
   (:require [datomic.client.api :as d]
-            ;; [datomic.api :as da]
-            ;; [compute.datomic-client-memdb.core :as memdb]
-
             [beatthemarket.persistence.datomic.environments :as datomic.environments]
-
 
             [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
@@ -17,57 +13,6 @@
 
 
 ;; COMPONENT
-#_(defn config->client [{:keys [db-name config env]}]
-
-  (let [client (d/client config)]
-
-    (hash-map
-      :env env
-      :client client
-      :conn (d/connect client {:db-name db-name}))))
-
-#_(defn ->datomic-client-local [{:keys [db-name config env]}]
-
-  (let [client (d/client config)]
-
-    (d/create-database client {:db-name db-name})
-
-    (hash-map
-      :env env
-      :client client
-      :conn (d/connect client {:db-name db-name}))))
-
-#_(defn close-db-connection-local! [client]
-  #_(memdb/close client))
-
-#_(defmulti close-db-connection! :env)
-
-#_(defmethod close-db-connection! :production [_])   ;; a no-op
-
-#_(defmethod close-db-connection! :development [{client :client}]
-  (close-db-connection-local! client))
-
-
-
-#_(defmulti ->datomic-client :env)
-
-#_(defmethod ->datomic-client :production [opts]
-
-  (let [{:keys [db-name config env]}
-        client (d/client config)]
-
-    (hash-map
-      :env env
-      :client client
-      :conn (d/connect client {:db-name db-name}))))
-
-#_(defmethod ->datomic-client :development [opts]
-
-  (->datomic-client-local opts))
-
-#_(defmethod ->datomic-client :development [opts]
-  (->datomic-client-local opts))
-
 
 (defn create-database
 

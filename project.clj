@@ -126,9 +126,18 @@
                  [magnet/payments.stripe "0.3.4"]
 
                  [com.datomic/client-cloud "0.8.102"]
-                 [com.datomic/dev-local    "0.9.203"]
-                 ;; [com.datomic/datomic-free "0.9.5697"]
-                 [datomic-client-memdb "1.1.1"
+                 [org.clojure/test.check "1.1.0"]]
+
+  :min-lein-version "2.0.0"
+  :resource-paths ["config" "resources"]
+
+  :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
+                                      "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
+                       :resource-paths ["test/resources"]
+                       :dependencies [[com.datomic/dev-local    "0.9.203"]
+
+                                      ;; NOTE Kludge as transitive deps start breaking for dev-local when removed
+                                      [datomic-client-memdb "1.1.1"
                                        :exclusions
                                        [org.slf4j/slf4j-nop
                                         com.cognitect/transit-clj
@@ -144,15 +153,7 @@
                                         org.eclipse.jetty/jetty-http
                                         org.eclipse.jetty/jetty-io
                                         org.eclipse.jetty/jetty-util]]
-                 [org.clojure/test.check "1.1.0"]]
-
-  :min-lein-version "2.0.0"
-  :resource-paths ["config" "resources"]
-
-  :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
-                                      "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
-                       :resource-paths ["test/resources"]
-                       :dependencies [[stylefruits/gniazdo "1.1.3"
+                                      [stylefruits/gniazdo "1.1.3"
                                        :exclusions [org.eclipse.jetty.websocket/websocket-client]]
                                       [expound "0.8.4"]]
                        :plugins      [[s3-wagon-private "1.3.4"]
@@ -165,8 +166,4 @@
   :repositories [["private" {:url "s3p://beatthemarket2/repository/"
                              :checksum :ignore}]]
 
-  ;; export AWS_ACCESS_KEY_ID=AKIASW4RAQ2QR5SZY775
-  ;; export AWS_SECRET_ACCESS_KEY=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
-
-  ;; :aliases {"slamhound" ["run" "-m" "slam.hound"]}
   :main ^{:skip-aot true} beatthemarket.handler.http.server)

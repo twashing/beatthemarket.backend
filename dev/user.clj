@@ -47,10 +47,21 @@
        ppi)
 
 
+
+
+
   ;; CREATE Database
 
-  (persistence.datomic/create-database)
-  (persistence.datomic/delete-database)
+  (state.core/set-prep :dev-local)
+  (state.core/init-components)
+
+  (persistence.datomic/create-database
+    (-> integrant.repl.state/system :persistence/datomic :opts :client)
+    (-> integrant.repl.state/system :persistence/datomic :opts :db-name))
+
+  (persistence.datomic/delete-database
+    (-> integrant.repl.state/system :persistence/datomic :opts :client)
+    (-> integrant.repl.state/system :persistence/datomic :opts :db-name))
 
 
   ;; UP Components

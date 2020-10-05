@@ -6,6 +6,15 @@
 (defmulti close-db-connection! :env)
 
 
+(defmethod ->datomic-client :dev-local [{:keys [db-name config env]}]
+
+  (let [client (d/client config)]
+
+    (hash-map
+      :env env
+      :db-name db-name
+      :client client)))
+
 (defmethod ->datomic-client :production [{:keys [db-name config env]}]
 
   (let [client (d/client config)]
@@ -19,6 +28,9 @@
 (defmethod ->datomic-client :development [{:keys [db-name config env]}]
 
   (let [client (d/client config)]
+
+    ;; TODO only run if DB doesn't exist
+    (d/create-database client {:db-name db-name})
 
     (hash-map
       :env env
