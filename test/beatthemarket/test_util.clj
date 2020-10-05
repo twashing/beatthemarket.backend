@@ -16,7 +16,6 @@
             [gniazdo.core :as g]
             [expound.alpha :as expound]
             [datomic.client.api :as d]
-            [compute.datomic-client-memdb.core :as memdb]
 
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.user :as iam.user]
@@ -25,6 +24,7 @@
             [beatthemarket.migration.schema-init :as schema-init]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
+            [beatthemarket.persistence.datomic.environments :as datomic.environments]
             [beatthemarket.persistence.generators :as persistence.generators]
             [beatthemarket.state.core :as state.core]
             [beatthemarket.util :refer [ppi] :as util])
@@ -266,30 +266,6 @@
            (finally
              (log/debug :reason ::test-end)
              (g/close session))))))))
-
-
-;; Datomic
-(defn ->datomic-client-test [{:keys [db-name config env]}]
-
-  (let [url    (format "datomic:mem://%s" db-name)
-        client (memdb/client config)]
-
-    (d/create-database client {:db-name url})
-
-    (hash-map
-      :env env
-      :url url
-      :client client
-      :conn (d/connect client {:db-name url}))))
-
-(defn close-db-connection-local! [client]
-  (memdb/close client))
-
-(defmethod persistence.datomic/->datomic-client :test [opts]
-  (->datomic-client-test opts))
-
-(defmethod persistence.datomic/close-db-connection! :test [{client :client}]
-  (close-db-connection-local! client))
 
 
 

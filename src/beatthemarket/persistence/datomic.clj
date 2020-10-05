@@ -1,10 +1,11 @@
 (ns beatthemarket.persistence.datomic
   (:require [datomic.client.api :as d]
+            [beatthemarket.persistence.datomic.environments :as datomic.environments]
+
             [clojure.java.io :refer [resource]]
             [clojure.edn :refer [read-string]]
             [integrant.core :as ig]
             [integrant.repl.state :as repl.state]
-            ;; [compute.datomic-client-memdb.core :as memdb]
             [beatthemarket.util :refer [ppi] :as util]
 
             ;; TODO Make configurable, loading of :data-processor namespaces
@@ -12,54 +13,35 @@
 
 
 ;; COMPONENT
-(defn config->client [{:keys [db-name config env]}]
 
-  (let [client (d/client config)]
+(defn create-database
 
-    (hash-map
-      :env env
-      :client client
-      :conn (d/connect client {:db-name db-name}))))
+  ([]
+   (create-database
+     (-> integrant.repl.state/config :persistence/datomic :datomic :config d/client)
+     (-> integrant.repl.state/config :persistence/datomic :datomic :db-name)))
 
-(defn ->datomic-client-local [{:keys [db-name config env]}]
+  ([client db-name]
+   (d/create-database client {:db-name db-name})))
 
-  #_(let [url    (format "datomic:mem://%s" db-name)
-        client (memdb/client config)]
+(defn delete-database
 
-    (d/create-database client {:db-name url})
+  ([]
+   (delete-database
+     (-> integrant.repl.state/config :persistence/datomic :datomic :config d/client)
+     (-> integrant.repl.state/config :persistence/datomic :datomic :db-name)))
 
-    (hash-map
-      :env env
-      :url url
-      :client client
-      :conn (d/connect client {:db-name url}))))
-
-(defn close-db-connection-local! [client]
-  #_(memdb/close client))
-
-(defmulti close-db-connection! :env)
-
-(defmethod close-db-connection! :production [_])   ;; a no-op
-
-(defmethod close-db-connection! :development [{client :client}]
-  (close-db-connection-local! client))
-
-
-(defmulti ->datomic-client :env)
-
-(defmethod ->datomic-client :production [opts]
-  (config->client opts))
-
-(defmethod ->datomic-client :development [opts]
-  (->datomic-client-local opts))
+  ([client db-name]
+   (d/delete-database client {:db-name db-name})))
 
 
 (defmethod ig/init-key :persistence/datomic [_ {datomic-opts :datomic :as opts}]
-  {:opts (->datomic-client (assoc datomic-opts :env (:env opts)))})
+  {:opts (datomic.environments/->datomic-client (assoc datomic-opts :env (:env opts)))})
 
 (defmethod ig/halt-key! :persistence/datomic [_ {datomic-component-map :opts}]
   (println "Closing database...")
-  (close-db-connection! datomic-component-map))
+  (datomic.environments/close-db-connection! datomic-component-map))
+
 
 
 ;; DATABASE

@@ -26,7 +26,14 @@ You'll notice a corresponding log message in the Clojure REPL.
 
 ```
 GOOGLE_APPLICATION_CREDENTIALS="./beatthemarket-c13f8-firebase-adminsdk-k3cwr-5129bb442c.json" \
+AWS_ACCESS_KEY_ID=<your-access-key-id> \
+AWS_SECRET_ACCESS_KEY=<your-secret-access-key> \
 lein repl
+
+AWS_ACCESS_KEY_ID=<your-access-key-id> \
+AWS_SECRET_ACCESS_KEY=<your-secret-access-key> \
+lein run -p development
+
 ```
 
 ## Component
@@ -73,6 +80,32 @@ zip -j target/$BEATTHEMARKET_VERSION /tmp/workspace/build/beatthemarket/beatthem
 zip -g target/$BEATTHEMARKET_VERSION \
 .ebextensions/options.config \
 Procfile
+```
+
+## Datomic
+
+[Connect to Datomic Cloud's access gateway](https://docs.datomic.com/cloud/getting-started/get-connected.html#access-gateway)
+
+```
+export AWS_ACCESS_KEY_ID=<key>
+export AWS_SECRET_ACCESS_KEY=<secret-key>
+
+datomic-cli/datomic client access <system-name>
+```
+
+Locally, you can create or delete a database like so (see `dev/user.clj`).
+
+```
+(state.core/set-prep :dev-local)
+(state.core/init-components)
+
+(persistence.datomic/create-database
+  (-> integrant.repl.state/system :persistence/datomic :opts :client)
+  (-> integrant.repl.state/system :persistence/datomic :opts :db-name))
+
+(persistence.datomic/delete-database
+  (-> integrant.repl.state/system :persistence/datomic :opts :client)
+  (-> integrant.repl.state/system :persistence/datomic :opts :db-name))
 ```
 
 ## Code Hygiene

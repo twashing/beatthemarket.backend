@@ -26,7 +26,7 @@
     :db/unique      :db.unique/value}
 
    {:db/ident       :migration/tag
-    :db/valueType   :db.type/string
+    :db/valueType   :db.type/keyword
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/value}
 
@@ -132,6 +132,7 @@
        (clojure.string/join "-")))
 
 (defn migration-ran? [conn migration-tag]
+
   (util/exists?
     (d/q '[:find ?m
            :in $ ?migration-tag ?applied-comparator
@@ -158,7 +159,7 @@
             migration-entity
             {:migration/id (UUID/randomUUID)
              :migration/name (migration-tag->name tag)
-             :migration/tag (name tag)
+             :migration/tag tag
              :migration/created (c/to-date (migration-tag->creation-date tag))
              :migration/applied (c/to-date (t/now))}]
 

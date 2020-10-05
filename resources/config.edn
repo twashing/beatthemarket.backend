@@ -23,33 +23,33 @@
 
                                 :game-level/two {:profit-threshold 10000.0
                                                  :lose-threshold 2000.0
-                                                 :tick-sleep-ms 950
+                                                 :tick-sleep-ms 900
                                                  :order 2}
                                 :game-level/three {:profit-threshold 50000.0
                                                    :lose-threshold 2000.0
-                                                   :tick-sleep-ms 900
+                                                   :tick-sleep-ms 800
                                                    :order 3}
                                 :game-level/four {:profit-threshold 100000.0
                                                   :lose-threshold 5000.0
-                                                  :tick-sleep-ms 850
+                                                  :tick-sleep-ms 750
                                                   :order 4}
                                 :game-level/five {:profit-threshold 1000000.0
                                                   :lose-threshold 10000.0
-                                                  :tick-sleep-ms 800
+                                                  :tick-sleep-ms 700
                                                   :order 5}
 
                                 ;; millions
                                 :game-level/six {:profit-threshold 10000000.0
                                                  :lose-threshold 500000.0
-                                                 :tick-sleep-ms 750
+                                                 :tick-sleep-ms 675
                                                  :order 6}
                                 :game-level/seven {:profit-threshold 50000000.0
                                                    :lose-threshold 500000.0
-                                                   :tick-sleep-ms 700
+                                                   :tick-sleep-ms 650
                                                    :order 7}
                                 :game-level/eight {:profit-threshold 100000000.0
                                                    :lose-threshold 500000.0
-                                                   :tick-sleep-ms 650
+                                                   :tick-sleep-ms 625
                                                    :order 8}
                                 :game-level/nine {:profit-threshold 500000000.0
                                                   :lose-threshold 500000.0
@@ -90,7 +90,9 @@
 
  ;; MAIN
  :integrant #profile
- {:production {:service/service               {:join?         false
+ {:dev-local {:persistence/datomic {:datomic         #ref [:secrets :dev-local :persistence/datomic]}}
+
+  :production {:service/service               {:join?         false
                                                :hostname      "0.0.0.0"
                                                :port          5000
                                                :keep-alive-ms 10000}
@@ -134,8 +136,10 @@
                                                 :keep-alive-ms 10000}
                 :server/server                 {:service #ig/ref :service/service}
                 :firebase/firebase             #ref [:secrets :firebase]
-                :persistence/datomic           {:datomic         {:db-name "beaththemarket"
-                                                                  :config  {}}}
+                :persistence/datomic           {:datomic         {:db-name "beatthemarket"
+                                                                  :config  {:server-type :dev-local
+                                                                            :system "dev"
+                                                                            :storage-dir "/tmp/data"}}}
                 :payment.provider/apple                {:service #ref [:secrets :development :payment.provider/apple]
                                                         :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
                                                         :products {:additional_balance_100k "additional_balance_100k"
@@ -173,8 +177,10 @@
                                          :keep-alive-ms 10000}
          :server/server                 {:service #ig/ref :service/service}
          :firebase/firebase             #ref [:secrets :firebase]
-         :persistence/datomic           {:datomic         {:db-name "beaththemarket"
-                                                           :config  {}}}
+         :persistence/datomic           {:datomic         {:db-name "beatthemarket"
+                                                           :config  {:server-type :dev-local
+                                                                     :system "dev"
+                                                                     :storage-dir "/tmp/data"}}}
          :payment.provider/apple                {:service #ref [:secrets :test :payment.provider/apple]
                                                  :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
                                                  :products {:additional_balance_100k "additional_balance_100k"
