@@ -34,7 +34,6 @@
                   ]
                  [org.slf4j/jul-to-slf4j "1.7.25"]
                  [org.slf4j/jcl-over-slf4j "1.7.25"]
-                 ;; [org.slf4j/log4j-over-slf4j "1.7.25"]
                  [org.apache.commons/commons-math3 "3.6.1"]
                  [integrant "0.8.0"]
                  [aero "1.1.6"]
