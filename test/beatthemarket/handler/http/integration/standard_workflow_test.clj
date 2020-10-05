@@ -104,9 +104,7 @@
 
     (testing "We are returned expected game information [stocks subscriptions id]"
 
-      (test-util/<message!! 1000)
-
-      (let [{:keys [stocks id]} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+      (let [{:keys [stocks id]} (-> (test-util/consume-until 987) :payload :data :createGame)]
 
         (is (UUID/fromString id))
         (is (= 4 (count stocks)))
@@ -144,7 +142,13 @@
 
                   :stream-level-update!
                   :stream-portfolio-update!
-                  :stream-stock-tick}]
+                  :stream-stock-tick
+
+                  :group-stock-tick-pairs
+                  :client-id
+                  :game-level
+                  :short-circuit-game?
+                  :accounts :user}]
 
             (->> repl.state/system :game/games deref (#(get % game-id)) keys
                  (into #{})
@@ -178,10 +182,8 @@
                                      }"
                              :variables {:gameLevel gameLevel}}})
 
-      (test-util/<message!! 1000)
-
       (let [conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
-            {game-id :id}                                (-> (test-util/<message!! 1000) :payload :data :createGame)
+            {game-id :id}                                (-> (test-util/consume-until 987) :payload :data :createGame)
 
             {[{client-id-persisted :game.user/user-client}] :game/users}
             (ffirst (persistence.core/entity-by-domain-id conn :game/id (UUID/fromString game-id)))]
@@ -189,6 +191,22 @@
         (is (= client-id client-id-persisted))
 
         (testing "User / device pair can only have 1 running game"
+
+          (test-util/send-data {:id   989
+                                :type :start
+                                :payload
+                                {:query "mutation StartGame($id: String!) {
+                                             startGame(id: $id) {
+                                               stockTickId
+                                               stockTickTime
+                                               stockTickClose
+                                               stockId
+                                               stockName
+                                             }
+                                           }"
+                                 :variables {:id game-id}}})
+
+          (Thread/sleep 200)
 
           (testing "Creating another game should throw an error"
 
@@ -203,8 +221,7 @@
                                            }"
                                    :variables {:gameLevel gameLevel}}})
 
-            (test-util/<message!! 1000)
-            (let [errors (-> (test-util/<message!! 1000) :payload :errors)
+            (let [errors (-> (test-util/consume-until 988) :payload :errors)
                   expected-error-count 1]
 
               (is (= expected-error-count (count errors)))
@@ -854,21 +871,7 @@
       (:control-channel gs)
       (core.async/>!! gs {:type :ControlEvent
                           :event :exit
-                          :game-id id}))
-
-    (let [expected-game-events {:type "data"
-                                :id 992
-                                :payload
-                                {:data
-                                 {:gameEvents
-                                  {:event "exit" :gameId id}}}}]
-
-      (as-> (test-util/consume-subscriptions) ss
-        (filter #(and (= 992 (:id %))
-                      (= "exit" (-> % :payload :data :gameEvents :event))) ss)
-        (first ss)
-        (= expected-game-events ss)
-        (is ss)))))
+                          :game-id id}))))
 
 (deftest user-market-profit-loss-test
 

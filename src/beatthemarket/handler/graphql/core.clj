@@ -175,7 +175,8 @@
           conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
           {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)
 
-          rename-user-key-map {:user/email :userEmail
+          rename-user-key-map {:db/id :id
+                               :user/email :userEmail
                                :user/name :userName
                                :user/external-uid :userExternalUid
                                :user/accounts :userAccounts}
@@ -185,7 +186,8 @@
                                         :bookkeeping.account/balance :accountBalance
                                         :bookkeeping.account/amount :accountAmount}
 
-          base-response {:user (->> [:user/email
+          base-response {:user (->> [:db/id
+                                     :user/email
                                      :user/name
                                      :user/external-uid
                                      {:user/accounts [:bookkeeping.account/id
@@ -205,7 +207,7 @@
 
     (catch Exception e
       (do
-        (ppi (bean e))
+        ;; (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
@@ -427,7 +429,7 @@
 
     (catch Exception e
       (do
-        (ppi (bean e))
+        ;; (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-resume-game [context {gameId :gameId} _]
@@ -510,7 +512,7 @@
 
     (catch Exception e
       (do
-        (ppi (bean e))
+        ;; (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-join-game [context {gameId :gameId} _]

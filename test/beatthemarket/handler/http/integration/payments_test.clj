@@ -55,7 +55,7 @@
 
     (testing "Start a Game"
 
-      (let [{:keys [stocks id] :as create-game} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+      (let [{:keys [stocks id] :as create-game} (-> (test-util/consume-until 987) :payload :data :createGame)]
 
         (test-util/send-data {:id   988
                               :type :start
@@ -71,9 +71,10 @@
                                        }"
                                :variables {:id id}}})
 
-        (test-util/<message!! 5000)
-        (-> (test-util/<message!! 1000) :payload :data :startGame)
-        (test-util/<message!! 1000)
+        ;; (test-util/<message!! 5000)
+        ;; (-> (test-util/<message!! 1000) :payload :data :startGame)
+        ;; (test-util/<message!! 1000)
+        (test-util/consume-until 988)
 
         create-game))))
 
@@ -144,7 +145,9 @@
          is)
 
     (is (= expected-verify-payment-response
-           (map #(select-keys % [:productId :provider]) payment-response)))))
+           (->> payment-response
+                (filter #(= product-id (:productId %)))
+                (map #(select-keys % [:productId :provider])))))))
 
 (deftest verify-payment-apple-test-no-game
 
@@ -177,14 +180,14 @@
 
     (testing "Basic verify payment"
 
-      (let [payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)]
+      (let [payment-response (-> (test-util/consume-until 987) :payload :data :verifyPayment)]
 
         (verify-payment-response payment-response product-id provider)
 
 
         (testing "Subsequent call to list payments, includes the most recent"
 
-          (test-util/send-data {:id   987
+          (test-util/send-data {:id   988
                                 :type :start
                                 :payload
                                 {:query "query UserPayments {
@@ -195,9 +198,9 @@
                                        }
                                      }"}})
 
-          (test-util/<message!! 3000)
+          ;; (test-util/<message!! 3000)
 
-          (let [user-payments-response (-> (test-util/<message!! 1000) :payload :data :userPayments)
+          (let [user-payments-response (-> (test-util/consume-until 988) :payload :data :userPayments)
                 expected-user-payment-keys #{:paymentId :productId :provider}
                 expected-user-payments-response [{:productId product-id
                                                   :provider provider}]]
@@ -209,7 +212,9 @@
                  is)
 
             (is (= expected-user-payments-response
-                   (map #(select-keys % [:productId :provider]) user-payments-response)))))
+                   (->> user-payments-response
+                        (filter #(= product-id (:productId %)))
+                        (map #(select-keys % [:productId :provider])))))))
 
 
         (testing "With no game, charge is not applied"
@@ -252,10 +257,7 @@
                                          :provider provider
                                          :token token}}})
 
-      (test-util/<message!! 10000)
-      (test-util/<message!! 10000)
-
-      (let [payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)]
+      (let [payment-response (-> (test-util/consume-until 987) :payload :data :verifyPayment)]
 
         (verify-payment-response payment-response product-id provider)
 
@@ -289,8 +291,15 @@
         provider "apple"
         token (-> "example-hash-apple.2.json" resource slurp)]
 
+
     (test-util/send-init {:client-id (str client-id)})
-    (test-util/login-assertion service id-token)
+
+
+    (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          {user-db-id :id} (test-util/login-assertion service id-token)]
+
+      (is (empty? (beatthemarket.integration.payments.core/payments-for-user conn user-db-id))))
+
 
     (test-util/send-data {:id   987
                           :type :start
@@ -306,11 +315,9 @@
                                        :provider provider
                                        :token token}}})
 
-    (test-util/<message!! 1000)
-
     (testing "Basic verify payment"
 
-      (verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
+      (verify-payment-response (-> (test-util/consume-until 987) :payload :data :verifyPayment)
                                product-id provider))
 
     (testing "Subsequent call to list payments, includes the most recent"
@@ -326,9 +333,10 @@
                                        }
                                      }"}})
 
-      (test-util/<message!! 1000)
+      (let [user-payments-response (-> (test-util/consume-until 987) :payload :data :userPayments)
+            original-user-payments-count (count user-payments-response)
 
-      (let [user-payments-response (-> (test-util/<message!! 1000) :payload :data :userPayments)
+
             expected-user-payment-keys #{:paymentId :productId :provider}
             expected-user-payments-response [{:productId product-id
                                               :provider provider}]]
@@ -340,7 +348,57 @@
              is)
 
         (is (= expected-user-payments-response
-               (map #(select-keys % [:productId :provider]) user-payments-response)))))))
+               (->> user-payments-response
+                    (filter #(= product-id (:productId %)))
+                    (map #(select-keys % [:productId :provider])))))
+
+
+        (testing "Subsequent VerifyPayments are idempotent"
+
+          (test-util/send-data {:id   988
+                                :type :start
+                                :payload
+                                {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                                 :variables {:productId product-id
+                                             :provider provider
+                                             :token token}}})
+
+          (test-util/send-data {:id   989
+                                :type :start
+                                :payload
+                                {:query "query UserPayments {
+                                       userPayments {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"}})
+
+          (let [updated-user-payments-response (-> (test-util/consume-until 989) :payload :data :userPayments)
+                expected-user-payment-keys #{:paymentId :productId :provider}
+                expected-user-payments-response [{:productId product-id
+                                                  :provider provider}]]
+
+            (is (= original-user-payments-count (count updated-user-payments-response)))
+            (->> updated-user-payments-response
+                 (map keys)
+                 (map #(into #{} %))
+                 (every? #(= expected-user-payment-keys %))
+                 is)
+
+            (is (= expected-user-payments-response
+                   (->> updated-user-payments-response
+                        (filter #(= product-id (:productId %)))
+                        (map #(select-keys % [:productId :provider])))))))))
+
+    ;; NOTE Stop DB connection from being closed
+    (Thread/sleep 2000)))
 
 (deftest verify-payment-apple-subscription-test
 
@@ -421,54 +479,6 @@
            :provider "google"}]}}}
 
     ))
-
-#_(deftest X-test
-
-    #_(testing "Basic verify payment"
-
-      (let [verify-payment-response (-> (test-util/<message!! 1000) :payload :data :verifyPayment)
-
-            expected-verify-keys #{:paymentId :productId :provider}
-            expected-verify-payment-response [{:productId product-id
-                                               :provider provider}]]
-
-        (->> verify-payment-response
-             (map keys)
-             (map #(into #{} %))
-             (every? #(= expected-verify-keys %))
-             is)
-
-        (is (= expected-verify-payment-response
-               (map #(select-keys % [:productId :provider]) verify-payment-response)))))
-
-    #_(testing "Subsequent call to list payments, includes the most recent"
-
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "query UserPayments {
-                                       userPayments {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"}})
-
-      (test-util/<message!! 1000)
-
-      (let [user-payments-response (-> (test-util/<message!! 1000) :payload :data :userPayments)
-            expected-user-payment-keys #{:paymentId :productId :provider}
-            expected-user-payments-response [{:productId product-id
-                                              :provider provider}]]
-
-        (->> user-payments-response
-             (map keys)
-             (map #(into #{} %))
-             (every? #(= expected-user-payment-keys %))
-             is)
-
-        (is (= expected-user-payments-response
-               (map #(select-keys % [:productId :provider]) user-payments-response))))))
 
 (defn delete-test-customer! [id]
 
@@ -792,7 +802,7 @@
         id-token (test-util/->id-token)
         client-id (UUID/randomUUID)
 
-        payload (-> "example-payload-stripe-charge2.json" resource slurp (json/read-str :key-fn keyword) ppi)]
+        payload (-> "example-payload-stripe-charge2.json" resource slurp (json/read-str :key-fn keyword))]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
@@ -819,7 +829,7 @@
 
       (let [{product-id :productId
              provider :provider} payload
-            payment-response (-> (test-util/<message!! 3000) ppi :payload :data :verifyPayment)]
+            payment-response (-> (test-util/<message!! 3000) :payload :data :verifyPayment)]
 
         (verify-payment-response payment-response product-id provider)))))
 
@@ -875,6 +885,7 @@
                  (= expected-unapplied-purchases)
                  is)))
 
+        (Thread/sleep 1000)
 
         (testing "Purchses are applied after game start"
 
@@ -1009,8 +1020,7 @@
 
         (let [payment-response (->> (test-util/consume-subscriptions 1000)
                                     (filter #(= 992 (:id %)))
-                                    last
-                                    trace)
+                                    last)
 
               expected-timer-response
               {:type "data"
@@ -1116,9 +1126,8 @@
 
         ;; D
         (let [payment-response (->> (test-util/consume-subscriptions 1000)
-                                    trace (filter #(= 992 (:id %)))
-                                    last
-                                    trace)
+                                    (filter #(= 992 (:id %)))
+                                    last)
 
               expected-timer-response
               {:type "data"
@@ -1161,7 +1170,7 @@
           stockTickClose :stockTickClose
           stockId :stockId
           stockName :stockName}]
-        (-> latest-tick :payload :data :stockTicks ppi)
+        (-> latest-tick :payload :data :stockTicks)
 
         amount-to-buy (->> (/ target-buy-value stockTickClose)
                            (format "%.0f")
@@ -1221,13 +1230,9 @@
 
         (testing "Purchses are applied after game start"
 
-          (let [game-id (:id (ppi (start-game-workflow)))
+          (let [game-id (:id (start-game-workflow))
                 game-id-uuid (UUID/fromString game-id)]
 
-            ;; (ppi (test-util/<message!! 1000))
-            ;; (ppi (test-util/<message!! 1000))
-            ;; (ppi (test-util/<message!! 1000))
-            ;; (ppi (test-util/<message!! 1000))
             #_(testing "Make purchase, greater than Cash, less than Margin threshold"
 
               (let [target-buy-value 250000.0
@@ -1235,7 +1240,7 @@
 
                 (buy-sell-workflow game-id target-buy-value)
 
-                (->> (test-util/<message!! 1000)
+                (->> (test-util/consume-until 990)
                      (= expected-buy-ack)
                      is)
                 (test-util/<message!! 1000)))

@@ -4,7 +4,8 @@
             [com.rpl.specter :refer [transform ALL]]
 
             [beatthemarket.test-util :as test-util]
-            [beatthemarket.util :refer [ppi] :as util]))
+            [beatthemarket.util :refer [ppi] :as util])
+  (:import [java.util UUID]))
 
 
 (use-fixtures :once (partial test-util/component-prep-fixture :test))
@@ -73,8 +74,6 @@
           id-token (test-util/->id-token)
           email "sun.ra@foo.com"]
 
-
-      (test-util/login-assertion service id-token)
 
       (test-util/send-data {:id   987
                             :type :start
@@ -161,8 +160,11 @@
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
         email "twashing@gmail.com"
-        gameLevel 1]
+        gameLevel 1
+        client-id (UUID/randomUUID)]
 
+
+    (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
     (test-util/send-data {:id   987
@@ -176,7 +178,8 @@
                                    }"
                            :variables {:gameLevel gameLevel}}})
 
-    (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+
+    (let [{gameId :id} (-> (test-util/consume-until 987) :payload :data :createGame)]
 
       (test-util/send-data {:id   988
                             :type :start
@@ -193,7 +196,7 @@
                              :variables {:gameId gameId
                                          :email  email}}})
 
-      (test-util/<message!! 1000)
+      (ppi (test-util/<message!! 1000))
 
       (let [expected-user-account-balances #{{:name "Cash"
                                               :balance 100000.0
@@ -204,7 +207,7 @@
                                               :counterParty nil
                                               :amount 0}}
 
-            result-accounts (->> (test-util/<message!! 1000) :payload :data :accountBalances
+            result-accounts (->> (test-util/<message!! 1000) ppi :payload :data :accountBalances
                                  (map #(dissoc % :id))
                                  (into #{}))]
 

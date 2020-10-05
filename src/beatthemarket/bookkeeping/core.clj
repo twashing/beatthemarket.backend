@@ -10,7 +10,7 @@
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.iam.persistence :as iam.persistence]
-            [beatthemarket.util :as util :refer [exists?]]
+            [beatthemarket.util :as util :refer [ppi exists?]]
             [clojure.core.async :as core.async])
   (:import [java.util UUID]))
 

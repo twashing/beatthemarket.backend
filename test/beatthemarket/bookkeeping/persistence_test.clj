@@ -26,8 +26,11 @@
 
       (let [user-db-id                  (:db/id (test-util/generate-user! conn))
             sink-fn                     identity
+            data-sequence-fn (constantly [])
+            opts {:user {:db/id user-db-id}}
+
             {{game-db-id :db/id
-              game-id :game/id} :game} (game.games/create-game! conn user-db-id sink-fn)
+              game-id :game/id} :game} (game.games/create-game! conn sink-fn data-sequence-fn opts)
 
             expected-cash-account {:bookkeeping.account/name "Cash"
                                    :bookkeeping.account/type :bookkeeping.account.type/asset
@@ -55,8 +58,11 @@
 
       (let [user-db-id                  (:db/id (test-util/generate-user! conn))
             sink-fn                     identity
+            data-sequence-fn (constantly [])
+            opts {:user {:db/id user-db-id}}
+
             {{game-db-id :db/id
-              game-id :game/id} :game} (game.games/create-game! conn user-db-id sink-fn)
+              game-id :game/id} :game} (game.games/create-game! conn sink-fn data-sequence-fn opts)
 
             expected-equity-account {:bookkeeping.account/name "Equity"
                                      :bookkeeping.account/type :bookkeeping.account.type/equity
@@ -81,8 +87,11 @@
   (let [conn                                        (-> repl.state/system :persistence/datomic :opts :conn)
         {user-db-id :db/id :as user}                (test-util/generate-user! conn)
         sink-fn                                     identity
+        data-sequence-fn (constantly [])
+        opts {:user {:db/id user-db-id}}
+
         {{game-id     :game/id
-          game-stocks :game/stocks} :game :as game} (game.games/create-game! conn user-db-id sink-fn)
+          game-stocks :game/stocks} :game :as game} (game.games/create-game! conn sink-fn data-sequence-fn opts)
 
         {stock-name  :game.stock/name :as stock} (first game-stocks)]
 

@@ -17,7 +17,7 @@
 
 
 (defmethod ig/init-key :payment.provider/apple [_ {_verify-receipt-endpoint :verify-receipt-endpoint
-                                           _primary-shared-secret :primary-shared-secret}])
+                                                   _primary-shared-secret :primary-shared-secret}])
 
 ;; Validating locally
 ;;
@@ -51,8 +51,24 @@
 
 (defn verify-payment-workflow [conn client-id email verify-receipt-endpoint primary-shared-secret apple-hash]
 
-  (let [game-and-payments
+  (let [user-db-id (:db/id (ffirst (iam.persistence/user-by-email conn email '[:db/id])))
+
+        existing-transaction-ids
+        (->> (integration.payments.core/payments-for-user conn user-db-id
+                                                          '[:db/id
+                                                            :payment/id
+                                                            :payment/product-id
+                                                            {:payment/provider
+                                                             [{:payment.apple/receipts [*]}]}])
+             (map (comp :payment.apple.receipt/transactionId first :payment.apple/receipts :payment/provider))
+             (into #{}))
+
+        match-existing-transaction-ids (fn [[k {tid :transaction_id}]]
+                                         (some existing-transaction-ids #{tid}))
+
+        game-and-payments
         (->> (verify-payment verify-receipt-endpoint primary-shared-secret apple-hash)
+             (remove match-existing-transaction-ids)
              (apple.persistence/latest-receipts->entity apple-hash)
              (map #(integration.payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id %)))
 

@@ -186,11 +186,25 @@
              (d/db conn) user-db-id subscription-set)
         util/exists?)))
 
+(defn payments-for-user
+
+  ([conn user-db-id]
+   (payments-for-user conn user-db-id '[*]))
+
+  ([conn user-db-id expr]
+
+   (map first
+        (d/q '[:find (pull ?p pexpr)
+               :in $ ?u pexpr
+               :where
+               [?u :user/payments ?p]]
+             (d/db conn) user-db-id expr))))
+
 (defn applied-payments-for-user [conn user-db-id]
 
   (map first
        (d/q '[:find (pull ?p [*])
-              :in $ ?u ;; [?product-ids ...]
+              :in $ ?u
               :where
               [?u :user/payments ?p]
               [?p :payment.applied/applied]]
@@ -200,7 +214,7 @@
 
   (map first
        (d/q '[:find (pull ?p [*])
-              :in $ ?u ;; [?product-ids ...]
+              :in $ ?u
               :where
               [?u :user/payments ?p]
               [(missing? $ ?p :payment.applied/applied)]]
@@ -281,7 +295,4 @@
       (filter (fn [[k v]]
                 (some v #{"prod_I1RDqXXxLnMXdb"})))
       ppi
-      ffirst)
-
-
-  )
+      ffirst))
