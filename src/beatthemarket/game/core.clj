@@ -88,14 +88,9 @@
 
   ([conn]
 
-   (let [stocks (->> (name-generator/generate-names 4)
-                     (map (juxt :stock-name :stock-symbol))
-                     (map #(apply ->stock %))
-                     (map persistence.core/bind-temporary-id))]
-
-     (initialize-game! conn {:stocks      stocks
-                             :game-level  :game-level/one
-                             :game-status :game-status/created})))
+   (initialize-game! conn {:stocks      (generate-stocks! 4)
+                           :game-level  :game-level/one
+                           :game-status :game-status/created}))
 
   ([conn {user       :user
           accounts   :accounts

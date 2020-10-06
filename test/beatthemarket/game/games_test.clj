@@ -622,7 +622,7 @@
               expected-realized-keys #{:user-id :tick-id :game-id :stock-id :profit-loss-type :profit-loss}
               expected-realized-profit-loss {:profit-loss-type :realized-profit-loss
                                              :profit-loss (.floatValue 166.67)}
-              realized-profit-losses-allgames (ppi (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?))
+              realized-profit-losses-allgames (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?)
 
               realized-profit-losses-allgames-forgame (get realized-profit-losses-allgames game-id)]
 
@@ -713,7 +713,7 @@
 
 
     ;; (ppi (game.calculation/collect-realized-profit-loss-all-users-allgames conn false))
-    (ppi (game.calculation/collect-realized-profit-loss-all-users-allgames conn true))
+    (game.calculation/collect-realized-profit-loss-all-users-allgames conn true)
 
     ;; TODO complete
     #_[#:user{:email "twashing@gmail.com",
@@ -948,7 +948,7 @@
     (testing "Tick sleep is 950 me after leveling up"
 
       (let [tick-sleep-atom (:tick-sleep-atom (games.state/inmemory-game-by-id game-id))
-            expected-tick-sleep 950]
+            expected-tick-sleep 900]
         (is (= expected-tick-sleep @tick-sleep-atom))))))
 
 (deftest lose-level-test

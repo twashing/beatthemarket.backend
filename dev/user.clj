@@ -52,9 +52,13 @@
 
   ;; CREATE Database
 
+
+  ;; A
   (state.core/set-prep :dev-local)
   (state.core/init-components)
 
+
+  ;; B
   (persistence.datomic/create-database
     (-> integrant.repl.state/system :persistence/datomic :opts :client)
     (-> integrant.repl.state/system :persistence/datomic :opts :db-name))
@@ -62,6 +66,18 @@
   (persistence.datomic/delete-database
     (-> integrant.repl.state/system :persistence/datomic :opts :client)
     (-> integrant.repl.state/system :persistence/datomic :opts :db-name))
+
+
+  ;; C
+  (let [db-name (-> integrant.repl.state/system :persistence/datomic :opts :db-name)
+        conn (-> integrant.repl.state/system
+                 :persistence/datomic
+                 :opts
+                 :client
+                 (d/connect {:db-name db-name}))]
+
+    (migration.core/run-migrations conn))
+
 
 
   ;; UP Components

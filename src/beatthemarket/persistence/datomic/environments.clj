@@ -1,5 +1,6 @@
 (ns beatthemarket.persistence.datomic.environments
-  (:require [datomic.client.api :as d]))
+  (:require [datomic.client.api :as d]
+            [beatthemarket.util :refer [ppi]]))
 
 
 (defmulti ->datomic-client :env)

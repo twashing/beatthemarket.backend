@@ -94,7 +94,7 @@
         expected-body-message "useradded"
         expected-headers {"Content-Type" "application/json"}
 
-        expected-user-keys #{:userEmail :userName :userExternalUid :userAccounts}
+        expected-user-keys #{:id :userEmail :userName :userExternalUid :userAccounts}
         expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount}
 
         {status :status
@@ -125,7 +125,9 @@
     (t/are [x y] (= x y)
       expected-status status
       expected-headers headers
-      expected-body-message message)))
+      expected-body-message message)
+
+    user-parsed))
 
 
 ;; Firebase Token Helpers
@@ -380,6 +382,24 @@
       (<message!! 1000))
 
     createGameAck))
+
+(defn consume-until
+
+  ([message-id]
+   (consume-until message-id 4))
+
+  ([message-id threshold]
+
+   (loop [{id :id :as message} (<message!! 1000)
+          count 1]
+
+     (let [{type :type} message]
+
+       (if (or (> count threshold)
+               (and (= message-id id)
+                    (= "data" type)))
+         message
+         (recur (<message!! 1000) (inc count)))))))
 
 (defn consume-messages [channel container]
 

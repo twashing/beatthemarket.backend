@@ -582,7 +582,7 @@
         crossing-counter-balance-threshold? (crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
 
 
-    (ppi [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
+    ;; (ppi [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
 
     (match [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?]
 

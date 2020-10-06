@@ -36,9 +36,8 @@
                                      }"
                  :variables {:gameLevel gameLevel}}}))
 
-  (test-util/<message!! 1000)
 
-  (let [{:keys [stocks id] :as createGameAck} (-> (test-util/<message!! 1000) :payload :data :createGame)]
+  (let [{:keys [stocks id] :as createGameAck} (-> (test-util/consume-until 987) :payload :data :createGame)]
 
     (test-util/send-data {:id   988
                 :type :start
@@ -54,8 +53,6 @@
                                        }"
                  :variables {:id id}}})
 
-    (test-util/<message!! 1000)
-
     (test-util/send-data {:id   989
                 :type :start
                 :payload
@@ -69,8 +66,6 @@
                                          }
                                        }"
                  :variables {:gameId id}}})
-
-    (test-util/<message!! 1000)
 
     (test-util/send-data {:id   990
                 :type :start
@@ -94,12 +89,6 @@
                          }"
                  :variables {:gameId id}}})
 
-
-    (ppi (test-util/<message!! 1000))
-    (ppi (test-util/<message!! 1000))
-    (ppi (test-util/<message!! 1000))
-    (ppi (test-util/<message!! 1000))
-    (ppi (test-util/<message!! 1000))
 
     (let [latest-tick (->> (test-util/consume-subscriptions)
                            (filter #(= 989 (:id %)))
@@ -130,6 +119,7 @@
       (test-util/<message!! 1000)
       (test-util/<message!! 1000)
 
+
       (let [expected-profit-loss-keys #{:profitLoss :stockId :gameId :profitLossType}
             expected-account-update-keys #{:id :name :balance :counterParty :amount}
             collect-events (comp :portfolioUpdates :data :payload)
@@ -151,15 +141,4 @@
              (map keys)
              (map #(into #{} %))
              (map #(= expected-account-update-keys %))
-             is))
-
-      (test-util/send-data {:id   992
-                            :type :start
-                            :payload
-                            {:query "mutation exitGame($gameId: String!) {
-                                       exitGame(gameId: $gameId) {
-                                         event
-                                         gameId
-                                       }
-                                     }"
-                             :variables {:gameId id}}}))))
+             is)))))

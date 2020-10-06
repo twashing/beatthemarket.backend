@@ -49,11 +49,6 @@
                                                stock-account-amount
                                                pershare-purchase-ratio] :as calculation}]
 
-  (ppi
-    [latest-price
-     {:keys [price
-             stock-account-amount
-             pershare-purchase-ratio] :as calculation}])
 
   ;; NOTE Poor man's filter to just recalculate running P/L
   (if (and price stock-account-amount pershare-purchase-ratio)
