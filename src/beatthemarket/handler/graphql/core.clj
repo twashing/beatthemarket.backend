@@ -3,6 +3,8 @@
              :refer [>!!]]
             [datomic.client.api :as d]
             [clojure.data.json :as json]
+            [clj-time.core :as t]
+            [clj-time.coerce :as c]
             [integrant.repl.state :as repl.state]
             [io.pedestal.log :as log]
             [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
@@ -59,6 +61,43 @@
          [?u :user/email ?email] ;; For a User
          ]
        (d/db conn) email))
+
+#_(defn running-games-for-user-device [conn email client-id]
+
+    (d/q '[:find (pull ?g [:db/id
+                           :game/id
+                           {:game/status [*]}])
+           :in $ ?email ?client-id
+           :where
+           [?g :game/start-time]
+           [(missing? $ ?g :game/end-time)] ;; game still active?
+           (or [?g :game/status :game-status/running]
+               [?g :game/status :game-status/paused]) ;; game not exited?
+           [?g :game/users ?us]
+           [?us :game.user/user-client ?client-id]  ;; For a Device
+           [?us :game.user/user ?u]
+           [?u :user/email ?email] ;; For a User
+           ]
+         (d/db conn)
+         email client-id))
+
+(defn running-games-for-user-device [conn email]
+
+  (d/q '[:find (pull ?g [:db/id
+                         :game/id
+                         {:game/status [*]}])
+         :in $ ?email
+         :where
+         [?g :game/start-time]
+         [(missing? $ ?g :game/end-time)] ;; game still active?
+         (or [?g :game/status :game-status/running]
+             [?g :game/status :game-status/paused]) ;; game not exited?
+         [?g :game/users ?us]
+         [?us :game.user/user ?u]
+         [?u :user/email ?email] ;; For a User
+         ]
+       (d/db conn)
+       email))
 
 (defn check-user-device-doesnt-have-running-game? [conn email client-id]
 
@@ -135,7 +174,6 @@
 #_(defn check-user-device-has-lost-game? [conn email client-id]
   (check-user-device-by-game-status conn email client-id :game-status/lost))
 
-
 (defn check-user-device-not-already-joined? [conn email client-id game-id]
 
   (when (ffirst
@@ -172,20 +210,22 @@
   (try
 
     (let [{{{email :email :as checked-authentication} :checked-authentication}
-           :request}                                   context
+           :request} context
+
+          ;; client-id                                    (check-client-id-exists context)
           conn                                         (-> repl.state/system :persistence/datomic :opts :conn)
           {:keys [db-before db-after tx-data tempids]} (iam.user/conditionally-add-new-user! conn checked-authentication)
 
-          rename-user-key-map {:db/id :id
-                               :user/email :userEmail
-                               :user/name :userName
+          rename-user-key-map {:db/id             :id
+                               :user/email        :userEmail
+                               :user/name         :userName
                                :user/external-uid :userExternalUid
-                               :user/accounts :userAccounts}
+                               :user/accounts     :userAccounts}
 
-          rename-user-accounts-key-map {:bookkeeping.account/id :accountId
-                                        :bookkeeping.account/name :accountName
+          rename-user-accounts-key-map {:bookkeeping.account/id      :accountId
+                                        :bookkeeping.account/name    :accountName
                                         :bookkeeping.account/balance :accountBalance
-                                        :bookkeeping.account/amount :accountAmount}
+                                        :bookkeeping.account/amount  :accountAmount}
 
           base-response {:user (->> [:db/id
                                      :user/email
@@ -202,13 +242,24 @@
                                     (transform [:userAccounts ALL] #(clojure.set/rename-keys % rename-user-accounts-key-map))
                                     (#(json/write-str % :value-fn coerce-uuid->str)))}]
 
+
+      (run! (fn [[{game-db-id              :db/id
+                  {game-status :db/ident} :game/status} :as game-entity]]
+
+              (persistence.datomic/transact-entities! conn
+                                                      [[:db/retract  game-db-id :game/status game-status]
+                                                       [:db/add      game-db-id :game/status :game-status/exited]
+                                                       [:db/add      game-db-id :game/end-time (c/to-date (t/now))]]))
+            #_(running-games-for-user-device conn email client-id)
+            (running-games-for-user-device conn email))
+
       (if (util/truthy? (and db-before db-after tx-data tempids))
         (assoc base-response :message :useradded)
         (assoc base-response :message :userexists)))
 
     (catch Exception e
       (do
-        ;; (ppi (bean e))
+        (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
@@ -513,6 +564,10 @@
                                         (log/debug :graphql.core.processing (format ">> :graphql.core.processing > calculate-profit-loss on TICK / " (pr-str stock-ticks)))
                                         (hash-map :stock-ticks stock-ticks
                                                   :profit-loss {}))})]
+
+        (ppi [:unapplied-payments-for-user (payments.core/unapplied-payments-for-user conn user-db-id)])
+        (ppi [:applied-payments-for-user (payments.core/applied-payments-for-user conn user-db-id)])
+
 
         ;; NOTE game status is updated in: resume-game -> run-game
         (games.control/resume-game! conn user-db-id game-control)

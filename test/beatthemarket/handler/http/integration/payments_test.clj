@@ -81,10 +81,7 @@
 
 (defn verify-payment-workflow [client-id product-id provider token]
 
-  (test-util/<message!! 1000)
   (test-util/send-init {:client-id (str client-id)})
-
-  (test-util/<message!! 1000)
   (test-util/send-data {:id   987
                         :type :start
                         :payload
@@ -99,10 +96,8 @@
                                      :provider provider
                                      :token token}}})
 
-  (let [verify-payment (-> (test-util/<message!! 3000) :payload :data :verifyPayment)]
-
-    (test-util/<message!! 1000)
-    verify-payment))
+  (Thread/sleep 2000)
+  (-> (test-util/consume-until 987) :payload :data :verifyPayment))
 
 (deftest user-payments-test
 
@@ -886,7 +881,7 @@
                  (= expected-unapplied-purchases)
                  is)))
 
-        (Thread/sleep 1000)
+        (Thread/sleep 2000)
 
         (testing "Purchses are applied after game start"
 
@@ -1110,6 +1105,8 @@
                                          }"
                                  :variables {:gameId game-id}}})
 
+          (Thread/sleep 1000)
+
           (->> (test-util/consume-subscriptions 1000)
                (filter #(= 990 (:id %)))
                (filter #(= "data" (:type %)))
@@ -1123,6 +1120,8 @@
 
       (testing "i. Game timer has been extended by 5 minutes
                 ii. Running P/L is empty"
+
+        (Thread/sleep 1000)
 
         (is (empty? (game.calculation/running-profit-loss-for-game game-id-uuid)))
 
@@ -1138,8 +1137,8 @@
                          {:gameEvents
                           {:gameId game-id
                            :level 1
-                           :minutesRemaining 10
-                           :secondsRemaining 00}}}}]
+                           :minutesRemaining 9
+                           :secondsRemaining 57}}}}]
 
           (is (= expected-timer-response payment-response))))
 

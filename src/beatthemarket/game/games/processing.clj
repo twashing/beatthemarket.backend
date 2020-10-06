@@ -201,8 +201,8 @@
                                                         :profit-loss running-pl))]
 
     #_(ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
-          [:realized realized-pl (> realized-pl profit-threshold)]
-          [:current-level (deref current-level)]])
+            [:realized realized-pl (> realized-pl profit-threshold)]
+            [:current-level (deref current-level)]])
 
 
     (when (:event game-event-message)

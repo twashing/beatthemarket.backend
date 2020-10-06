@@ -326,6 +326,14 @@
     (conditionally-level-up! conn game-id source-and-destination)
     #_(conditionally-reset-level-time! conn game-id source-and-destination)))
 
+(defn flush-channel! [ch timeout threshold]
+
+  (core.async/go-loop [c 0]
+
+    (when (<= c threshold)
+      (let [[v _] (core.async/alts! [ch (core.async/timeout timeout)])]
+        (when (not (nil? v))
+          (recur (inc c)))))))
 
 
 (defmulti handle-control-event (fn [_ _ {m :event} _ _] m))
@@ -349,8 +357,10 @@
     (exit-game! conn game-id)
 
     (log/info :game.games (format "%sExiting / Time Remaining / %s" (if message message "") (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream (assoc control :type :ControlEvent)))
-  [])
+    (core.async/>!! game-event-stream (assoc control :type :ControlEvent))
+
+    (flush-channel! game-event-stream 1000 5)
+    []))
 
 (defmethod handle-control-event :win [conn game-event-stream {:keys [game-id level] :as control} now end]
 
@@ -375,6 +385,8 @@
 
     (log/info :game.games (format "Lose %s" (format-remaining-time remaining)))
     (core.async/go (core.async/>! game-event-stream (assoc control :type :LevelStatus)))
+
+    (flush-channel! game-event-stream 1000 5)
     []))
 
 (defmethod handle-control-event :timeout [conn game-event-stream {game-id :game-id :as control} now end]
@@ -670,7 +682,8 @@
 
            ;; game-control initial
            {:keys [tick-sleep-atom level-timer] :as game-control-live}
-           (as-> (game.games.core/default-game-control conn game-id game-control-replay) v
+           (as-> (dissoc game-control-replay :calculate-profit-loss) v
+             (game.games.core/default-game-control conn game-id v)
              (merge-with #(if %2 %2 %1)
                          game-control-replay
                          v
