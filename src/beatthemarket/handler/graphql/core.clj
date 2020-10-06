@@ -4,6 +4,7 @@
             [datomic.client.api :as d]
             [clojure.data.json :as json]
             [integrant.repl.state :as repl.state]
+            [io.pedestal.log :as log]
             [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
             [com.walmartlabs.lacinia.resolve :refer [resolve-as]]
 
@@ -501,7 +502,17 @@
                                       :short-circuit-game? (atom false)
                                       :tick-sleep-atom (atom (-> integrant.repl.state/config :game/game :tick-sleep-ms))
                                       :level-timer     (atom level-timer)
-                                      :current-level   current-level})]
+                                      :current-level   current-level
+
+                                      ;; NOTE
+                                      ;; We want tick and realized P/L histories
+                                      ;; But we don't want to recalculate (in-memory) P/L for a game restart
+                                      :calculate-profit-loss
+                                      (fn [_ _ game-id stock-ticks]
+
+                                        (log/debug :graphql.core.processing (format ">> :graphql.core.processing > calculate-profit-loss on TICK / " (pr-str stock-ticks)))
+                                        (hash-map :stock-ticks stock-ticks
+                                                  :profit-loss {}))})]
 
         ;; NOTE game status is updated in: resume-game -> run-game
         (games.control/resume-game! conn user-db-id game-control)

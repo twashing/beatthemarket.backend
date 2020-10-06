@@ -537,22 +537,9 @@
          game-start-position    :game/start-position
          game-stocks            :game/stocks} game
 
-        ;; {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
-        ;;                                               (get game-level))
-        ;; current-level (atom {:level            game-level
-        ;;                      :profit-threshold profit-threshold
-        ;;                      :lose-threshold   lose-threshold})
-
         data-generators       (-> integrant.repl.state/config :game/game :data-generators)
         stocks-with-tick-data (stocks->stocks-with-tick-data game-stocks data-sequence-fn data-generators)
         input-sequence-local  (stocks->stock-sequences stocks-with-tick-data)]
-
-
-    ;; X. Update :game/status
-    #_(let [data [[:db/retract  game-db-id :game/status (:db/ident game-status)]
-                  [:db/add      game-db-id :game/status :game-status/running]]]
-
-        (persistence.datomic/transact-entities! conn data))
 
 
     ;; X. Update :game/level
@@ -663,20 +650,19 @@
                                                :game/stocks first
                                                :game.stock/price-history count)
          ticks-and-trade-all               (->> game-with-decorated-price-history ffirst :game/stocks
-                                                (map (partial extract-tick-and-trade conn)))
-         replay-per-stock
-         (fn [ticks-and-trade]
-           (map #(list %1 %2)
-                (games.pipeline/stock-tick-pipeline game-control-replay)
-                (games.pipeline/replay-stock-pipeline user-db-id game-control-replay (map second ticks-and-trade))))]
+                                                (map (partial extract-tick-and-trade conn)))]
 
 
+     ;; A. Apply payments
      (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
 
 
-     ;; Replay ticks & trades
-     (doall
-       (map replay-per-stock ticks-and-trade-all))
+     ;; B. Replay ticks & trades
+     (run! (fn [ticks-and-trade]
+             (map #(list %1 %2)
+                  (games.pipeline/stock-tick-pipeline game-control-replay)
+                  (games.pipeline/replay-stock-pipeline user-db-id game-control-replay (map second ticks-and-trade))))
+           ticks-and-trade-all)
 
 
      ;; Re-start game

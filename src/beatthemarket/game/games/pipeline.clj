@@ -42,13 +42,14 @@
 (defn stock-tick-and-stream-pipeline [{{game-id :game/id} :game
                                        process-transact! :process-transact!
                                        group-stock-tick-pairs :group-stock-tick-pairs
-                                       stream-stock-tick :stream-stock-tick}
+                                       stream-stock-tick :stream-stock-tick
+                                       calculate-profit-loss :calculate-profit-loss}
                                       input]
 
   (->> (map process-transact! input)
        (map group-stock-tick-pairs)
        (map stream-stock-tick)
-       (map (partial games.processing/calculate-profit-loss :tick nil game-id))))
+       (map calculate-profit-loss)))
 
 ;; A
 (defn stock-tick-pipeline [{input-sequence :input-sequence :as game-control}]

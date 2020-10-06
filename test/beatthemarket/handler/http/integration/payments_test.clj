@@ -7,6 +7,7 @@
             [datomic.client.api :as d]
 
             [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
@@ -1120,9 +1121,10 @@
       (subscribe-to-game-events 992 game-id)
 
 
-      (testing "Game timer has been extended by 5 minutes"
+      (testing "i. Game timer has been extended by 5 minutes
+                ii. Running P/L is empty"
 
-        ;; (Thread/sleep 2000)
+        (is (empty? (game.calculation/running-profit-loss-for-game game-id-uuid)))
 
         ;; D
         (let [payment-response (->> (test-util/consume-subscriptions 1000)
