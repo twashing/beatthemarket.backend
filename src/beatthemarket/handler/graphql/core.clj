@@ -563,7 +563,7 @@
 
                                         (log/debug :graphql.core.processing (format ">> :graphql.core.processing > calculate-profit-loss on TICK / " (pr-str stock-ticks)))
                                         (hash-map :stock-ticks stock-ticks
-                                                  :profit-loss {}))})]
+                                                  :profit-loss []))})]
 
         (ppi [:unapplied-payments-for-user (payments.core/unapplied-payments-for-user conn user-db-id)])
         (ppi [:applied-payments-for-user (payments.core/applied-payments-for-user conn user-db-id)])
@@ -578,7 +578,7 @@
 
     (catch Exception e
       (do
-        ;; (ppi (bean e))
+        (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-join-game [context {gameId :gameId} _]

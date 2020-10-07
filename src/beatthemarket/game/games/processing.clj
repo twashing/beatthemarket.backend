@@ -77,12 +77,11 @@
 
 (defn stream-stock-tick [stock-tick-stream stock-ticks]
 
-  (log/debug :game.games.processing (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
+  (log/info :game.games.processing (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
   (log/debug :game.games.processing (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
   ;; (ppi stock-tick-stream)
   ;; (ppi stock-ticks)
   (core.async/go (core.async/>! stock-tick-stream stock-ticks))
-  ;; (core.async/go (core.async/>! stock-tick-stream wtf))
 
   stock-ticks)
 
@@ -200,7 +199,7 @@
                              lose-threshold-met? (assoc :event :lose
                                                         :profit-loss running-pl))]
 
-    #_(ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
+    (ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
             [:realized realized-pl (> realized-pl profit-threshold)]
             [:current-level (deref current-level)]])
 
