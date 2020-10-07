@@ -542,7 +542,6 @@
                      stock-tick-stream
                      portfolio-update-stream
                      game-event-stream
-                     calculate-profit-loss
                      sink-fn] :as game-control} data-sequence-fn]
 
   (let [{game-db-id             :db/id
@@ -586,7 +585,6 @@
                  :process-transact-level-update! identity
                  :stream-stock-tick        (fn [stock-tick-pairs]
                                              (games.processing/group-stock-tick-pairs stock-tick-pairs))
-                 :calculate-profit-loss    calculate-profit-loss
                  :stream-portfolio-update! identity
                  :stream-level-update!     identity
 
@@ -642,6 +640,7 @@
   ([conn game-id user-db-id {:keys [control-channel
                                     stock-tick-stream
                                     portfolio-update-stream
+                                    calculate-profit-loss
                                     sink-fn] :as game-control} data-sequence-fn]
 
    ;; TODO
@@ -658,7 +657,8 @@
          ;; Game Control
          user-entity {:db/id user-db-id}
          game-control-replay (-> (update-level!-then->game-control-replay conn game-entity game-control data-sequence-fn)
-                                 (assoc :user user-entity))
+                                 (assoc :user user-entity
+                                        :calculate-profit-loss (partial calculate-profit-loss nil nil game-id)))
 
 
          ;; Re-play game
@@ -674,16 +674,15 @@
      (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
 
 
-     (ppi [:A :stock-accounts-with-inventory-by-game-user
+     #_(ppi [:A :stock-accounts-with-inventory-by-game-user
            (bookkeeping.persistence/stock-accounts-with-inventory-by-game-user conn user-db-id game-id)])
-
-     (ppi [:A.i :inmemory-profit-loss :BEFORE (:profit-loss (game.games.state/inmemory-game-by-id game-id))])
+     #_(ppi [:A.i :inmemory-profit-loss :BEFORE (:profit-loss (game.games.state/inmemory-game-by-id game-id))])
 
      ;; B. Replay ticks & trades
      (run! (fn [ticks-and-trade]
              (map #(list %1 %2)
                   (games.pipeline/stock-tick-pipeline game-control-replay)
-                  (games.pipeline/replay-stock-pipeline user-db-id game-control-replay (map second ticks-and-trade))))
+                  (games.pipeline/replay-stock-trades-pipeline user-db-id game-control-replay (map second ticks-and-trade))))
            ticks-and-trade-all)
 
 
@@ -692,7 +691,7 @@
        (game.persistence/update-profit-loss-state! game-id {}))
 
 
-     (ppi [:A.ii :inmemory-profit-loss :AFTER (:profit-loss  (game.games.state/inmemory-game-by-id game-id))])
+     #_(ppi [:A.ii :inmemory-profit-loss :AFTER (:profit-loss  (game.games.state/inmemory-game-by-id game-id))])
 
 
      ;; Re-start game
@@ -713,7 +712,7 @@
                                                    (seek-to-position tick-index)
                                                    second))))
 
-           _ (ppi [:B :get-inmemory-profit-loss (get-inmemory-profit-loss game-id)])
+           ;; _ (ppi [:B :get-inmemory-profit-loss (get-inmemory-profit-loss game-id)])
 
            inputs-at-position (games.pipeline/stock-tick-pipeline game-control-live)
            game-control-live (->> (run-iteration inputs-at-position)

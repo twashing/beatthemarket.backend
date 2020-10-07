@@ -572,9 +572,9 @@
                                       :calculate-profit-loss
                                       (fn [_ _ game-id stock-ticks]
 
-                                        (log/debug :graphql.core.processing (format ">> :graphql.core.processing > calculate-profit-loss on TICK / " (pr-str stock-ticks)))
+                                        (ppi [:A :restart-calculate-profit-loss])
 
-                                        (let [updated-profit-loss-calculations []]
+                                        (let [updated-profit-loss-calculations {}]
                                           (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
                                           (hash-map :stock-ticks stock-ticks
                                                     :profit-loss updated-profit-loss-calculations)))})]
