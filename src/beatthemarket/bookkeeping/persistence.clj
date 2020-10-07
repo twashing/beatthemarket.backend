@@ -45,3 +45,17 @@
          [?gua :bookkeeping.account/counter-party]]
        (d/db conn)
        game-id user-db-id))
+
+(defn stock-accounts-with-inventory-by-game-user [conn user-db-id game-id]
+  (d/q '[:find (pull ?gua [*])
+         :in $ ?game-id ?game-user
+         :where
+         [?g :game/id ?game-id]
+         [?g :game/users ?gus]
+         [?gus :game.user/user ?game-user]
+         [?gus :game.user/accounts ?gua]
+         [?gua :bookkeeping.account/counter-party]
+         [?gua :bookkeeping.account/amount ?amount]
+         [(> ?amount 0)]]
+       (d/db conn)
+       game-id user-db-id))

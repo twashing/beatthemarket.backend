@@ -18,8 +18,9 @@
 
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.calculation :as game.calculation]
-            [beatthemarket.game.games.trades :as games.trades]
+            [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games :as game.games]
+            [beatthemarket.game.games.trades :as games.trades]
             [beatthemarket.game.games.core :as games.core]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.game.games.pipeline :as games.pipeline]
@@ -102,20 +103,28 @@
 (defn check-user-device-doesnt-have-running-game? [conn email client-id]
 
   (when (ffirst
-          (d/q '[:find (pull ?g [*])
-                 :in $ ?email ?client-id
-                 :where
-                 [?g :game/start-time]
-                 [(missing? $ ?g :game/end-time)] ;; game still active?
-                 (or [?g :game/status :game-status/running]
-                     [?g :game/status :game-status/paused]) ;; game not exited?
-                 [?g :game/users ?us]
-                 [?us :game.user/user-client ?client-id]  ;; For a Device
-                 [?us :game.user/user ?u]
-                 [?u :user/email ?email] ;; For a User
-                 ]
-               (d/db conn)
-               email client-id))
+          (ppi
+            (d/q '[:find (pull ?g [:db/id
+                                   :game/id
+                                   :game/start-time
+                                   :game/end-time
+                                   {:game/status [*]}
+                                   {:game/level [*]}
+                                   {:game/users [{:game.user/user  [*]}
+                                                 :game.user/user-client]}])
+                   :in $ ?email ?client-id
+                   :where
+                   [?g :game/start-time]
+                   [(missing? $ ?g :game/end-time)] ;; game still active?
+                   (or [?g :game/status :game-status/running]
+                       [?g :game/status :game-status/paused]) ;; game not exited?
+                   [?g :game/users ?us]
+                   [?us :game.user/user-client ?client-id]  ;; For a Device
+                   [?us :game.user/user ?u]
+                   [?u :user/email ?email] ;; For a User
+                   ]
+                 (d/db conn)
+                 email client-id)))
     (throw (Exception. (format "User device has a running game / email %s / client-id %s" email client-id)))))
 
 (defn check-user-device-has-created-game? [conn email client-id]
@@ -295,7 +304,9 @@
              (transform [:stocks ALL MAP-KEYS] (comp keyword name)))))
 
     (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+      (do
+        (ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-start-game [context {game-id :id :as args} _]
 
@@ -317,7 +328,7 @@
 
     (catch Exception e
       (do
-        ;; (ppi (bean e))
+        (ppi (bean e))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-buy-stock [context args _]
@@ -562,15 +573,22 @@
                                       (fn [_ _ game-id stock-ticks]
 
                                         (log/debug :graphql.core.processing (format ">> :graphql.core.processing > calculate-profit-loss on TICK / " (pr-str stock-ticks)))
-                                        (hash-map :stock-ticks stock-ticks
-                                                  :profit-loss []))})]
 
-        (ppi [:unapplied-payments-for-user (payments.core/unapplied-payments-for-user conn user-db-id)])
-        (ppi [:applied-payments-for-user (payments.core/applied-payments-for-user conn user-db-id)])
+                                        (let [updated-profit-loss-calculations []]
+                                          (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
+                                          (hash-map :stock-ticks stock-ticks
+                                                    :profit-loss updated-profit-loss-calculations)))})]
+
+        ;; (ppi [:unapplied-payments-for-user (payments.core/unapplied-payments-for-user conn user-db-id)])
+        ;; (ppi [:applied-payments-for-user (payments.core/applied-payments-for-user conn user-db-id)])
 
 
         ;; NOTE game status is updated in: resume-game -> run-game
         (games.control/resume-game! conn user-db-id game-control)
+
+        ;; NOTE WTF!!!
+        ;; In-memory P/L isn't getting rest... only in PROD >:|
+        ;; (beatthemarket.game.persistence/update-profit-loss-state! game-id [])
 
         {:type   :ControlEvent
          :event  :restart
@@ -613,15 +631,30 @@
     (catch Exception e
       (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
 
+(defn game-paused? [conn game-id]
+
+  (= :game-status/paused
+     (-> (persistence.core/entity-by-domain-id conn :game/id game-id) ffirst :game/status :db/ident)))
+
 (defn resolve-exit-game [context {gameId :gameId} _]
 
   (let [game-id (UUID/fromString gameId)
+        conn (-> repl.state/system :persistence/datomic :opts :conn)
         event   {:type    :ControlEvent
                  :event   :exit
-                 :game-id game-id}]
+                 :game-id game-id}
 
-    (-> (game.games/send-control-event! game-id event)
-        (assoc :gameId gameId))))
+        exit-game-manually (constantly
+                             (do
+                               (games.control/update-short-circuit-game! game-id true)
+                               (games.control/exit-game! conn game-id)))]
+
+    (if (game-paused? conn game-id)
+
+      (exit-game-manually)
+
+      (-> (game.games/send-control-event! game-id event)
+          (assoc :gameId gameId)))))
 
 (defn resolve-games [context {gameId :gameId} _]
 

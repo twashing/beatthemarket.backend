@@ -8,12 +8,14 @@
             [integrant.repl.state :as repl.state]
 
             [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
             [beatthemarket.datasource :as datasource]
             [beatthemarket.datasource.core :as datasource.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.calculation :as game.calculation]
+            [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games.state :as games.state]
             [beatthemarket.game.games.core :as game.games.core]
             [beatthemarket.game.games.state :as game.games.state]
@@ -219,16 +221,17 @@
 
     (persistence.datomic/transact-entities! conn data)))
 
-(defn update-game-timer! [conn game-id level-timer]
+(defn conditionally-update-game-timer! [conn game-id level-timer]
 
   (let [{game-db-id :db/id
-         game-level-timer :game/level-timer} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+         game-level-timer :game/level-timer} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))]
 
-        data (cond-> []
-               game-level-timer (conj [:db/retract game-db-id :game/level-timer game-level-timer])
-               true             (conj [:db/add game-db-id :game/level-timer level-timer]))]
+    (if-not (= game-level-timer level-timer)
 
-    (persistence.datomic/transact-entities! conn data)))
+      (persistence.datomic/transact-entities! conn
+                                              (cond-> []
+                                                game-level-timer (conj [:db/retract game-db-id :game/level-timer game-level-timer])
+                                                true             (conj [:db/add game-db-id :game/level-timer level-timer]))))))
 
 (defn pause-game! [conn game-id]
 
@@ -240,7 +243,7 @@
                         :game/games deref (get game-id)
                         :level-timer deref)]
 
-    (update-game-timer! conn game-id level-timer)))
+    (conditionally-update-game-timer! conn game-id level-timer)))
 
 (defn exit-game! [conn game-id]
 
@@ -255,7 +258,7 @@
                         :level-timer deref)]
 
     ;; A
-    (update-game-timer! conn game-id level-timer)
+    (conditionally-update-game-timer! conn game-id level-timer)
 
     ;; B
     (persistence.datomic/transact-entities! conn data))
@@ -539,6 +542,7 @@
                      stock-tick-stream
                      portfolio-update-stream
                      game-event-stream
+                     calculate-profit-loss
                      sink-fn] :as game-control} data-sequence-fn]
 
   (let [{game-db-id             :db/id
@@ -582,6 +586,7 @@
                  :process-transact-level-update! identity
                  :stream-stock-tick        (fn [stock-tick-pairs]
                                              (games.processing/group-stock-tick-pairs stock-tick-pairs))
+                 :calculate-profit-loss    calculate-profit-loss
                  :stream-portfolio-update! identity
                  :stream-level-update!     identity
 
@@ -669,6 +674,11 @@
      (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
 
 
+     (ppi [:A :stock-accounts-with-inventory-by-game-user
+           (bookkeeping.persistence/stock-accounts-with-inventory-by-game-user conn user-db-id game-id)])
+
+     (ppi [:A.i :inmemory-profit-loss :BEFORE (:profit-loss (game.games.state/inmemory-game-by-id game-id))])
+
      ;; B. Replay ticks & trades
      (run! (fn [ticks-and-trade]
              (map #(list %1 %2)
@@ -677,12 +687,20 @@
            ticks-and-trade-all)
 
 
+     ;; TODO - Fix this kludge... why isn't PL state getting purged, when called from resolve-restart-game
+     (when (:calculate-profit-loss game-control)
+       (game.persistence/update-profit-loss-state! game-id {}))
+
+
+     (ppi [:A.ii :inmemory-profit-loss :AFTER (:profit-loss  (game.games.state/inmemory-game-by-id game-id))])
+
+
      ;; Re-start game
      (let [data-generators (-> integrant.repl.state/config :game/game :data-generators)
 
            ;; game-control initial
            {:keys [tick-sleep-atom level-timer] :as game-control-live}
-           (as-> (dissoc game-control-replay :calculate-profit-loss) v
+           (as-> game-control-replay v
              (game.games.core/default-game-control conn game-id v)
              (merge-with #(if %2 %2 %1)
                          game-control-replay
@@ -694,6 +712,8 @@
                                                    stocks->stock-sequences
                                                    (seek-to-position tick-index)
                                                    second))))
+
+           _ (ppi [:B :get-inmemory-profit-loss (get-inmemory-profit-loss game-id)])
 
            inputs-at-position (games.pipeline/stock-tick-pipeline game-control-live)
            game-control-live (->> (run-iteration inputs-at-position)

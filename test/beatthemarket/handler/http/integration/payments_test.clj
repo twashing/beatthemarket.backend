@@ -12,6 +12,8 @@
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
             [beatthemarket.integration.payments.core :as integration.payments.core]
+
+            [beatthemarket.handler.http.integration.util :as integration.util]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
@@ -1043,19 +1045,6 @@
 ;; additional 5 minutes
 ;; then consume timer events
 
-(defn exit-game [game-id]
-
-  (test-util/send-data {:id   993
-                        :type :start
-                        :payload
-                        {:query "mutation exitGame($gameId: String!) {
-                                       exitGame(gameId: $gameId) {
-                                         event
-                                         gameId
-                                       }
-                                     }"
-                         :variables {:gameId game-id}}}))
-
 (deftest additional-5-minutes-test-after-game-end
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
@@ -1081,7 +1070,7 @@
                                  :provider provider
                                  :token token})
       ;; C
-      (exit-game game-id)
+      (integration.util/exit-game game-id)
 
 
       (Thread/sleep 4000)
@@ -1094,7 +1083,8 @@
                                                       {:event "restart"
                                                        :gameId game-id}}}}]
 
-          (test-util/send-data {:id   990
+          (integration.util/restart-game game-id 990)
+          #_(test-util/send-data {:id   990
                                 :type :start
                                 :payload
                                 {:query "mutation RestartGame($gameId: String!) {

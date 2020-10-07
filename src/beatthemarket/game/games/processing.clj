@@ -92,12 +92,16 @@
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
   (log/debug :game.games.processing (format ">> calculate-profit-loss on TICK / " (pr-str stock-ticks)))
+
+
+  (ppi [:C.i :inmemory-profit-loss (:profit-loss (game.games.state/inmemory-game-by-id game-id))])
+
   (let [updated-profit-loss-calculations
         (-> (game.games.state/inmemory-game-by-id game-id)
             :profit-loss
             ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
-    #_(ppi [:updated-profit-loss-calculations updated-profit-loss-calculations])
+    (ppi [:C.ii :updated-profit-loss-calculations updated-profit-loss-calculations])
     (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
     (hash-map :stock-ticks stock-ticks
               :profit-loss (game.calculation/collect-running-profit-loss game-id updated-profit-loss-calculations))))
