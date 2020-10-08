@@ -77,12 +77,11 @@
 
 (defn stream-stock-tick [stock-tick-stream stock-ticks]
 
-  (log/debug :game.games.processing (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
+  (log/info :game.games.processing (format ">> STREAM stock-tick-pairs / %s" stock-ticks))
   (log/debug :game.games.processing (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
   ;; (ppi stock-tick-stream)
   ;; (ppi stock-ticks)
   (core.async/go (core.async/>! stock-tick-stream stock-ticks))
-  ;; (core.async/go (core.async/>! stock-tick-stream wtf))
 
   stock-ticks)
 
@@ -93,12 +92,16 @@
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
   (log/debug :game.games.processing (format ">> calculate-profit-loss on TICK / " (pr-str stock-ticks)))
+
+
+  #_(ppi [:C.i :inmemory-profit-loss (:profit-loss (game.games.state/inmemory-game-by-id game-id))])
+
   (let [updated-profit-loss-calculations
         (-> (game.games.state/inmemory-game-by-id game-id)
             :profit-loss
             ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
-    #_(ppi [:updated-profit-loss-calculations updated-profit-loss-calculations])
+    #_(ppi [:C.ii :updated-profit-loss-calculations updated-profit-loss-calculations])
     (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
     (hash-map :stock-ticks stock-ticks
               :profit-loss (game.calculation/collect-running-profit-loss game-id updated-profit-loss-calculations))))
@@ -182,7 +185,10 @@
          lose-threshold :lose-threshold
          level :level} (deref current-level)
 
-        running-pl (if-let [pl (-> profit-loss first :profit-loss)]
+        running-pl (if-let [pl (reduce (fn [ac {pl :profit-loss}]
+                                         (+ ac pl))
+                                       0.0
+                                       profit-loss)]
                      pl
                      0.0)
 
@@ -200,9 +206,9 @@
                              lose-threshold-met? (assoc :event :lose
                                                         :profit-loss running-pl))]
 
-    #_(ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
-          [:realized realized-pl (> realized-pl profit-threshold)]
-          [:current-level (deref current-level)]])
+    (ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
+            [:realized realized-pl (> realized-pl profit-threshold)]
+            [:current-level (deref current-level)]])
 
 
     (when (:event game-event-message)

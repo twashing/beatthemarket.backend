@@ -954,27 +954,27 @@
 (deftest lose-level-test
 
   (let [;; A
-        conn (-> repl.state/system :persistence/datomic :opts :conn)
-        user (test-util/generate-user! conn)
+        conn       (-> repl.state/system :persistence/datomic :opts :conn)
+        user       (test-util/generate-user! conn)
         user-db-id (:db/id user)
-        userId         (:user/external-uid user)
+        userId     (:user/external-uid user)
 
         ;; B
         data-sequence-fn (constantly [100.0 80.0])
         tick-length      (count (data-sequence-fn))
 
         ;; C
-        sink-fn                identity
+        sink-fn identity
 
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
         game-event-stream (core.async/chan)
-        opts       {:level-timer-sec 5
-                    :user            {:db/id user-db-id}
-                    :accounts        (game.core/->game-user-accounts)
-                    :game-level      :game-level/one
-                    :game-event-stream game-event-stream}
+        opts              {:level-timer-sec   5
+                           :user              {:db/id user-db-id}
+                           :accounts          (game.core/->game-user-accounts)
+                           :game-level        :game-level/one
+                           :game-event-stream game-event-stream}
 
 
         ;; D Launch Game
@@ -983,21 +983,21 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
 
 
         ;; E Buy Stock
-        {stock-id   :game.stock/id
+        {stock-id  :game.stock/id
          stockName :game.stock/name} (first stocks)
 
-        opts {:conn    conn
-              :userId  userId
-              :gameId  game-id
-              :stockId stock-id
+        opts {:conn         conn
+              :userId       userId
+              :gameId       game-id
+              :stockId      stock-id
               :game-control game-control}
 
         ;; i.
-        ops-before  [{:op :buy :stockAmount 100}]
+        ops-before       [{:op :buy :stockAmount 100}]
         ops-before-count (count ops-before)]
 
     (testing "Testing the correct level lose message is shown"
@@ -1009,11 +1009,11 @@
       (Thread/sleep 1000) ;; NOTE kludge to get around timing transact of new level
       (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
-            expected-game-event {:game-id game-id
-                                 :level :game-level/one
+            expected-game-event {:game-id     game-id
+                                 :level       :game-level/one
                                  :profit-loss (.floatValue -2000.0)
-                                 :event :lose
-                                 :type :LevelStatus}
+                                 :event       :lose
+                                 :type        :LevelStatus}
 
             expected-game-level :game-level/one]
 

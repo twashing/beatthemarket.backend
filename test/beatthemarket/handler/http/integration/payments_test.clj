@@ -7,10 +7,13 @@
             [datomic.client.api :as d]
 
             [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
             [beatthemarket.integration.payments.core :as integration.payments.core]
+
+            [beatthemarket.handler.http.integration.util :as integration.util]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
@@ -80,10 +83,7 @@
 
 (defn verify-payment-workflow [client-id product-id provider token]
 
-  (test-util/<message!! 1000)
   (test-util/send-init {:client-id (str client-id)})
-
-  (test-util/<message!! 1000)
   (test-util/send-data {:id   987
                         :type :start
                         :payload
@@ -98,10 +98,8 @@
                                      :provider provider
                                      :token token}}})
 
-  (let [verify-payment (-> (test-util/<message!! 3000) :payload :data :verifyPayment)]
-
-    (test-util/<message!! 1000)
-    verify-payment))
+  (Thread/sleep 2000)
+  (-> (test-util/consume-until 987) :payload :data :verifyPayment))
 
 (deftest user-payments-test
 
@@ -885,7 +883,7 @@
                  (= expected-unapplied-purchases)
                  is)))
 
-        (Thread/sleep 1000)
+        (Thread/sleep 2000)
 
         (testing "Purchses are applied after game start"
 
@@ -1047,19 +1045,6 @@
 ;; additional 5 minutes
 ;; then consume timer events
 
-(defn exit-game [game-id]
-
-  (test-util/send-data {:id   993
-                        :type :start
-                        :payload
-                        {:query "mutation exitGame($gameId: String!) {
-                                       exitGame(gameId: $gameId) {
-                                         event
-                                         gameId
-                                       }
-                                     }"
-                         :variables {:gameId game-id}}}))
-
 (deftest additional-5-minutes-test-after-game-end
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
@@ -1085,7 +1070,7 @@
                                  :provider provider
                                  :token token})
       ;; C
-      (exit-game game-id)
+      (integration.util/exit-game game-id)
 
 
       (Thread/sleep 4000)
@@ -1098,7 +1083,8 @@
                                                       {:event "restart"
                                                        :gameId game-id}}}}]
 
-          (test-util/send-data {:id   990
+          (integration.util/restart-game game-id 990)
+          #_(test-util/send-data {:id   990
                                 :type :start
                                 :payload
                                 {:query "mutation RestartGame($gameId: String!) {
@@ -1108,6 +1094,8 @@
                                            }
                                          }"
                                  :variables {:gameId game-id}}})
+
+          (Thread/sleep 1000)
 
           (->> (test-util/consume-subscriptions 1000)
                (filter #(= 990 (:id %)))
@@ -1120,9 +1108,12 @@
       (subscribe-to-game-events 992 game-id)
 
 
-      (testing "Game timer has been extended by 5 minutes"
+      (testing "i. Game timer has been extended by 5 minutes
+                ii. Running P/L is empty"
 
-        ;; (Thread/sleep 2000)
+        (Thread/sleep 1000)
+
+        (is (empty? (game.calculation/running-profit-loss-for-game game-id-uuid)))
 
         ;; D
         (let [payment-response (->> (test-util/consume-subscriptions 1000)
@@ -1136,8 +1127,8 @@
                          {:gameEvents
                           {:gameId game-id
                            :level 1
-                           :minutesRemaining 10
-                           :secondsRemaining 00}}}}]
+                           :minutesRemaining 9
+                           :secondsRemaining 57}}}}]
 
           (is (= expected-timer-response payment-response))))
 

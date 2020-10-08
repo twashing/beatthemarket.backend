@@ -191,56 +191,6 @@
   (= (game-status game-id)
      :game-status/paused))
 
-#_(defn level-timer->db [minute-and-second-tuple]
-    (str minute-and-second-tuple))
-
-#_(defn db->level-timer [minute-and-second-tuple]
-    (clojure.edn/read-string minute-and-second-tuple))
-
-#_(defn inputs->historical-data [input-sequence start-position]
-    (take start-position input-sequence))
-
-#_(defn inputs->control-chain [{:keys [game input-sequence
-                                     stream-stock-tick calculate-profit-loss
-                                     collect-profit-loss stream-portfolio-update!
-                                     process-transact! transact-profit-loss
-                                     check-level-complete]}]
-
-  (->> input-sequence
-       (map process-transact!)
-       (map stream-stock-tick)
-       (map calculate-profit-loss)
-       (map collect-profit-loss)
-       (map transact-profit-loss)
-       (map stream-portfolio-update!)
-       (map check-level-complete)))
-
-#_(defn inputs->processing-pipeline [conn {:keys [game input-sequence
-
-                                                  control-channel
-                                                  stock-tick-stream
-                                                  portfolio-update-stream
-                                                  game-event-stream
-
-                                                  process-transact!
-                                                  stream-stock-tick calculate-profit-loss
-                                                  collect-profit-loss stream-portfolio-update!
-                                                  transact-profit-loss
-                                                  check-level-complete
-                                                  stream-level-update!]}]
-
-    ;; (comp (map process-transact!)) ;; input-sequence
-    ;; (comp (map (buy-stock! conn userId gameId stockId stockAmount tickId tickPrice)))
-
-    (comp
-      (map calculate-profit-loss)
-      (map process-transact!)
-      ;; (map collect-profit-loss)
-      ;; (map transact-profit-loss)
-      (map stream-portfolio-update!)
-      (map check-level-complete)
-      (map stream-level-update!)))
-
 (defn update-start-position! [conn game-id start-position]
 
   ;; (ppi [game-id start-position])
