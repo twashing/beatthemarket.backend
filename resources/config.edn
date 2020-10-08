@@ -7,6 +7,7 @@
         :tick-sleep-ms         1000
         :level-timer-sec       300 ;; (* 5 60)
         :latest-tick-threshold 100
+        :stream-buffer-size    2
         :data-generators [:datasource.sine/generate-sine-sequence
                           :datasource.sine/generate-cosine-sequence
                           :datasource.oscillating/generate-oscillating-sequence]

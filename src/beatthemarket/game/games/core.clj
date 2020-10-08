@@ -15,12 +15,12 @@
                              portfolio-update-stream :portfolio-update-stream
                              game-event-stream :game-event-stream}]
 
-  (let [stream-buffer 10
+  (let [stream-buffer-size (-> integrant.repl.state/config :game/game :stream-buffer-size)
 
-        control-channel         (or control-channel (core.async/chan (core.async/sliding-buffer stream-buffer)))
-        stock-tick-stream       (or stock-tick-stream (core.async/chan (core.async/sliding-buffer stream-buffer)))
-        portfolio-update-stream (or portfolio-update-stream (core.async/chan (core.async/sliding-buffer stream-buffer)))
-        game-event-stream       (or game-event-stream (core.async/chan (core.async/sliding-buffer stream-buffer)))]
+        control-channel         (or control-channel (core.async/chan (core.async/sliding-buffer stream-buffer-size)))
+        stock-tick-stream       (or stock-tick-stream (core.async/chan (core.async/sliding-buffer stream-buffer-size)))
+        portfolio-update-stream (or portfolio-update-stream (core.async/chan (core.async/sliding-buffer stream-buffer-size)))
+        game-event-stream       (or game-event-stream (core.async/chan (core.async/sliding-buffer stream-buffer-size)))]
 
     {:profit-loss {}
 

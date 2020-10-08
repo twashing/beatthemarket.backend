@@ -206,7 +206,7 @@
                              lose-threshold-met? (assoc :event :lose
                                                         :profit-loss running-pl))]
 
-    (ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
+    #_(ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
             [:realized realized-pl (> realized-pl profit-threshold)]
             [:current-level (deref current-level)]])
 
