@@ -79,7 +79,7 @@
     (persistence.datomic/transact-entities! conn user-entity)
     (run! #(integration.payments.core/apply-payment-conditionally-on-running-game conn email (:payment %) (:game %))
           game-and-payments)
-    (payments.persistence/user-payments conn)))
+    (payments.persistence/user-payments conn email)))
 
 ;; Response keys: (:receipt :environment :latest_receipt_info :latest_receipt :status)
 

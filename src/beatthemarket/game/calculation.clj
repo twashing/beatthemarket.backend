@@ -86,7 +86,9 @@
                                                     (group-by-stock [game-id profit-loss])
                                                     profit-loss)
 
-                     games [(->game-status game-id game-status profit-loss-possibly-grouped)]]
+                     games (if (and game-id game-status)
+                             [(->game-status game-id game-status profit-loss-possibly-grouped)]
+                             [])]
 
                  (->user email name external-uid games)))))))
 

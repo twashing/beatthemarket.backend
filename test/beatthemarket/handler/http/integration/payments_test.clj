@@ -122,11 +122,9 @@
                                        }
                                      }"}})
 
-    (test-util/<message!! 1000)
-
     (testing "Returning an empty set of user payments"
 
-      (let [empty-user-payments (-> (test-util/<message!! 1000) :payload :data :userPayments)
+      (let [empty-user-payments (-> (test-util/consume-until 987) :payload :data :userPayments)
             expected-user-payments []]
 
         (is (= expected-user-payments empty-user-payments))))))
@@ -479,36 +477,6 @@
 
     ))
 
-(defn delete-test-customer! [id]
-
-  (test-util/send-data {:id   987
-                        :type :start
-                        :payload
-                        {:query "mutation DeleteStripeCustomer($id: String!) {
-                                           deleteStripeCustomer(id: $id) {
-                                             message
-                                           }
-                                         }"
-                         :variables {:id id}}})
-
-  (test-util/<message!! 1000))
-
-(defn create-test-customer! [email]
-
-  (test-util/send-data {:id   987
-                        :type :start
-                        :payload
-                        {:query "mutation CreateStripeCustomer($email: String!) {
-                                       createStripeCustomer(email: $email) {
-                                         id
-                                         email
-                                       }
-                                     }"
-                         :variables {:email email}}})
-
-  (test-util/<message!! 1000)
-  (test-util/<message!! 1000))
-
 (deftest create-stripe-customer-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
@@ -524,7 +492,7 @@
     (testing "Create customer if Stripe doesn't have it"
 
       (let [[{result-id :id
-              result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)]
+              result-email :email}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)]
 
         (is (= email result-email))
         (is (not (nil? result-id)))
@@ -551,7 +519,7 @@
               result-id result-id2)))
 
         (testing "DELETEING test customer"
-          (delete-test-customer! result-id))))))
+          (integration.util/delete-test-customer! result-id))))))
 
 (deftest verify-stripe-subscription-test-no-game
 
@@ -594,7 +562,7 @@
       (testing "Create a test customer"
 
         (let [[{result-id :id
-                result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+                result-email :email}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)
 
               token-json (json/write-str
                            (assoc token
@@ -623,7 +591,7 @@
                                      product-id provider))
 
           (testing "DELETEING test customer"
-            (delete-test-customer! result-id)))))))
+            (integration.util/delete-test-customer! result-id)))))))
 
 (deftest verify-stripe-subscription-test-with-game
 
@@ -642,7 +610,7 @@
 
       (let [email "foo@bar.com"
             [{result-id :id
-              result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)]
+              result-email :email}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)]
 
         (testing "Subsciption with a valid card"
 
@@ -683,7 +651,7 @@
             (is (integration.payments.core/margin-trading? conn (:db/id user-entity)))))
 
         (testing "DELETEING test customer"
-          (delete-test-customer! result-id))))))
+          (integration.util/delete-test-customer! result-id))))))
 
 (deftest verify-stripe-charge-test-no-game
 
@@ -863,7 +831,7 @@
             user-email "twashing@gmail.com"
             user-entity (ffirst (iam.persistence/user-by-email conn user-email '[:db/id]))
 
-            [{result-id :id}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+            [{result-id :id}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)
             token-subscription-json (json/write-str
                                       (assoc token-subscription
                                              :customerId result-id
@@ -915,7 +883,7 @@
             (games.control/update-short-circuit-game! game-id-uuid true)))
 
         (testing "DELETEING test customer"
-          (delete-test-customer! result-id))))))
+          (integration.util/delete-test-customer! result-id))))))
 
 (defn subscribe-to-game-events [subscription-id game-id]
 
@@ -933,21 +901,6 @@
                                        }
                                      }"
                          :variables {:gameId game-id}}}))
-
-(defn verify-payment [client-id payload]
-
-  (test-util/send-init {:client-id (str client-id)})
-  (test-util/send-data {:id   989
-                        :type :start
-                        :payload
-                        {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"
-                         :variables payload}}))
 
 (deftest additional-5-minutes-test-with-game
 
@@ -985,9 +938,9 @@
       ;; B
       (testing "Charge a valid card"
 
-        (verify-payment client-id {:productId product-id
-                                   :provider provider
-                                   :token token})
+        (integration.util/verify-payment client-id {:productId product-id
+                                                    :provider provider
+                                                    :token token})
 
         (let [payment-response (->> (test-util/consume-subscriptions 1000)
                                     (filter #(= 989 (:id %)))
@@ -1067,7 +1020,7 @@
       ;; (subscribe-to-game-events 1000 game-id)
 
       ;; B
-      (verify-payment client-id {:productId product-id
+      (integration.util/verify-payment client-id {:productId product-id
                                  :provider provider
                                  :token token})
       ;; C
@@ -1214,7 +1167,7 @@
             user-email "twashing@gmail.com"
             user-entity (ffirst (iam.persistence/user-by-email conn user-email '[:db/id]))
 
-            [{result-id :id}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+            [{result-id :id}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)
             token-subscription-json (json/write-str
                                       (assoc token-subscription
                                              :customerId result-id
@@ -1258,7 +1211,7 @@
             (games.control/update-short-circuit-game! game-id-uuid true)))
 
         (testing "DELETEING test customer"
-          (delete-test-customer! result-id))))))
+          (integration.util/delete-test-customer! result-id))))))
 
 
 ;; TODO

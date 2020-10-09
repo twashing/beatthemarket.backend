@@ -78,6 +78,7 @@
                                        }
                                      }"
                           :variables {:gameId game-id}}})))
+
 (defn restart-game
 
   ([game-id] (restart-game game-id 990))
@@ -94,3 +95,61 @@
                                            }
                                          }"
                           :variables {:gameId game-id}}})))
+
+(defn verify-payment
+
+  ([client-id payload]
+
+   (verify-payment client-id payload 989))
+
+  ([client-id payload message-id]
+
+   (test-util/send-init {:client-id (str client-id)})
+   (test-util/send-data {:id   message-id
+                         :type :start
+                         :payload
+                         {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                          :variables payload}})))
+
+(defn delete-test-customer!
+
+  ([id]
+
+   (delete-test-customer! id 987))
+
+  ([id delete-id]
+
+   (test-util/send-data {:id   delete-id
+                         :type :start
+                         :payload
+                         {:query "mutation DeleteStripeCustomer($id: String!) {
+                                           deleteStripeCustomer(id: $id) {
+                                             message
+                                           }
+                                         }"
+                          :variables {:id id}}})))
+
+(defn create-test-customer!
+
+  ([email]
+
+   (create-test-customer! email 987))
+
+  ([email create-id]
+
+   (test-util/send-data {:id   create-id
+                         :type :start
+                         :payload
+                         {:query "mutation CreateStripeCustomer($email: String!) {
+                                       createStripeCustomer(email: $email) {
+                                         id
+                                         email
+                                       }
+                                     }"
+                          :variables {:email email}}})))

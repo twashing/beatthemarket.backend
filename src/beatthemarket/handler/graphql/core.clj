@@ -103,28 +103,27 @@
 (defn check-user-device-doesnt-have-running-game? [conn email client-id]
 
   (when (ffirst
-          (ppi
-            (d/q '[:find (pull ?g [:db/id
-                                   :game/id
-                                   :game/start-time
-                                   :game/end-time
-                                   {:game/status [*]}
-                                   {:game/level [*]}
-                                   {:game/users [{:game.user/user  [*]}
-                                                 :game.user/user-client]}])
-                   :in $ ?email ?client-id
-                   :where
-                   [?g :game/start-time]
-                   [(missing? $ ?g :game/end-time)] ;; game still active?
-                   (or [?g :game/status :game-status/running]
-                       [?g :game/status :game-status/paused]) ;; game not exited?
-                   [?g :game/users ?us]
-                   [?us :game.user/user-client ?client-id]  ;; For a Device
-                   [?us :game.user/user ?u]
-                   [?u :user/email ?email] ;; For a User
-                   ]
-                 (d/db conn)
-                 email client-id)))
+          (d/q '[:find (pull ?g [:db/id
+                                 :game/id
+                                 :game/start-time
+                                 :game/end-time
+                                 {:game/status [*]}
+                                 {:game/level [*]}
+                                 {:game/users [{:game.user/user  [*]}
+                                               :game.user/user-client]}])
+                 :in $ ?email ?client-id
+                 :where
+                 [?g :game/start-time]
+                 [(missing? $ ?g :game/end-time)] ;; game still active?
+                 (or [?g :game/status :game-status/running]
+                     [?g :game/status :game-status/paused]) ;; game not exited?
+                 [?g :game/users ?us]
+                 [?us :game.user/user-client ?client-id]  ;; For a Device
+                 [?us :game.user/user ?u]
+                 [?u :user/email ?email] ;; For a User
+                 ]
+               (d/db conn)
+               email client-id))
     (throw (Exception. (format "User device has a running game / email %s / client-id %s" email client-id)))))
 
 (defn check-user-device-has-created-game? [conn email client-id]
@@ -210,6 +209,72 @@
                          (-> context :com.walmartlabs.lacinia/connection-params :client-id))]
     (UUID/fromString client-id)
     (throw (Exception. "Missing :client-id in your connection_init"))))
+
+
+
+
+(defn valid-apple-product-id? [product-id]
+
+  (let [products (-> repl.state/system :payment.provider/apple :products)]
+
+    (as-> (vals products) v
+      (into #{} v)
+      (some v #{product-id})
+      (util/exists? v))))
+
+(defn valid-apple-subscription-id? [subscription-id]
+
+  (let [subscriptions (-> repl.state/system :payment.provider/apple :subscriptions)]
+
+    (as-> (vals subscriptions) v
+      (into #{} v)
+      (some v #{subscription-id})
+      (util/exists? v))))
+
+
+
+
+(defn valid-google-product-id? [product-id]
+
+  (let [products (-> repl.state/system :payment.provider/google :products)]
+
+    (as-> (vals products) v
+      (into #{} v)
+      (some v #{product-id})
+      (util/exists? v))))
+
+(defn valid-google-subscription-id? [subscription-id]
+
+  (let [subscriptions (-> repl.state/system :payment.provider/google :subscriptions)]
+
+    (as-> (vals subscriptions) v
+      (into #{} v)
+      (some v #{subscription-id})
+      (util/exists? v))))
+
+
+
+
+(defn valid-stripe-product-id? [product-id]
+
+  (let [products (-> repl.state/system :payment.provider/stripe :products)]
+
+    (as-> (vals products) v
+      (into #{} v)
+      (some v #{product-id})
+      (util/exists? v))))
+
+(defn valid-stripe-subscription-id? [subscription-id]
+
+  (let [subscriptions (-> repl.state/system :payment.provider/stripe :subscriptions)]
+
+    (as-> (vals subscriptions) v
+      (into #{} v)
+      (some v #{subscription-id})
+      (util/exists? v))))
+
+
+
 
 
 ;; RESOLVERS
@@ -400,14 +465,29 @@
   (try
 
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-          group-by-stock? true]
+          group-by-stock? true
 
-      (->> (game.calculation/collect-realized-profit-loss-for-user-allgames conn email group-by-stock?)
-           first
-           graphql.encoder/user->graphql))
+          filter-subscriptions (fn [{product-id :payment/product-id :as payment}]
+
+                                 (let [subscription? (juxt valid-apple-subscription-id? valid-google-subscription-id? valid-stripe-subscription-id?)]
+
+                                   (->> (subscription? product-id)
+                                        (into #{})
+                                        (some true?))))
+
+          user (-> (game.calculation/collect-realized-profit-loss-for-user-allgames conn email group-by-stock?)
+                   first
+                   graphql.encoder/user->graphql)]
+
+      (->> (payments.persistence/user-payments conn email)
+           (filter filter-subscriptions)
+           (map graphql.encoder/payment-purchase->graphql)
+           (assoc user :subscriptions)))
 
     (catch Throwable e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+      (do
+        (ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-users [context args _]
 
@@ -695,7 +775,7 @@
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
           {{{email :email} :checked-authentication} :request} context]
 
-      (->> (payments.persistence/user-payments conn)
+      (->> (payments.persistence/user-payments conn email)
            (map graphql.encoder/payment-purchase->graphql)))
 
     (catch Exception e
@@ -727,24 +807,6 @@
 
     (->> (payments.google/verify-payment-workflow conn client-id email payment-config args)
          (map graphql.encoder/payment-purchase->graphql))))
-
-(defn valid-stripe-product-id? [product-id]
-
-  (let [products (-> repl.state/system :payment.provider/stripe :products)]
-
-    (as-> (vals products) v
-      (into #{} v)
-      (some v #{product-id})
-      (util/exists? v))))
-
-(defn valid-stripe-subscription-id? [subscription-id]
-
-  (let [subscriptions (-> repl.state/system :payment.provider/stripe :subscriptions)]
-
-    (as-> (vals subscriptions) v
-      (into #{} v)
-      (some v #{subscription-id})
-      (util/exists? v))))
 
 (defmethod verify-payment-handler "stripe" [context {product-id :productId
                                                      provider :provider
