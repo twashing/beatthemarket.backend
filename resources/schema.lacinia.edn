@@ -84,6 +84,9 @@
    {:userEmail {:type String}
     :userName {:type String}
     :userExternalUid {:type String}
+    :provider {:type String}
+    :type {:type String}
+    :subscriptions {:type (list :Payment)}
     :games {:type (list :GameStatus)}}}
 
   :Payment

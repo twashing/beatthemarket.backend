@@ -121,4 +121,4 @@
 
     (persistence.datomic/transact-entities! conn user-entity)
     (payments.core/apply-payment-conditionally-on-running-game conn email payment game)
-    (payments.persistence/user-payments conn)))
+    (payments.persistence/user-payments conn email)))

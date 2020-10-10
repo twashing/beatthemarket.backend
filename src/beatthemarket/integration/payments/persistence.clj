@@ -1,13 +1,20 @@
 (ns beatthemarket.integration.payments.persistence
-  (:require [datomic.client.api :as d]))
+  (:require [datomic.client.api :as d]
+            [beatthemarket.util :refer [ppi] :as util]))
 
 
-(defn user-payments [conn]
+(defn user-payments [conn email]
 
-  (->> (d/q '[:find (pull ?e [*
-                              {:payment/provider [*]}
-                              {:payment/provider-type [*]}])
-              :where [?e :payment/id]] (d/db conn))
+  (->> (d/q '[:find (pull ?up [*
+                               {:payment/provider [*]}
+                               {:payment/provider-type [*]}
+                               {:user/_payments [*]}])
+              :in $ ?email
+              :where
+              [?u :user/payments ?up]
+              [?u :user/email ?email]
+              [?up :payment/id]]
+            (d/db conn) email)
        (map first)))
 
 (defn payment-by-id [conn payment-id]

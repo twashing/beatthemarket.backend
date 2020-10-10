@@ -37,33 +37,37 @@
 ;;
 ;; Update subscription (Webhook - POST)
 
-(defn start-game-workflow []
+(defn start-game-workflow
 
-  (test-util/<message!! 1000)
-  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
-        gameLevel 1]
+  ([]
+   (start-game-workflow 987 988))
 
-    (testing "Create a Game"
+  ([create-id start-id]
 
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "mutation CreateGame($gameLevel: Int!) {
+   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+         gameLevel 1]
+
+     (testing "Create a Game"
+
+       (test-util/send-data {:id   create-id
+                             :type :start
+                             :payload
+                             {:query "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }"
-                             :variables {:gameLevel gameLevel}}}))
+                              :variables {:gameLevel gameLevel}}}))
 
-    (testing "Start a Game"
+     (testing "Start a Game"
 
-      (let [{:keys [stocks id] :as create-game} (-> (test-util/consume-until 987) :payload :data :createGame)]
+       (let [{:keys [stocks id] :as create-game} (-> (test-util/consume-until create-id) :payload :data :createGame)]
 
-        (test-util/send-data {:id   988
-                              :type :start
-                              :payload
-                              {:query "mutation StartGame($id: String!) {
+         (test-util/send-data {:id   start-id
+                               :type :start
+                               :payload
+                               {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
                                            stockTickId
                                            stockTickTime
@@ -72,14 +76,11 @@
                                            stockName
                                          }
                                        }"
-                               :variables {:id id}}})
+                                :variables {:id id}}})
 
-        ;; (test-util/<message!! 5000)
-        ;; (-> (test-util/<message!! 1000) :payload :data :startGame)
-        ;; (test-util/<message!! 1000)
-        (test-util/consume-until 988)
+         (test-util/consume-until start-id)
 
-        create-game))))
+         create-game)))))
 
 (defn verify-payment-workflow [client-id product-id provider token]
 
@@ -121,11 +122,9 @@
                                        }
                                      }"}})
 
-    (test-util/<message!! 1000)
-
     (testing "Returning an empty set of user payments"
 
-      (let [empty-user-payments (-> (test-util/<message!! 1000) :payload :data :userPayments)
+      (let [empty-user-payments (-> (test-util/consume-until 987) :payload :data :userPayments)
             expected-user-payments []]
 
         (is (= expected-user-payments empty-user-payments))))))
@@ -478,36 +477,6 @@
 
     ))
 
-(defn delete-test-customer! [id]
-
-  (test-util/send-data {:id   987
-                        :type :start
-                        :payload
-                        {:query "mutation DeleteStripeCustomer($id: String!) {
-                                           deleteStripeCustomer(id: $id) {
-                                             message
-                                           }
-                                         }"
-                         :variables {:id id}}})
-
-  (test-util/<message!! 1000))
-
-(defn create-test-customer! [email]
-
-  (test-util/send-data {:id   987
-                        :type :start
-                        :payload
-                        {:query "mutation CreateStripeCustomer($email: String!) {
-                                       createStripeCustomer(email: $email) {
-                                         id
-                                         email
-                                       }
-                                     }"
-                         :variables {:email email}}})
-
-  (test-util/<message!! 1000)
-  (test-util/<message!! 1000))
-
 (deftest create-stripe-customer-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
@@ -523,7 +492,7 @@
     (testing "Create customer if Stripe doesn't have it"
 
       (let [[{result-id :id
-              result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)]
+              result-email :email}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)]
 
         (is (= email result-email))
         (is (not (nil? result-id)))
@@ -550,7 +519,7 @@
               result-id result-id2)))
 
         (testing "DELETEING test customer"
-          (delete-test-customer! result-id))))))
+          (integration.util/delete-test-customer! result-id))))))
 
 (deftest verify-stripe-subscription-test-no-game
 
@@ -593,7 +562,7 @@
       (testing "Create a test customer"
 
         (let [[{result-id :id
-                result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+                result-email :email}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)
 
               token-json (json/write-str
                            (assoc token
@@ -622,7 +591,7 @@
                                      product-id provider))
 
           (testing "DELETEING test customer"
-            (delete-test-customer! result-id)))))))
+            (integration.util/delete-test-customer! result-id)))))))
 
 (deftest verify-stripe-subscription-test-with-game
 
@@ -641,7 +610,7 @@
 
       (let [email "foo@bar.com"
             [{result-id :id
-              result-email :email}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)]
+              result-email :email}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)]
 
         (testing "Subsciption with a valid card"
 
@@ -682,7 +651,7 @@
             (is (integration.payments.core/margin-trading? conn (:db/id user-entity)))))
 
         (testing "DELETEING test customer"
-          (delete-test-customer! result-id))))))
+          (integration.util/delete-test-customer! result-id))))))
 
 (deftest verify-stripe-charge-test-no-game
 
@@ -862,7 +831,7 @@
             user-email "twashing@gmail.com"
             user-entity (ffirst (iam.persistence/user-by-email conn user-email '[:db/id]))
 
-            [{result-id :id}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+            [{result-id :id}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)
             token-subscription-json (json/write-str
                                       (assoc token-subscription
                                              :customerId result-id
@@ -914,7 +883,7 @@
             (games.control/update-short-circuit-game! game-id-uuid true)))
 
         (testing "DELETEING test customer"
-          (delete-test-customer! result-id))))))
+          (integration.util/delete-test-customer! result-id))))))
 
 (defn subscribe-to-game-events [subscription-id game-id]
 
@@ -932,21 +901,6 @@
                                        }
                                      }"
                          :variables {:gameId game-id}}}))
-
-(defn verify-payment [client-id payload]
-
-  (test-util/send-init {:client-id (str client-id)})
-  (test-util/send-data {:id   989
-                        :type :start
-                        :payload
-                        {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"
-                         :variables payload}}))
 
 (deftest additional-5-minutes-test-with-game
 
@@ -984,9 +938,9 @@
       ;; B
       (testing "Charge a valid card"
 
-        (verify-payment client-id {:productId product-id
-                                   :provider provider
-                                   :token token})
+        (integration.util/verify-payment client-id {:productId product-id
+                                                    :provider provider
+                                                    :token token})
 
         (let [payment-response (->> (test-util/consume-subscriptions 1000)
                                     (filter #(= 989 (:id %)))
@@ -1066,7 +1020,7 @@
       ;; (subscribe-to-game-events 1000 game-id)
 
       ;; B
-      (verify-payment client-id {:productId product-id
+      (integration.util/verify-payment client-id {:productId product-id
                                  :provider provider
                                  :token token})
       ;; C
@@ -1135,12 +1089,18 @@
 
       (games.control/update-short-circuit-game! game-id-uuid true))))
 
-(defn buy-sell-workflow [game-id target-buy-value]
+(defn buy-sell-workflow
 
-  (test-util/send-data {:id   989
-                        :type :start
-                        :payload
-                        {:query "subscription StockTicks($gameId: String!) {
+  ([game-id target-buy-value]
+
+   (buy-sell-workflow game-id target-buy-value 989 990))
+
+  ([game-id target-buy-value subscribe-stock-tick-id buy-id]
+
+   (test-util/send-data {:id   subscribe-stock-tick-id
+                         :type :start
+                         :payload
+                         {:query "subscription StockTicks($gameId: String!) {
                                            stockTicks(gameId: $gameId) {
                                              stockTickId
                                              stockTickTime
@@ -1149,42 +1109,40 @@
                                              stockName
                                          }
                                        }"
-                         :variables {:gameId game-id}}})
+                          :variables {:gameId game-id}}})
 
-  (test-util/<message!! 1000)
+   (let [latest-tick (->> (test-util/consume-subscriptions)
+                          (filter #(= subscribe-stock-tick-id (:id %)))
+                          last)
+         [{stockTickId :stockTickId
+           stockTickTime :stockTickTime
+           stockTickClose :stockTickClose
+           stockId :stockId
+           stockName :stockName}]
+         (-> latest-tick :payload :data :stockTicks)
 
-  (let [latest-tick (->> (test-util/consume-subscriptions)
-                         (filter #(= 989 (:id %)))
-                         last)
-        [{stockTickId :stockTickId
-          stockTickTime :stockTickTime
-          stockTickClose :stockTickClose
-          stockId :stockId
-          stockName :stockName}]
-        (-> latest-tick :payload :data :stockTicks)
+         amount-to-buy (->> (/ target-buy-value stockTickClose)
+                            (format "%.0f")
+                            (#(Integer/parseInt %)))]
 
-        amount-to-buy (->> (/ target-buy-value stockTickClose)
-                           (format "%.0f")
-                           (#(Integer/parseInt %)))]
-
-    (test-util/send-data {:id   990
-                          :type :start
-                          :payload
-                          {:query "mutation BuyStock($input: BuyStock!) {
+     (test-util/send-data {:id   buy-id
+                           :type :start
+                           :payload
+                           {:query "mutation BuyStock($input: BuyStock!) {
                                            buyStock(input: $input) {
                                              message
                                            }
                                          }"
-                           :variables {:input {:gameId      game-id
-                                               :stockId     stockId
-                                               :stockAmount amount-to-buy
-                                               :tickId      stockTickId
-                                               :tickPrice   stockTickClose}}}})))
+                            :variables {:input {:gameId      game-id
+                                                :stockId     stockId
+                                                :stockAmount amount-to-buy
+                                                :tickId      stockTickId
+                                                :tickPrice   stockTickClose}}}}))))
 
 
 
 ;; TODO Fix subscription workflow
-#_(deftest margin-trading-allows-upto-10x-cash-test
+(deftest margin-trading-allows-upto-10x-cash-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
@@ -1192,7 +1150,6 @@
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
-
 
     (testing "Purchase Product and Subscription before game start"
 
@@ -1210,7 +1167,7 @@
             user-email "twashing@gmail.com"
             user-entity (ffirst (iam.persistence/user-by-email conn user-email '[:db/id]))
 
-            [{result-id :id}] (-> (create-test-customer! email) :payload :data :createStripeCustomer)
+            [{result-id :id}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)
             token-subscription-json (json/write-str
                                       (assoc token-subscription
                                              :customerId result-id
@@ -1221,38 +1178,40 @@
 
         (testing "Purchses are applied after game start"
 
-          (let [game-id (:id (start-game-workflow))
+          (let [game-id (:id (start-game-workflow 1000 1001))
                 game-id-uuid (UUID/fromString game-id)]
 
-            #_(testing "Make purchase, greater than Cash, less than Margin threshold"
+            (testing "Make purchase, greater than Cash, less than Margin threshold"
 
               (let [target-buy-value 250000.0
-                    expected-buy-ack {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}]
+                    expected-buy-ack {:type "data" :id 1011 :payload {:data {:buyStock {:message "Ack"}}}}
 
-                (buy-sell-workflow game-id target-buy-value)
+                    subscribe-stock-tick-id 1010
+                    buy-id 1011]
 
-                (->> (test-util/consume-until 990)
+                (buy-sell-workflow game-id target-buy-value subscribe-stock-tick-id buy-id)
+
+                (->> (test-util/consume-until buy-id)
                      (= expected-buy-ack)
                      is)
-                (test-util/<message!! 1000)))
 
-            (testing "Make purchase, greater than Margin threshold"
+                (testing "Make purchase, greater than Margin threshold"
 
-              (let [target-buy-value 1850000.0
-                    expected-error-message (-> (test-util/<message!! 1000) ppi :payload :errors :message)]
+                  (let [target-buy-value 1850000.0
+                        buy-id 1021]
 
-                (buy-sell-workflow game-id target-buy-value)
+                    (buy-sell-workflow game-id target-buy-value subscribe-stock-tick-id buy-id)
 
-                (is (clojure.string/starts-with? expected-error-message "Margin account (10x Cash) is still Insufficient Funds [100000.0] for purchase value"))
+                    (let [expected-error-message-part "Insufficient Funds on Margin account (10x Cash)"
+                          error-message (-> (test-util/consume-until buy-id) :payload :errors second :message)]
 
-                #_(ppi (test-util/<message!! 1000))
-                #_(ppi (test-util/<message!! 1000))
-                #_(ppi (test-util/<message!! 1000))))
+                      (is (clojure.string/starts-with? error-message expected-error-message-part)))))))
 
+            (Thread/sleep 2000)
             (games.control/update-short-circuit-game! game-id-uuid true)))
 
         (testing "DELETEING test customer"
-          (delete-test-customer! result-id))))))
+          (integration.util/delete-test-customer! result-id))))))
 
 
 ;; TODO

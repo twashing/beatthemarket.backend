@@ -261,7 +261,7 @@
 
       (if (check-within-margin-bounds inputs cash-account-balance debit-value)
 
-        (rop/fail (ex-info (format "Margin account (10x Cash) is still Insufficient Funds [%s] for purchase value [%s]"
+        (rop/fail (ex-info (format "Insufficient Funds on Margin account (10x Cash) [%s] for purchase value [%s]"
                                    cash-account-balance
                                    debit-value)
                            inputs))

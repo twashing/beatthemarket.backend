@@ -137,7 +137,7 @@
 
     (persistence.datomic/transact-entities! conn user-entity)
     (integration.payments.core/apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
-    (payments.persistence/user-payments conn)))
+    (payments.persistence/user-payments conn email)))
 
 
 ;; SUBSCRIPTION
@@ -189,7 +189,7 @@
 
         (persistence.datomic/transact-entities! conn user-entity)
         (integration.payments.core/apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
-        (payments.persistence/user-payments conn)))))
+        (payments.persistence/user-payments conn email)))))
 
 (comment
 
