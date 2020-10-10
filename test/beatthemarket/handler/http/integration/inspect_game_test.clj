@@ -5,6 +5,7 @@
             [integrant.repl.state :as state]
             [com.rpl.specter :refer [transform ALL]]
 
+            [beatthemarket.game.games.control :as games.control]
             [beatthemarket.handler.http.integration.util :as integration.util]
             [beatthemarket.test-util :as test-util]
             [beatthemarket.util :refer [ppi] :as util])
@@ -158,6 +159,18 @@
                (= expected-user)
                is)))))
 
+(defn create-exit-game! [message-id]
+
+  (let [{game-id :id} (integration.util/start-game-workflow)
+        game-id-uuid (UUID/fromString game-id)]
+
+    (integration.util/exit-game game-id message-id)
+
+    ;; (Thread/sleep 2000)
+    (games.control/update-short-circuit-game! game-id-uuid true)
+
+    (test-util/consume-until message-id)))
+
 (deftest query-users-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
@@ -167,10 +180,15 @@
 
     (test-util/login-assertion service id-token)
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "query Users {
+    (create-exit-game! 1000)
+    (create-exit-game! 1001)
+
+    (let [users-message-id 1002]
+
+      (test-util/send-data {:id   users-message-id
+                            :type :start
+                            :payload
+                            {:query "query Users {
                                      users {
                                        userEmail
                                        userName
@@ -188,8 +206,8 @@
                                      }
                                    }"}})
 
-    (ppi (test-util/<message!! 1000))
-    (ppi (test-util/<message!! 1000))
+      (ppi (test-util/consume-until users-message-id)))
+
 
     #_(let [result-users (-> (test-util/<message!! 1000) :payload :data :users)]
 

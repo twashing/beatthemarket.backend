@@ -500,7 +500,9 @@
            (map graphql.encoder/user->graphql)))
 
     (catch Throwable e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+      (do
+        (ppi (bean e))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-user-personal-profit-loss [context {:keys [email gameId groupByStock] :as args} _]
 
