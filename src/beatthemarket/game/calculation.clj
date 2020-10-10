@@ -114,7 +114,7 @@
                                  [?g :game/id]
                                  [?g :game/users ?gu]
                                  [?gu :game.user/user ?guu]
-                                 [?guu :user/email "twashing@gmail.com"]]
+                                 [?guu :user/external-uid]]
                                (d/db conn))
 
          grouped-games->games-by-user
