@@ -96,6 +96,38 @@
                                          }"
                           :variables {:gameId game-id}}})))
 
+(defn buy-stock [buy-id game-id stock-id stock-amount stock-tick-id stock-tick-close]
+
+  (test-util/send-data {:id   buy-id
+                        :type :start
+                        :payload
+                        {:query "mutation BuyStock($input: BuyStock!) {
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                         :variables {:input {:gameId      game-id
+                                             :stockId     stock-id
+                                             :stockAmount stock-amount
+                                             :tickId      stock-tick-id
+                                             :tickPrice   stock-tick-close}}}}))
+
+(defn sell-stock [sell-id game-id stock-id stock-amount stock-tick-id stock-tick-close]
+
+  (test-util/send-data {:id   sell-id
+                        :type :start
+                        :payload
+                        {:query "mutation SellStock($input: SellStock!) {
+                                           sellStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                         :variables {:input {:gameId      game-id
+                                             :stockId     stock-id
+                                             :stockAmount stock-amount
+                                             :tickId      stock-tick-id
+                                             :tickPrice   stock-tick-close}}}}))
+
 (defn verify-payment
 
   ([client-id payload]
