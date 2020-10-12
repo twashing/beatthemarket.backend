@@ -63,7 +63,6 @@
                                          }
                                        }"
                               :variables {:gameId id}}})
-
        (test-util/consume-until stock-tick-id)
 
        create-game-result))))
@@ -140,10 +139,31 @@
 
    (verify-payment client-id payload 989))
 
-  ([client-id payload message-id]
+  ([client-id payload verify-payment-id]
 
    (test-util/send-init {:client-id (str client-id)})
-   (test-util/send-data {:id   message-id
+   (test-util/send-data {:id   verify-payment-id
+                         :type :start
+                         :payload
+                         {:query     "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                          :variables payload}})))
+
+(defn verify-payment-workflow
+
+  ([client-id product-id provider token]
+
+   (verify-payment-workflow client-id product-id provider token 987))
+
+  ([client-id product-id provider token verify-payment-id]
+
+   (test-util/send-init {:client-id (str client-id)})
+   (test-util/send-data {:id   verify-payment-id
                          :type :start
                          :payload
                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
@@ -153,7 +173,12 @@
                                          provider
                                        }
                                      }"
-                          :variables payload}})))
+                          :variables {:productId product-id
+                                      :provider provider
+                                      :token token}}})
+
+   (Thread/sleep 2000)
+   (-> (test-util/consume-until verify-payment-id) :payload :data :verifyPayment)))
 
 (defn delete-test-customer!
 

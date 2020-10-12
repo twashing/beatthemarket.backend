@@ -938,7 +938,10 @@
       (when-let [game-event (core.async/<! game-event-stream)]
 
         (source-stream
-          (graphql.encoder/game-event->graphql game-event))
+          (let [a (graphql.encoder/game-event->graphql game-event)]
+
+            (println [:game-event a])
+            a))
 
         (recur)))
 
