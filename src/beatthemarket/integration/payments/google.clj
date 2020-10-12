@@ -111,9 +111,9 @@
   (let [{payment :payment
          game :game :as game-and-payments}
         (->> (verify-payment payment-config args)
-                               check-acknowledgement-valid
-                               (payments.google.persistence/acknowledgement->entity args)
-                               (payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id))
+             check-acknowledgement-valid
+             (payments.google.persistence/acknowledgement->entity args)
+             (payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id))
 
         user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
                         ffirst

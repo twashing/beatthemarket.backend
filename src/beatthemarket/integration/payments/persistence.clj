@@ -25,3 +25,10 @@
          [?p :payment/id ?payment-id]]
        (d/db conn) payment-id))
 
+(defn payment-by-product-id [conn product-id]
+
+  (d/q '[:find (pull ?p [*])
+         :in $ ?product-id
+         :where
+         [?p :payment/product-id ?product-id]]
+       (d/db conn) product-id))

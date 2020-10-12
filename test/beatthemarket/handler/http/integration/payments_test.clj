@@ -433,9 +433,7 @@
         {:verifyPayment
          [{:paymentId "07c135e7-f56f-452f-9e53-2c376f2043c4",
            :productId "additional_100k",
-           :provider "google"}]}}}
-
-    ))
+           :provider "google"}]}}}))
 
 (deftest verify-payment-google-test
 
@@ -537,61 +535,122 @@
 
     (testing "Subscription error with an invalid card"
 
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+      (let [verify-payment-id 987]
+
+        (test-util/send-data {:id   verify-payment-id
+                              :type :start
+                              :payload
+                              {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
                                        verifyPayment(productId: $productId, provider: $provider, token: $token) {
                                          paymentId
                                          productId
                                          provider
                                        }
                                      }"
-                             :variables {:productId product-id
-                                         :provider provider
-                                         :token token}}})
+                               :variables {:productId product-id
+                                           :provider provider
+                                           :token token}}})
 
-      (test-util/<message!! 5000)
-      (let [error-message (-> (test-util/<message!! 5000) :payload :errors first :message)
-            expected-error-message "Your card has expired."]
-        (is (= expected-error-message error-message))))
+        (let [error-message (-> (test-util/consume-until verify-payment-id) :payload :errors first :message)
+              expected-error-message "Your card has expired."]
+          (is (= expected-error-message error-message)))))
 
     (let [token (-> "example-payload-stripe-subscription-valid.json" resource slurp (json/read-str :key-fn keyword))
           email "foo@bar.com"]
 
       (testing "Create a test customer"
 
-        (let [[{result-id :id
-                result-email :email}] (-> (integration.util/create-test-customer! email) :payload :data :createStripeCustomer)
+        (let [create-id 988]
 
-              token-json (json/write-str
-                           (assoc token
-                                  :customerId result-id
-                                  :paymentMethodId "pm_card_visa"))]
+          (integration.util/create-test-customer! email create-id)
 
-          (testing "Subsciption with a valid card"
+          (let [[{result-id :id
+                  result-email :email}] (-> (test-util/consume-until create-id) :payload :data :createStripeCustomer)
 
-            (test-util/send-data {:id   988
-                                  :type :start
-                                  :payload
-                                  {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                token-json (json/write-str
+                             (assoc token
+                                    :customerId result-id
+                                    :paymentMethodId "pm_card_visa"))]
+
+            (testing "Subsciption with a valid card"
+
+              (let [verify-payment-id2 989]
+
+                (test-util/send-data {:id   verify-payment-id2
+                                      :type :start
+                                      :payload
+                                      {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
                                              verifyPayment(productId: $productId, provider: $provider, token: $token) {
                                                paymentId
                                                productId
                                                provider
                                              }
                                            }"
-                                   :variables {:productId product-id
-                                               :provider provider
-                                               :token token-json}}})
+                                       :variables {:productId product-id
+                                                   :provider provider
+                                                   :token token-json}}})
 
-            (test-util/<message!! 1000)
+                (verify-payment-response (-> (test-util/consume-until verify-payment-id2) :payload :data :verifyPayment)
+                                         product-id provider))
 
-            (verify-payment-response (-> (test-util/<message!! 5000) :payload :data :verifyPayment)
-                                     product-id provider))
+              (testing "DELETEING test customer"
+                (integration.util/delete-test-customer! result-id)))))))))
 
-          (testing "DELETEING test customer"
-            (integration.util/delete-test-customer! result-id)))))))
+(deftest verify-stripe-subscription-idempotency-test-no-game
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "prod_I1RAoB8UK5GDab" ;; Margin Trading
+        provider "stripe"
+        token (-> "example-payload-stripe-subscription-expired-card-error.json" resource slurp)]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+
+    (let [token (-> "example-payload-stripe-subscription-valid.json" resource slurp (json/read-str :key-fn keyword))
+          email "foo@bar.com"]
+
+
+      (testing "Create a test customer"
+
+        (let [create-id 988]
+
+          (integration.util/create-test-customer! email create-id)
+
+          (let [[{result-id :id
+                  result-email :email}] (-> (test-util/consume-until create-id) :payload :data :createStripeCustomer)]
+
+
+            (testing "Subsciption with a valid card"
+
+              (let [verify-payment-id 989
+                    verify-payment-id2 990
+
+                    token-json (json/write-str
+                                 (assoc token
+                                        :customerId result-id
+                                        :paymentMethodId "pm_card_visa"))
+
+                    payload {:productId product-id
+                             :provider provider
+                             :token token-json}]
+
+                (testing "First subscription"
+
+                  (integration.util/verify-payment client-id payload verify-payment-id)
+
+                  (let [subscriptions1 (-> (test-util/consume-until verify-payment-id) :payload :data :verifyPayment)]
+
+                    (integration.util/verify-payment client-id payload verify-payment-id2)
+
+                    (is (= subscriptions1
+                           (-> (test-util/consume-until verify-payment-id2) :payload :data :verifyPayment))))))
+
+              (testing "DELETEING test customer"
+                (integration.util/delete-test-customer! result-id)))))))))
 
 (deftest verify-stripe-subscription-test-with-game
 

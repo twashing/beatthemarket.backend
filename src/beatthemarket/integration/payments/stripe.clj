@@ -162,34 +162,39 @@
                                       payment-method-id :paymentMethodId
                                       price-id :priceId} :token :as args}]
 
-  (let [{success? :success? :as payment-method}
-        (conditionally-attach-payment-method client payment-method-id customer-id)]
 
-    (if-not success?
+  (if (empty? (payments.persistence/payment-by-product-id conn product-id))
 
-      (throw (Exception. (-> payment-method :error-details :error :message)))
+    (let [{success? :success? :as payment-method}
+          (conditionally-attach-payment-method client payment-method-id customer-id)]
 
-      (let [{{payment-method-id :id} :payment-method} payment-method
-            payload {:customer customer-id
-                     :default_payment_method payment-method-id
-                     :items {"0" {:price price-id}}}
+      (if-not success?
 
-            payment-type :payment.provider.stripe/subscription
+        (throw (Exception. (-> payment-method :error-details :error :message)))
 
-            {game-entity :game
-             payment-entity :payment}
-            (->> (conditionally-create-subscription client payload)
-                 :subscription
-                 (->payment conn product-id payment-type)
-                 (integration.payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id))
+        (let [{{payment-method-id :id} :payment-method} payment-method
+              payload {:customer customer-id
+                       :default_payment_method payment-method-id
+                       :items {"0" {:price price-id}}}
 
-            user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
-                            ffirst
-                            (assoc :user/payments payment-entity))]
+              payment-type :payment.provider.stripe/subscription
 
-        (persistence.datomic/transact-entities! conn user-entity)
-        (integration.payments.core/apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
-        (payments.persistence/user-payments conn email)))))
+              {game-entity :game
+               payment-entity :payment}
+              (->> (conditionally-create-subscription client payload)
+                   :subscription
+                   (->payment conn product-id payment-type)
+                   (integration.payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id))
+
+              user-entity (-> (iam.persistence/user-by-email conn email '[:db/id])
+                              ffirst
+                              (assoc :user/payments payment-entity))]
+
+          (persistence.datomic/transact-entities! conn user-entity)
+          (integration.payments.core/apply-payment-conditionally-on-running-game conn email payment-entity game-entity)
+          (payments.persistence/user-payments conn email))))
+
+    (payments.persistence/user-payments conn email)))
 
 (comment
 
