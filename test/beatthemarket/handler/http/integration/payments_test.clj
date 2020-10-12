@@ -382,17 +382,7 @@
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (test-util/send-data {:id verify-payment-id
-                          :type :start
-                          :payload
-                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"
-                           :variables apple-payload}})
+    (integration.util/verify-payment client-id apple-payload verify-payment-id)
 
     (let [expected-verify-payment-result [{:productId "margin_trading_1month.1"
                                            :provider "apple"}]
@@ -412,12 +402,14 @@
 
         product-id "margin_trading_1month"
         provider "google"
-        android-payload (-> "android.additional_100k.txt" resource slurp (json/read-str :key-fn keyword))]
+        android-payload (-> "android.additional_100k.txt" resource slurp (json/read-str :key-fn keyword))
+
+        verify-payment-id 987]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (test-util/send-data {:id   987
+    (test-util/send-data {:id verify-payment-id
                           :type :start
                           :payload
                           {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
@@ -429,20 +421,20 @@
                                      }"
                            :variables android-payload}})
 
-    (ppi (test-util/<message!! 1000))
-    (ppi (test-util/<message!! 1000))
+    (let [expected-verify-payment-keys #{:paymentId :productId :provider}
+          expected-verify-payment-response [{:productId "additional_100k"
+                                             :provider "google"}]
+          verify-payment-response (-> (test-util/consume-until verify-payment-id) :payload :data :verifyPayment)]
 
-    ;; TODO complete
-    #_{:type "data",
-       :id 987,
-       :payload
-       {:data
-        {:verifyPayment
-         [{:paymentId "07c135e7-f56f-452f-9e53-2c376f2043c4",
-           :productId "additional_100k",
-           :provider "google"}]}}}
+      (->> verify-payment-response
+           first
+           keys
+           (into #{})
+           (= expected-verify-payment-keys)
+           is)
 
-    ))
+      (is (= expected-verify-payment-response
+             (update verify-payment-response 0 #(dissoc % :paymentId)))))))
 
 (deftest create-stripe-customer-test
 
