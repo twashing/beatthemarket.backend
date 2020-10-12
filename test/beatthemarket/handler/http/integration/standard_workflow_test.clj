@@ -373,10 +373,10 @@
                               :game-id id}))
 
 
-        (ppi (test-util/<message!! 1000))
+        (test-util/<message!! 1000)
 
         (let [expected-result []
-              result (-> (test-util/<message!! 1000) ppi :payload :data :startGame)]
+              result (-> (test-util/<message!! 1000) :payload :data :startGame)]
 
           (is (= expected-result result)))))))
 
@@ -971,7 +971,7 @@
 
 (deftest start-exit-start-game-test
 
-  (let [{:keys [stocks id]} (ppi (integration.util/start-game-workflow))]
+  (let [{:keys [stocks id]} (integration.util/start-game-workflow)]
 
     (let [exit-message-id 993
           expected-exit-response {:type "data"

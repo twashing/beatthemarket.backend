@@ -1219,16 +1219,16 @@
         (is (t/after? (c/to-date-time end-time) (c/to-date-time start-time)))
         (is (= :game-status/exited status))))))
 
-#_(deftest start-game!-with-start-position-test
+(deftest start-game!-with-start-position-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
         {user-db-id :db/id
-         userId         :user/external-uid} (test-util/generate-user! conn)
+         userId     :user/external-uid} (test-util/generate-user! conn)
 
         ;; B
         data-sequence-fn (constantly [100.0 110.0 105.0 120.0 110.0 125.0 130.0])
-        tick-length     (count (data-sequence-fn))
+        tick-length      (count (data-sequence-fn))
 
 
         ;; C create-game!
@@ -1236,42 +1236,44 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
-        opts       {:level-timer-sec                   5
-                    :accounts                          (game.core/->game-user-accounts)
-                    :stream-stock-tick       (fn [a]
-                                               (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
-                                                 (swap! test-stock-ticks
-                                                        (fn [b]
-                                                          (conj b stock-ticks)))
-                                                 stock-ticks))
+        opts       {:level-timer-sec          5
+                    :user                     {:db/id user-db-id}
+                    :accounts                 (game.core/->game-user-accounts)
+                    :stream-stock-tick        (fn [a]
+                                                (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
+                                                  (swap! test-stock-ticks
+                                                         (fn [b]
+                                                           (conj b stock-ticks)))
+                                                  stock-ticks))
                     :stream-portfolio-update! (fn [a]
                                                 (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                 a)}
         game-level :game-level/one
-        {{game-id     :game/id
+        {{game-id    :game/id
           game-db-id :db/id :as game} :game
          control-channel              :control-channel
          game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn sink-fn data-sequence-fn opts)
 
         start-position               3
-        [historical-data iterations] (game.games/start-game!-workbench conn user-db-id game-control start-position)]
+        [historical-data iterations] (game.games/start-game!-workbench conn game-control start-position)]
 
 
     (testing "Game's startPosition is seeking to the correct location"
 
-      (let [expected-price 120.0
-            result-price   (-> iterations ffirst :stock-ticks first :game.stock.tick/close)]
+        (let [expected-price 120.0
+              result-price   (-> iterations ffirst :stock-ticks first :game.stock.tick/close)]
 
         (is (= expected-price result-price))))
 
     (testing "We are returning the correcet historical data"
 
-      (let [result-historical-data (->> (map :stock-ticks historical-data)
-                                        (map #(map graphql.encoder/stock-tick->graphql %)))
+        (let [result-historical-data (->> (map :stock-ticks historical-data)
+                                          (map #(map graphql.encoder/stock-tick->graphql %)))
 
-            expected-historical-data-length start-position]
+              expected-historical-data-length start-position
+              expected-stock-tick-keys #{:stockTickId :stockTickTime :stockTickClose :stockId :stockName}]
 
         (is (= expected-historical-data-length (count result-historical-data)))
 
@@ -1279,8 +1281,7 @@
              (map #(map keys %))
              (map #(map (fn [a] (into #{} a)) %))
              (map #(every? (fn [a]
-                             (= #{:stockTickId :stockTickTime :stockTickClose :stock-id :stockName}
-                                a)) %))
+                             (= expected-stock-tick-keys a)) %))
              (every? true?)
              is)))))
 
