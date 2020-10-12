@@ -5,35 +5,40 @@
   (:import [java.util UUID]))
 
 
-(defn start-game-workflow []
+(defn start-game-workflow
 
-  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)
-        gameLevel 1
+  ([]
+   (start-game-workflow 987))
 
-        client-id (UUID/randomUUID)]
+  ([create-id]
+   (start-game-workflow create-id 988))
 
-    (test-util/send-init {:client-id (str client-id)})
+  ([create-id start-id]
+   (start-game-workflow create-id start-id 989))
 
-    (test-util/login-assertion service id-token)
+  ([create-id start-id stock-tick-id]
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation CreateGame($gameLevel: Int!) {
+   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+         id-token (test-util/->id-token)
+         gameLevel 1]
+
+     (test-util/send-data {:id   create-id
+                           :type :start
+                           :payload
+                           {:query "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }"
-                           :variables {:gameLevel gameLevel}}})
+                            :variables {:gameLevel gameLevel}}})
 
-    (let [{:keys [stocks id] :as create-game-result} (-> (test-util/consume-until 987) :payload :data :createGame)]
+     (let [{:keys [stocks id] :as create-game-result} (-> (test-util/consume-until create-id) :payload :data :createGame)]
 
-      (test-util/send-data {:id   988
-                            :type :start
-                            :payload
-                            {:query "mutation StartGame($id: String!) {
+       (test-util/send-data {:id   start-id
+                             :type :start
+                             :payload
+                             {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
                                            stockTickId
                                            stockTickTime
@@ -42,12 +47,13 @@
                                            stockName
                                          }
                                        }"
-                             :variables {:id id}}})
+                              :variables {:id id}}})
+       (test-util/consume-until start-id)
 
-      (test-util/send-data {:id   989
-                            :type :start
-                            :payload
-                            {:query "subscription StockTicks($gameId: String!) {
+       (test-util/send-data {:id   stock-tick-id
+                             :type :start
+                             :payload
+                             {:query "subscription StockTicks($gameId: String!) {
                                            stockTicks(gameId: $gameId) {
                                              stockTickId
                                              stockTickTime
@@ -56,11 +62,11 @@
                                              stockName
                                          }
                                        }"
-                             :variables {:gameId id}}})
+                              :variables {:gameId id}}})
 
-      (test-util/<message!! 1000)
+       (test-util/consume-until stock-tick-id)
 
-      create-game-result)))
+       create-game-result))))
 
 (defn exit-game
 

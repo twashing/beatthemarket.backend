@@ -37,50 +37,6 @@
 ;;
 ;; Update subscription (Webhook - POST)
 
-(defn start-game-workflow
-
-  ([]
-   (start-game-workflow 987 988))
-
-  ([create-id start-id]
-
-   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
-         gameLevel 1]
-
-     (testing "Create a Game"
-
-       (test-util/send-data {:id   create-id
-                             :type :start
-                             :payload
-                             {:query "mutation CreateGame($gameLevel: Int!) {
-                                       createGame(gameLevel: $gameLevel) {
-                                         id
-                                         stocks { id name symbol }
-                                       }
-                                     }"
-                              :variables {:gameLevel gameLevel}}}))
-
-     (testing "Start a Game"
-
-       (let [{:keys [stocks id] :as create-game} (-> (test-util/consume-until create-id) :payload :data :createGame)]
-
-         (test-util/send-data {:id   start-id
-                               :type :start
-                               :payload
-                               {:query "mutation StartGame($id: String!) {
-                                         startGame(id: $id) {
-                                           stockTickId
-                                           stockTickTime
-                                           stockTickClose
-                                           stockId
-                                           stockName
-                                         }
-                                       }"
-                                :variables {:id id}}})
-
-         (test-util/consume-until start-id)
-
-         create-game)))))
 
 (defn verify-payment-workflow [client-id product-id provider token]
 
@@ -195,8 +151,6 @@
                                        }
                                      }"}})
 
-          ;; (test-util/<message!! 3000)
-
           (let [user-payments-response (-> (test-util/consume-until 988) :payload :data :userPayments)
                 expected-user-payment-keys #{:paymentId :productId :provider}
                 expected-user-payments-response [{:productId product-id
@@ -237,10 +191,11 @@
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (let [game-id-uuid (-> (start-game-workflow) :id UUID/fromString)]
+    (let [game-id-uuid (-> (integration.util/start-game-workflow) :id UUID/fromString)
+          verify-payment-id 990]
 
       (test-util/send-init {:client-id (str client-id)})
-      (test-util/send-data {:id   987
+      (test-util/send-data {:id   verify-payment-id
                             :type :start
                             :payload
                             {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
@@ -254,9 +209,18 @@
                                          :provider provider
                                          :token token}}})
 
-      (let [payment-response (-> (test-util/consume-until 987) :payload :data :verifyPayment)]
+      (let [payment-response (-> (test-util/consume-until verify-payment-id) :payload :data :verifyPayment)]
 
         (verify-payment-response payment-response product-id provider)
+
+        (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+              expected-cash-account-balance (.floatValue 200000.0)
+              email "twashing@gmail.com"
+
+              {cash-account-balance :bookkeeping.account/balance}
+              (ffirst (game.persistence/cash-account-for-user-game conn email game-id-uuid))]
+
+          (is (= expected-cash-account-balance cash-account-balance)))
 
 
         (testing "With a running game, charge is applied"
@@ -298,101 +262,108 @@
       (is (empty? (beatthemarket.integration.payments.core/payments-for-user conn user-db-id))))
 
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+    (let [verify-payment-id 987]
+
+      (test-util/send-data {:id   verify-payment-id
+                            :type :start
+                            :payload
+                            {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
                                        verifyPayment(productId: $productId, provider: $provider, token: $token) {
                                          paymentId
                                          productId
                                          provider
                                        }
                                      }"
-                           :variables {:productId product-id
-                                       :provider provider
-                                       :token token}}})
+                             :variables {:productId product-id
+                                         :provider provider
+                                         :token token}}})
 
-    (testing "Basic verify payment"
+      (testing "Basic verify payment"
 
-      (verify-payment-response (-> (test-util/consume-until 987) :payload :data :verifyPayment)
-                               product-id provider))
+        (verify-payment-response (-> (test-util/consume-until verify-payment-id) :payload :data :verifyPayment)
+                                 product-id provider)))
 
     (testing "Subsequent call to list payments, includes the most recent"
 
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "query UserPayments {
-                                       userPayments {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"}})
+      (let [user-payments-id 988]
 
-      (let [user-payments-response (-> (test-util/consume-until 987) :payload :data :userPayments)
-            original-user-payments-count (count user-payments-response)
+        (test-util/send-data {:id   user-payments-id
+                              :type :start
+                              :payload
+                              {:query "query UserPayments {
+                                         userPayments {
+                                           paymentId
+                                           productId
+                                           provider
+                                         }
+                                       }"}})
 
-
-            expected-user-payment-keys #{:paymentId :productId :provider}
-            expected-user-payments-response [{:productId product-id
-                                              :provider provider}]]
-
-        (->> user-payments-response
-             (map keys)
-             (map #(into #{} %))
-             (every? #(= expected-user-payment-keys %))
-             is)
-
-        (is (= expected-user-payments-response
-               (->> user-payments-response
-                    (filter #(= product-id (:productId %)))
-                    (map #(select-keys % [:productId :provider])))))
+        (let [user-payments-response (-> (test-util/consume-until user-payments-id) :payload :data :userPayments)
+              original-user-payments-count (count user-payments-response)
 
 
-        (testing "Subsequent VerifyPayments are idempotent"
+              expected-user-payment-keys #{:paymentId :productId :provider}
+              expected-user-payments-response [{:productId product-id
+                                                :provider provider}]]
 
-          (test-util/send-data {:id   988
-                                :type :start
-                                :payload
-                                {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"
-                                 :variables {:productId product-id
-                                             :provider provider
-                                             :token token}}})
+          (->> user-payments-response
+               (map keys)
+               (map #(into #{} %))
+               (every? #(= expected-user-payment-keys %))
+               is)
 
-          (test-util/send-data {:id   989
-                                :type :start
-                                :payload
-                                {:query "query UserPayments {
-                                       userPayments {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"}})
+          (is (= expected-user-payments-response
+                 (->> user-payments-response
+                      (filter #(= product-id (:productId %)))
+                      (map #(select-keys % [:productId :provider])))))
 
-          (let [updated-user-payments-response (-> (test-util/consume-until 989) :payload :data :userPayments)
-                expected-user-payment-keys #{:paymentId :productId :provider}
-                expected-user-payments-response [{:productId product-id
-                                                  :provider provider}]]
 
-            (is (= original-user-payments-count (count updated-user-payments-response)))
-            (->> updated-user-payments-response
-                 (map keys)
-                 (map #(into #{} %))
-                 (every? #(= expected-user-payment-keys %))
-                 is)
+          (testing "Subsequent VerifyPayments are idempotent"
 
-            (is (= expected-user-payments-response
-                   (->> updated-user-payments-response
-                        (filter #(= product-id (:productId %)))
-                        (map #(select-keys % [:productId :provider])))))))))
+            (let [verify-payment-id2 990
+                  user-payments-id2 991]
+
+              (test-util/send-data {:id   verify-payment-id2
+                                    :type :start
+                                    :payload
+                                    {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                               verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                                 paymentId
+                                                 productId
+                                                 provider
+                                               }
+                                             }"
+                                     :variables {:productId product-id
+                                                 :provider provider
+                                                 :token token}}})
+
+              (test-util/send-data {:id   user-payments-id2
+                                    :type :start
+                                    :payload
+                                    {:query "query UserPayments {
+                                               userPayments {
+                                                 paymentId
+                                                 productId
+                                                 provider
+                                               }
+                                             }"}})
+
+              (let [updated-user-payments-response (-> (test-util/consume-until user-payments-id2) :payload :data :userPayments)
+                    expected-user-payment-keys #{:paymentId :productId :provider}
+                    expected-user-payments-response [{:productId product-id
+                                                      :provider provider}]]
+
+                (is (= original-user-payments-count (count updated-user-payments-response)))
+                (->> updated-user-payments-response
+                     (map keys)
+                     (map #(into #{} %))
+                     (every? #(= expected-user-payment-keys %))
+                     is)
+
+                (is (= expected-user-payments-response
+                       (->> updated-user-payments-response
+                            (filter #(= product-id (:productId %)))
+                            (map #(select-keys % [:productId :provider])))))))))))
 
     ;; NOTE Stop DB connection from being closed
     (Thread/sleep 2000)))
@@ -405,12 +376,13 @@
 
         product-id "margin_trading_1month.1"
         provider "apple"
+        verify-payment-id 987
         apple-payload (-> "ios.margin_trading.txt" resource slurp (json/read-str :key-fn keyword))]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (test-util/send-data {:id   987
+    (test-util/send-data {:id verify-payment-id
                           :type :start
                           :payload
                           {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
@@ -422,18 +394,15 @@
                                      }"
                            :variables apple-payload}})
 
-    (ppi (test-util/<message!! 1000))
-    (ppi (test-util/<message!! 1000))
+    (let [expected-verify-payment-result [{:productId "margin_trading_1month.1"
+                                           :provider "apple"}]
+          verify-payment-result (-> (test-util/consume-until verify-payment-id) :payload :data :verifyPayment)]
 
-    ;; TODO complete
-    #_{:type "data",
-       :id 987,
-       :payload
-       {:data
-        {:verifyPayment
-         [{:paymentId "07c135e7-f56f-452f-9e53-2c376f2043c4",
-           :productId "additional_100k",
-           :provider "google"}]}}}))
+      (->> verify-payment-result
+           (filter #(= product-id (:productId %)))
+           (map #(dissoc % :paymentId))
+           (= expected-verify-payment-result)
+           is))))
 
 (deftest verify-payment-google-test
 
@@ -674,7 +643,7 @@
         (testing "Subsciption with a valid card"
 
           (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
-                game-id-uuid (-> (start-game-workflow) :id UUID/fromString)
+                game-id-uuid (-> (integration.util/start-game-workflow) :id UUID/fromString)
 
                 token (-> "example-payload-stripe-subscription-valid.json"
                           resource
@@ -775,7 +744,7 @@
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (let [game-id-uuid (-> (start-game-workflow) :id UUID/fromString)]
+    (let [game-id-uuid (-> (integration.util/start-game-workflow) :id UUID/fromString)]
 
 
       (testing "Charge a valid card"
@@ -915,7 +884,7 @@
 
         (testing "Purchses are applied after game start"
 
-          (let [game-id-uuid (-> (start-game-workflow) :id UUID/fromString)]
+          (let [game-id-uuid (-> (integration.util/start-game-workflow) :id UUID/fromString)]
 
             (is (empty? (integration.payments.core/unapplied-payments-for-user conn (:db/id user-entity))))
 
@@ -974,7 +943,7 @@
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (let [game-id (:id (start-game-workflow))
+    (let [game-id (:id (integration.util/start-game-workflow))
           game-id-uuid (UUID/fromString game-id)]
 
 
@@ -1071,7 +1040,7 @@
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (let [game-id (:id (start-game-workflow))
+    (let [game-id (:id (integration.util/start-game-workflow))
           game-id-uuid (UUID/fromString game-id)]
 
 
@@ -1237,7 +1206,7 @@
 
         (testing "Purchses are applied after game start"
 
-          (let [game-id (:id (start-game-workflow 1000 1001))
+          (let [game-id (:id (integration.util/start-game-workflow 1000 1001))
                 game-id-uuid (UUID/fromString game-id)]
 
             (testing "Make purchase, greater than Cash, less than Margin threshold"
