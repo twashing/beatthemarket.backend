@@ -5,7 +5,7 @@
             [io.pedestal.interceptor :as interceptor]
             [com.walmartlabs.lacinia.util :refer [as-error-map]]
             [beatthemarket.iam.authentication :as iam.auth]
-            [beatthemarket.util :refer [exists?]]))
+            [beatthemarket.util :refer [ppi exists?]]))
 
 
 (defn request->token [request]
@@ -16,11 +16,21 @@
 
 (defn auth-request-handler [request]
 
-  (log/debug :auth-request request)
+  (log/info :auth-request request)
 
-  (if (= {:uri "/health"
-          :request-method :get}
-         (select-keys request [:uri :request-method]))
+  (if (some #{{:uri "/health"
+               :request-method :get}
+
+              {:uri "/privacy"
+               :request-method :get}
+
+              {:uri "/terms"
+               :request-method :get}
+
+              {:uri "/support"
+               :request-method :get}}
+
+            #{(select-keys request [:uri :request-method])})
 
     request
 
