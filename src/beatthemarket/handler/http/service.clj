@@ -35,6 +35,7 @@
             [com.walmartlabs.lacinia.pedestal2]
             [com.walmartlabs.lacinia.pedestal :refer [inject]]
             [com.walmartlabs.lacinia.pedestal.subscriptions :as sub]
+            [markdown.core :refer [md-to-html-string]]
             [rop.core :as rop])
 
   (:import [org.eclipse.jetty.websocket.api Session]
@@ -64,11 +65,34 @@
                       (log/info :msg "WS Closed:" :reason reason-text))}})
 
 (def ^:private health-check-path "/health")
+(def ^:private privacy-policy-path "/privacy")
+(def ^:private terms-and-conditions-path "/terms")
+(def ^:private support-url-path "/support")
+
 (def ^:private default-api-path "/api")
 (def ^:private default-asset-path "/assets/graphiql")
 
 (defn health-handler [request]
   {:status 200 :body "ok"})
+
+(defn privacy-handler [request]
+
+  (ring-resp/content-type {:status 200
+                           :body (-> "PRIVACY.md" resource slurp md-to-html-string)}
+                          "text/html; charset=UTF-8"))
+
+(defn terms-handler [request]
+
+  (ring-resp/content-type {:status 200
+                           :body (-> "TERMS.md" resource slurp md-to-html-string)}
+                          "text/html; charset=UTF-8"))
+
+(defn support-handler [request]
+
+  (ring-resp/content-type {:status 200
+                           :body (-> "SUPPORT.md" resource slurp md-to-html-string)}
+                          "text/html; charset=UTF-8"))
+
 
 (defn auth-request-handler-ws [context]
 
@@ -142,8 +166,14 @@
   "Taken from com.walmartlabs.lacinia.pedestal2/default-service:
   See docs there."
   [compiled-schema options]
-  (let [{:keys [health-path api-path ide-path asset-path app-context port]
+  (let [{:keys [health-path privacy-path terms-path support-path
+                api-path ide-path asset-path app-context port]
+
          :or {health-path health-check-path
+              privacy-path privacy-policy-path
+              terms-path terms-and-conditions-path
+              support-path support-url-path
+
               api-path default-api-path
               ide-path "/ide"
               asset-path default-asset-path}} options
@@ -152,8 +182,13 @@
 
         full-routes (route/expand-routes
                       (into #{[health-path :get [health-handler] :route-name :health]
+                              [privacy-path :get [privacy-handler] :route-name :privacy]
+                              [terms-path :get [terms-handler] :route-name :terms]
+                              [support-path :get [support-handler] :route-name :support]
+
                               [api-path :post interceptors :route-name ::graphql-api]
-                              [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options) :route-name ::graphiql-ide]}
+                              [ide-path :get (com.walmartlabs.lacinia.pedestal2/graphiql-ide-handler options)
+                               :route-name ::graphiql-ide]}
                             (com.walmartlabs.lacinia.pedestal2/graphiql-asset-routes asset-path)))]
 
     (-> (merge options {::http/routes full-routes})

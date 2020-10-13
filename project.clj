@@ -125,10 +125,12 @@
                  [magnet/payments.stripe "0.3.4"]
 
                  [com.datomic/client-cloud "0.8.102"]
-                 [org.clojure/test.check "1.1.0"]]
+                 [org.clojure/test.check "1.1.0"]
+
+                 [markdown-clj "1.10.5"]]
 
   :min-lein-version "2.0.0"
-  :resource-paths ["config" "resources"]
+  :resource-paths ["config" "docs" "resources"]
 
   :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
                                       "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
