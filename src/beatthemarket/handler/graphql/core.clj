@@ -798,21 +798,26 @@
     (->> (payments.apple/verify-payment-workflow conn client-id email verify-receipt-endpoint primary-shared-secret apple-hash)
          (map graphql.encoder/payment-purchase->graphql))))
 
-(defmethod verify-payment-handler "google" [context {productId :productId
-                                                     provider :provider
-                                                     token :token :as args} _]
+(defmethod verify-payment-handler "google" [context {product-id :productId :as args} _]
 
   (let [client-id (check-client-id-exists context)
         {{{email :email} :checked-authentication} :request} context
         conn (-> repl.state/system :persistence/datomic :opts :conn)
         payment-config (-> repl.state/config :payment.provider/google :service)]
 
-    (->> (payments.google/verify-payment-workflow conn client-id email payment-config args)
-         (map graphql.encoder/payment-purchase->graphql))))
+    (cond
 
-(defmethod verify-payment-handler "stripe" [context {product-id :productId
-                                                     provider :provider
-                                                     :as args} _]
+      (valid-google-product-id? product-id)
+      (->> (payments.google/verify-product-payment-workflow conn client-id email payment-config args)
+           (map graphql.encoder/payment-purchase->graphql))
+
+      (valid-google-subscription-id? product-id)
+      (->> (payments.google/verify-subscription-payment-workflow conn client-id email payment-config args)
+           (map graphql.encoder/payment-purchase->graphql))
+
+      :else (throw (Exception. (format "Invalid product ID given %s" product-id))))))
+
+(defmethod verify-payment-handler "stripe" [context {product-id :productId :as args} _]
 
   ;; (ppi args)
   ;; (ppi #_context (check-client-id-exists context))
