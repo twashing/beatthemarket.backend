@@ -416,6 +416,51 @@
       (is (= expected-verify-payment-response
              (update verify-payment-response 0 #(dissoc % :paymentId)))))))
 
+(deftest verify-payment-google-subscription-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        product-id "margin_trading_1month"
+        provider "google"
+
+        product-id "margin_trading_1month"
+	      provider "google"
+	      android-token (ppi (-> "android.margintrading.token.json" resource slurp))]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                           :variables {:productId product-id
+                                       :provider provider
+                                       :token android-token}}})
+
+    (ppi (test-util/<message!! 1000))
+    (ppi (test-util/<message!! 1000))
+
+    ;; TODO complete
+    #_{:type "data",
+       :id 987,
+       :payload
+       {:data
+        {:verifyPayment
+         [{:paymentId "07c135e7-f56f-452f-9e53-2c376f2043c4",
+           :productId "additional_100k",
+           :provider "google"}]}}}
+
+    ))
+
 (deftest create-stripe-customer-test
 
   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)

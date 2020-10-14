@@ -16,7 +16,7 @@
 
 (defn auth-request-handler [request]
 
-  (log/info :auth-request request)
+  (log/debug :auth-request request)
 
   (if (some #{{:uri "/health"
                :request-method :get}
