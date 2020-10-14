@@ -565,6 +565,7 @@
   (try
 
     (log/info :graphql.core.resolve-pause-game args)
+
     (let [game-id (UUID/fromString gameId)
           event {:type :ControlEvent
                  :event :pause
