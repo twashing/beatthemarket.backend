@@ -386,11 +386,14 @@
 (defn consume-until
 
   ([message-id]
-   (consume-until message-id 4))
+   (consume-until message-id 1000))
 
-  ([message-id threshold]
+  ([message-id timeout]
+   (consume-until message-id timeout 4))
 
-   (loop [{id :id :as message} (<message!! 1000)
+  ([message-id timeout threshold]
+
+   (loop [{id :id :as message} (<message!! timeout)
           count 1]
 
      (let [{type :type} message]
@@ -399,7 +402,7 @@
                (and (= message-id id)
                     (= "data" type)))
          message
-         (recur (<message!! 1000) (inc count)))))))
+         (recur (<message!! timeout) (inc count)))))))
 
 (defn consume-messages [channel container]
 

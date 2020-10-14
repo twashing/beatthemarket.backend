@@ -5,35 +5,40 @@
   (:import [java.util UUID]))
 
 
-(defn start-game-workflow []
+(defn start-game-workflow
 
-  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
-        id-token (test-util/->id-token)
-        gameLevel 1
+  ([]
+   (start-game-workflow 987))
 
-        client-id (UUID/randomUUID)]
+  ([create-id]
+   (start-game-workflow create-id 988))
 
-    (test-util/send-init {:client-id (str client-id)})
+  ([create-id start-id]
+   (start-game-workflow create-id start-id 989))
 
-    (test-util/login-assertion service id-token)
+  ([create-id start-id stock-tick-id]
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation CreateGame($gameLevel: Int!) {
+   (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+         id-token (test-util/->id-token)
+         gameLevel 1]
+
+     (test-util/send-data {:id   create-id
+                           :type :start
+                           :payload
+                           {:query "mutation CreateGame($gameLevel: Int!) {
                                        createGame(gameLevel: $gameLevel) {
                                          id
                                          stocks { id name symbol }
                                        }
                                      }"
-                           :variables {:gameLevel gameLevel}}})
+                            :variables {:gameLevel gameLevel}}})
 
-    (let [{:keys [stocks id] :as create-game-result} (-> (test-util/consume-until 987) :payload :data :createGame)]
+     (let [{:keys [stocks id] :as create-game-result} (-> (test-util/consume-until create-id) :payload :data :createGame)]
 
-      (test-util/send-data {:id   988
-                            :type :start
-                            :payload
-                            {:query "mutation StartGame($id: String!) {
+       (test-util/send-data {:id   start-id
+                             :type :start
+                             :payload
+                             {:query "mutation StartGame($id: String!) {
                                          startGame(id: $id) {
                                            stockTickId
                                            stockTickTime
@@ -42,12 +47,13 @@
                                            stockName
                                          }
                                        }"
-                             :variables {:id id}}})
+                              :variables {:id id}}})
+       (test-util/consume-until start-id)
 
-      (test-util/send-data {:id   989
-                            :type :start
-                            :payload
-                            {:query "subscription StockTicks($gameId: String!) {
+       (test-util/send-data {:id   stock-tick-id
+                             :type :start
+                             :payload
+                             {:query "subscription StockTicks($gameId: String!) {
                                            stockTicks(gameId: $gameId) {
                                              stockTickId
                                              stockTickTime
@@ -56,11 +62,10 @@
                                              stockName
                                          }
                                        }"
-                             :variables {:gameId id}}})
+                              :variables {:gameId id}}})
+       (test-util/consume-until stock-tick-id)
 
-      (test-util/<message!! 1000)
-
-      create-game-result)))
+       create-game-result))))
 
 (defn exit-game
 
@@ -96,16 +101,69 @@
                                          }"
                           :variables {:gameId game-id}}})))
 
+(defn buy-stock [buy-id game-id stock-id stock-amount stock-tick-id stock-tick-close]
+
+  (test-util/send-data {:id   buy-id
+                        :type :start
+                        :payload
+                        {:query "mutation BuyStock($input: BuyStock!) {
+                                           buyStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                         :variables {:input {:gameId      game-id
+                                             :stockId     stock-id
+                                             :stockAmount stock-amount
+                                             :tickId      stock-tick-id
+                                             :tickPrice   stock-tick-close}}}}))
+
+(defn sell-stock [sell-id game-id stock-id stock-amount stock-tick-id stock-tick-close]
+
+  (test-util/send-data {:id   sell-id
+                        :type :start
+                        :payload
+                        {:query "mutation SellStock($input: SellStock!) {
+                                           sellStock(input: $input) {
+                                             message
+                                           }
+                                         }"
+                         :variables {:input {:gameId      game-id
+                                             :stockId     stock-id
+                                             :stockAmount stock-amount
+                                             :tickId      stock-tick-id
+                                             :tickPrice   stock-tick-close}}}}))
+
 (defn verify-payment
 
   ([client-id payload]
 
    (verify-payment client-id payload 989))
 
-  ([client-id payload message-id]
+  ([client-id payload verify-payment-id]
 
    (test-util/send-init {:client-id (str client-id)})
-   (test-util/send-data {:id   message-id
+   (test-util/send-data {:id   verify-payment-id
+                         :type :start
+                         :payload
+                         {:query     "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                         paymentId
+                                         productId
+                                         provider
+                                       }
+                                     }"
+                          :variables payload}})))
+
+(defn verify-payment-workflow
+
+  ([client-id product-id provider token]
+
+   (verify-payment-workflow client-id product-id provider token 987))
+
+  ([client-id product-id provider token verify-payment-id]
+
+   (test-util/send-init {:client-id (str client-id)})
+   (test-util/send-data {:id   verify-payment-id
                          :type :start
                          :payload
                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
@@ -115,7 +173,12 @@
                                          provider
                                        }
                                      }"
-                          :variables payload}})))
+                          :variables {:productId product-id
+                                      :provider provider
+                                      :token token}}})
+
+   (Thread/sleep 2000)
+   (-> (test-util/consume-until verify-payment-id) :payload :data :verifyPayment)))
 
 (defn delete-test-customer!
 

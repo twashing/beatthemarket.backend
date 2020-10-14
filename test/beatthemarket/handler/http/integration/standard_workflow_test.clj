@@ -695,9 +695,11 @@
             stockTickClose :stockTickClose
             stockId :stockId
             stockName :stockName}]
-          (-> latest-tick :payload :data :stockTicks)]
+          (-> latest-tick :payload :data :stockTicks)
 
-      (test-util/send-data {:id   990
+          buy-id 990]
+
+      (test-util/send-data {:id   buy-id
                             :type :start
                             :payload
                             {:query "mutation BuyStock($input: BuyStock!) {
@@ -711,27 +713,85 @@
                                                  :tickId      stockTickId
                                                  :tickPrice   stockTickClose}}}})
 
-      (test-util/<message!! 1000) ;;{:type "data", :id 990, :payload {:data {:buyStock {:message "Ack"}}}}
-      (test-util/<message!! 1000) ;;{:type "complete", :id 990}
+      ;; NOTE If the client doesn't consume the GQL buy response, the corresponding stock account isn't generated
+      ;; Ie, clients can get a corresponding error message: "Cannot find corresponding account for stockId [79164837200112]"
+      (test-util/consume-until buy-id)
 
       (testing "Selling the stock"
-        (test-util/send-data {:id   991
-                              :type :start
-                              :payload
-                              {:query "mutation SellStock($input: SellStock!) {
+
+        (let [sell-id 991]
+
+          (test-util/send-data {:id   sell-id
+                                :type :start
+                                :payload
+                                {:query "mutation SellStock($input: SellStock!) {
                                            sellStock(input: $input) {
                                              message
                                            }
                                          }"
-                               :variables {:input {:gameId      id
-                                                   :stockId     stockId
-                                                   :stockAmount 100
-                                                   :tickId      stockTickId
-                                                   :tickPrice   stockTickClose}}}})
+                                 :variables {:input {:gameId      id
+                                                     :stockId     stockId
+                                                     :stockAmount 100
+                                                     :tickId      stockTickId
+                                                     :tickPrice   stockTickClose}}}})
 
-        (let [ack (test-util/<message!! 1000)]
-          (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
-                 ack)))))))
+          (let [ack (test-util/consume-until sell-id)]
+            (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
+                   ack))))))))
+
+(deftest sell-stock-before-owning-errors-test
+
+  (let [{:keys [stocks id]} (integration.util/start-game-workflow)]
+
+    (as-> (:game/games repl.state/system) gs
+      (deref gs)
+      (get gs (UUID/fromString id))
+      (:control-channel gs)
+      (core.async/>!! gs {:type :ControlEvent
+                          :event :exit
+                          :game-id id}))
+
+    (let [latest-tick (->> (test-util/consume-subscriptions)
+                           (filter #(= 989 (:id %)))
+                           last)
+          [{stock-tick-id :stockTickId
+            stock-tick-time :stockTickTime
+            stock-tick-close :stockTickClose
+            stock-id :stockId
+            stock-name :stockName}]
+          (-> latest-tick :payload :data :stockTicks)
+
+          stock-amount 100
+          buy-id 990]
+
+      (integration.util/buy-stock buy-id id stock-id stock-amount stock-tick-id stock-tick-close)
+      (test-util/consume-until buy-id)
+
+      (testing "Selling the stock"
+
+        (let [sell-id 991
+              oversell-id 992]
+
+          (integration.util/sell-stock sell-id id stock-id stock-amount stock-tick-id stock-tick-close)
+          (let [ack (test-util/consume-until sell-id)]
+            (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
+                   ack)))
+
+          (integration.util/sell-stock oversell-id id stock-id stock-amount stock-tick-id stock-tick-close)
+          (let [expected-error-ack
+                {:type "data"
+                 :id oversell-id
+                 :payload
+                 {:data {:sellStock nil}
+                  :errors
+                  [{:message "Insufficient amount of stock [0] to sell"
+                    :locations [{:line 2 :column 44}]
+                    :path ["sellStock"]
+                    :extensions {:arguments {:input "$input"}}}]}}
+
+                ack (test-util/consume-until oversell-id)]
+
+            (is (= expected-error-ack ack))))))))
 
 (deftest stream-portfolio-updates-test
 
