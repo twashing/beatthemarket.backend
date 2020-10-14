@@ -554,7 +554,7 @@
     (->> (game.calculation/collect-account-balances conn game-db-id user-db-id)
          (map graphql.encoder/portfolio-update->graphql))))
 
-(defn resolve-pause-game [context {gameId :gameId} _]
+(defn resolve-pause-game [context {gameId :gameId :as args} _]
 
   ;; NOTE
   ;; ticks saved
@@ -564,6 +564,7 @@
 
   (try
 
+    (log/info :graphql.core.resolve-pause-game args)
     (let [game-id (UUID/fromString gameId)
           event {:type :ControlEvent
                  :event :pause
