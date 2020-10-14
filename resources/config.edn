@@ -68,7 +68,6 @@
                                                      :tick-sleep-ms 500
                                                      :order 11}}}
 
-
  :logging {:config {:level     :info
                     ;; :level     :debug
                     :console   true
@@ -86,7 +85,10 @@
                                 "org.eclipse.jetty.server.Server" :error
                                 "org.eclipse.jetty.util.log" :error
                                 "o.e.j.server.handler.ContextHandler" :error
-                                "o.e.jetty.server.AbstractConnector" :error}}}
+                                "o.e.jetty.server.AbstractConnector" :error
+                                "io.pedestal.http" :warn
+                                "io.pedestal.http.cors" :warn
+                                "beatthemarket.handler.authentication" :error}}}
 
 
  ;; MAIN
