@@ -380,7 +380,7 @@
         id-token (test-util/->id-token)
         client-id (UUID/randomUUID)
 
-        product-id "margin_trading_1month"
+        product-id "additional_100k"
         provider "google"
         android-payload (-> "android.additional_100k.txt" resource slurp (json/read-str :key-fn keyword))
 
@@ -458,6 +458,8 @@
          [{:paymentId "07c135e7-f56f-452f-9e53-2c376f2043c4",
            :productId "additional_100k",
            :provider "google"}]}}}
+
+    (Thread/sleep 2000)
 
     ))
 
