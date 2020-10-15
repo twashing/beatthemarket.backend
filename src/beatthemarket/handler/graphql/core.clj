@@ -236,7 +236,7 @@
 
 (defn valid-google-product-id? [product-id]
 
-  (let [products (-> repl.state/system :payment.provider/google :products)]
+  (let [products (-> repl.state/config :payment.provider/google :products)]
 
     (as-> (vals products) v
       (into #{} v)
@@ -245,7 +245,7 @@
 
 (defn valid-google-subscription-id? [subscription-id]
 
-  (let [subscriptions (-> repl.state/system :payment.provider/google :subscriptions)]
+  (let [subscriptions (-> repl.state/config :payment.provider/google :subscriptions)]
 
     (as-> (vals subscriptions) v
       (into #{} v)

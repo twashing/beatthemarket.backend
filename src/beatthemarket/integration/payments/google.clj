@@ -45,7 +45,7 @@
 
 
 (defn verify-product-payment [{:keys [googleProductName googlePackageName] :as payment-config}
-                      {:keys [productId token]}]
+                              {:keys [productId token]}]
 
   (let [purchase-hash (json/read-str token :key-fn keyword)
         httpTransport (GoogleNetHttpTransport/newTrustedTransport)
@@ -216,7 +216,7 @@
   (let [{payment :payment
          game :game :as game-and-payments}
         (->> (verify-subscription-payment payment-config args)
-             check-subscription-acknowledgement-valid
+             ;; check-subscription-acknowledgement-valid
              (payments.google.persistence/acknowledgement->entity args)
              (payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id))
 
