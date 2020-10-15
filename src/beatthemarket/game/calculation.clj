@@ -1,6 +1,7 @@
 (ns beatthemarket.game.calculation
   (:require [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
+            [io.pedestal.log :as log]
             [clojure.core.match :refer [match]]
 
             [beatthemarket.game.persistence :as game.persistence]
@@ -103,7 +104,7 @@
                                              :user/name
                                              :user/external-uid])
                                  :where
-                                 [?g :game/id]
+                                 ;; [?g :game/id]
                                  [?g :game/users ?gu]
                                  [?gu :game.user/user ?guu]
                                  [?guu :user/email ?email]]
