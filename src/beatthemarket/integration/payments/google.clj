@@ -1,5 +1,6 @@
 (ns beatthemarket.integration.payments.google
   (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clj-http.client :as client]
             [integrant.core :as ig]
 
@@ -29,19 +30,29 @@
   (let [httpTransport (GoogleNetHttpTransport/newTrustedTransport)
         jsonFactory (JacksonFactory/getDefaultInstance)
         serviceAccountId "116484587614025882652"
+
         ;; serviceAccountScopes (Collections/singleton "https://www.googleapis.com/auth/cloud-platform")
         serviceAccountScopes (Collections/singleton AndroidPublisherScopes/ANDROIDPUBLISHER)
-        p12File (File. "resources/beatthemarket-c13f8-447c4cb482d9.p12")]
 
-    (.. (GoogleCredential$Builder.)
-        (setTransport httpTransport)
-        (setJsonFactory jsonFactory)
+        p12ResourceName "beatthemarket-c13f8-447c4cb482d9.p12"
+        p12FileName (str "/tmp/" p12ResourceName)]
 
-        (setServiceAccountId serviceAccountId)
-        (setServiceAccountScopes serviceAccountScopes)
-        (setServiceAccountPrivateKeyFromP12File p12File)
+    ;; TODO
+    ;; Fix this kludge - read resource directly as file
+    (with-open [in (io/input-stream (io/resource p12ResourceName))]
+      (io/copy in (io/file p12FileName)))
 
-        (build))))
+    (let [p12File (File. p12FileName)]
+
+      (.. (GoogleCredential$Builder.)
+          (setTransport httpTransport)
+          (setJsonFactory jsonFactory)
+
+          (setServiceAccountId serviceAccountId)
+          (setServiceAccountScopes serviceAccountScopes)
+          (setServiceAccountPrivateKeyFromP12File p12File)
+
+          (build)))))
 
 
 (defn verify-product-payment [{:keys [googleProductName googlePackageName] :as payment-config}
@@ -175,8 +186,7 @@
      "orderId" "GPA.3358-8655-9676-96352..5",
      "priceAmountMicros" 339990000,
      "priceCurrencyCode" "UAH",
-     "purchaseType" 0
-     }
+     "purchaseType" 0}
 
 
     (def example-result
