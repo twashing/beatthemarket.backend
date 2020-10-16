@@ -139,10 +139,24 @@
                                                 :keep-alive-ms 10000}
                 :server/server                 {:service #ig/ref :service/service}
                 :firebase/firebase             #ref [:secrets :firebase]
-                :persistence/datomic           {:datomic         {:db-name "beatthemarket"
-                                                                  :config  {:server-type :dev-local
-                                                                            :system "dev"
-                                                                            :storage-dir "/tmp/data"}}}
+                :persistence/datomic           {:datomic
+
+                                                #_{:db-name "beatthemarket-production"
+                                                 :config  {:server-type :dev-local
+                                                           :system "production-imports"
+                                                           ;; :storage-dir "/tmp/foo"
+                                                           :storage-dir "/tmp/data/datomic/dev-local"
+                                                           }}
+
+                                                {:db-name "beaththemarket-20201004"
+                                                 :config
+                                                 {:server-type   :cloud
+                                                  :region        "us-east-1"
+                                                  :system        "beatthemarket-datomic4"
+                                                  ;; :endpoint      "https://localhost:8182"
+                                                  :endpoint   "http://entry.beatthemarket-datomic4.us-east-1.datomic.net:8182"
+                                                  :proxy-port 8182}}}
+
                 :payment.provider/apple                {:service #ref [:secrets :development :payment.provider/apple]
                                                         :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
                                                         :products {:additional_balance_100k "additional_balance_100k"
@@ -183,7 +197,8 @@
          :persistence/datomic           {:datomic         {:db-name "beatthemarket"
                                                            :config  {:server-type :dev-local
                                                                      :system "dev"
-                                                                     :storage-dir "/tmp/data"}}}
+                                                                     :storage-dir "/tmp/data/datomic-test/dev-local" ;; "/tmp/data"
+                                                                     }}}
          :payment.provider/apple                {:service #ref [:secrets :test :payment.provider/apple]
                                                  :subscriptions {:margin_trading_1month "margin_trading_1month.1"}
                                                  :products {:additional_balance_100k "additional_balance_100k"
