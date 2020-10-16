@@ -381,7 +381,9 @@
   (let [amount (Math/abs amount)
         updated-stock-account-amount (Math/abs updated-stock-account-amount)
 
-        pershare-purchase-ratio (/ amount updated-stock-account-amount)
+        pershare-purchase-ratio (if (zero? updated-stock-account-amount)
+                                  0
+                                  (/ amount updated-stock-account-amount))
         pershare-gain-or-loss   (- latest-price price)
         A                       (* pershare-gain-or-loss pershare-purchase-ratio)
         running-profit-loss     (* A updated-stock-account-amount)]
