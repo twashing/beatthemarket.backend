@@ -211,8 +211,6 @@
     (throw (Exception. "Missing :client-id in your connection_init"))))
 
 
-
-
 (defn valid-apple-product-id? [product-id]
 
   (let [products (-> repl.state/system :payment.provider/apple :products)]
@@ -230,8 +228,6 @@
       (into #{} v)
       (some v #{subscription-id})
       (util/exists? v))))
-
-
 
 
 (defn valid-google-product-id? [product-id]
@@ -253,8 +249,6 @@
       (util/exists? v))))
 
 
-
-
 (defn valid-stripe-product-id? [product-id]
 
   (let [products (-> repl.state/system :payment.provider/stripe :products)]
@@ -272,9 +266,6 @@
       (into #{} v)
       (some v #{subscription-id})
       (util/exists? v))))
-
-
-
 
 
 ;; RESOLVERS
@@ -333,7 +324,7 @@
 
     (catch Exception e
       (do
-        (ppi (bean e))
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-create-game [context {gameLevel :gameLevel :as args} parent]
@@ -370,7 +361,7 @@
 
     (catch Exception e
       (do
-        (ppi (bean e))
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-start-game [context {game-id :id :as args} _]
@@ -393,7 +384,7 @@
 
     (catch Exception e
       (do
-        (ppi (bean e))
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-buy-stock [context args _]
@@ -425,6 +416,8 @@
                 (cond->> (hash-map :message message)
                   (clojure.string/starts-with? message "Insufficient Funds ") (conj [{:message "InsufficientFunds"}])))]
 
+          (log/info :resolver-error (with-out-str (ppi (bean e))))
+
           (->> e bean :localizedMessage
                conditionally-add-insufficient-funds-error-code
                (resolve-as nil)))))))
@@ -452,7 +445,9 @@
         (resolve-as nil {:message "Error / resolve-sell-stock / INCOMPLETE /"}))
 
       (catch Throwable e
-        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
+        (do
+          (log/info :resolver-error (with-out-str (ppi (bean e))))
+          (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))))
 
 (defn update-sink-fn! [id-uuid sink-fn]
   (swap! (:game/games repl.state/system)
@@ -486,7 +481,7 @@
 
     (catch Throwable e
       (do
-        (ppi (bean e))
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-users [context args _]
@@ -501,7 +496,7 @@
 
     (catch Throwable e
       (do
-        (ppi (bean e))
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-user-personal-profit-loss [context {:keys [email gameId groupByStock] :as args} _]
@@ -528,7 +523,9 @@
              (map graphql.encoder/profit-loss->graphql))))
 
     (catch Throwable e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+      (do
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-user-market-profit-loss [context {email :email} _]
 
@@ -547,12 +544,19 @@
 
 (defn resolve-account-balances [context {gameId :gameId email :email} _]
 
-  (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
-        game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id (UUID/fromString gameId)))
-        user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))]
+  (try
 
-    (->> (game.calculation/collect-account-balances conn game-db-id user-db-id)
-         (map graphql.encoder/portfolio-update->graphql))))
+    (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
+          game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id (UUID/fromString gameId)))
+          user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))]
+
+      (->> (game.calculation/collect-account-balances conn game-db-id user-db-id)
+           (map graphql.encoder/portfolio-update->graphql)))
+
+    (catch Throwable e
+      (do
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-pause-game [context {gameId :gameId} _]
 
@@ -574,7 +578,7 @@
 
     (catch Exception e
       (do
-        ;; (ppi (bean e))
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-resume-game [context {gameId :gameId} _]
@@ -613,7 +617,7 @@
 
     (catch Exception e
       (do
-        ;; (ppi (bean e))
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-restart-game [context {gameId :gameId} _]
@@ -678,7 +682,7 @@
 
     (catch Exception e
       (do
-        (ppi (bean e))
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-join-game [context {gameId :gameId} _]
@@ -710,8 +714,10 @@
         (-> (game.games/send-control-event! game-id event)
             (assoc :gameId gameId))))
 
-    (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+    (catch Throwable e
+      (do
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn game-paused? [conn game-id]
 
@@ -720,23 +726,30 @@
 
 (defn resolve-exit-game [context {gameId :gameId} _]
 
-  (let [game-id (UUID/fromString gameId)
-        conn (-> repl.state/system :persistence/datomic :opts :conn)
-        event   {:type    :ControlEvent
-                 :event   :exit
-                 :game-id game-id}
+  (try
 
-        exit-game-manually (constantly
-                             (do
-                               (games.control/update-short-circuit-game! game-id true)
-                               (games.control/exit-game! conn game-id)))]
+    (let [game-id (UUID/fromString gameId)
+          conn (-> repl.state/system :persistence/datomic :opts :conn)
+          event   {:type    :ControlEvent
+                   :event   :exit
+                   :game-id game-id}
 
-    (if (game-paused? conn game-id)
+          exit-game-manually (constantly
+                               (do
+                                 (games.control/update-short-circuit-game! game-id true)
+                                 (games.control/exit-game! conn game-id)))]
 
-      (exit-game-manually)
+      (if (game-paused? conn game-id)
 
-      (-> (game.games/send-control-event! game-id event)
-          (assoc :gameId gameId)))))
+        (exit-game-manually)
+
+        (-> (game.games/send-control-event! game-id event)
+            (assoc :gameId gameId))))
+
+    (catch Throwable e
+      (do
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn resolve-games [context {gameId :gameId} _]
 
@@ -757,8 +770,10 @@
            :customers
            (map graphql.encoder/stripe-customer->graphql)))
 
-    (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+    (catch Throwable e
+      (do
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn delete-stripe-customer [context {id :id} parent]
 
@@ -767,8 +782,10 @@
     (let [{{client :client} :payment.provider/stripe} repl.state/system]
       {:message (:success? (payments.stripe/delete-customer! client id))})
 
-    (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+    (catch Throwable e
+      (do
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defn user-payments [context args _]
 
@@ -780,8 +797,10 @@
       (->> (payments.persistence/user-payments conn email)
            (map graphql.encoder/payment-purchase->graphql)))
 
-    (catch Exception e
-      (->> e bean :localizedMessage (hash-map :message) (resolve-as nil)))))
+    (catch Throwable e
+      (do
+        (log/info :resolver-error (with-out-str (ppi (bean e))))
+        (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 (defmulti verify-payment-handler (fn [_ {provider :provider} _] provider))
 
@@ -849,10 +868,12 @@
 (defn verify-payment [context args parent]
 
   (try
+
     (verify-payment-handler context args parent)
+
     (catch Exception e
       (do
-        (ppi (bean e))
+        (log/info :error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
 
