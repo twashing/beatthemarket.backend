@@ -90,7 +90,7 @@
     (def conn (-> integrant.repl.state/system :persistence/datomic :opts :conn))
     (def email "twashing@gmail.com"))
 
-  ;; B
+  ;; B Single User
   (->> (d/q '[:find (pull ?g [:game/id
                               {:game/status [:db/ident]}
                               {:game/users
@@ -116,7 +116,37 @@
   ;; C
   (-> (calculation/collect-realized-profit-loss-for-user-allgames conn email true)
       graphql.encoder/user->graphql
-      ppi))
+      ppi)
+
+
+  ;; D All Users
+  (->> (d/q '[:find
+
+              (pull ?guu [:db/id
+                          :user/email
+                          :user/name
+                          :user/external-uid])
+              (pull ?g [:game/id
+                        :game/status
+                        {:game/users
+                         [:game.user/user
+                          {:game.user/profit-loss
+                           #_[*]
+                           [{:game.user.profit-loss/tick [:game.stock.tick/id]}
+                            {:game.user.profit-loss/stock [:game.stock/id]}
+                            :game.user.profit-loss/amount]}]}])
+              :in $
+              :where
+              [?g :game/id]
+              [?g :game/users ?gu]
+              [?gu :game.user/user ?guu]
+              [?guu :user/external-uid]]
+            (d/db conn))
+       (take 2)
+       ppi)
+
+  ;; E
+  (calculation/collect-realized-profit-loss-all-users-allgames conn true))
 
 (comment ;; Convenience fns
 
