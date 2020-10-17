@@ -471,7 +471,6 @@
                                         (some true?))))
 
           user (-> (game.calculation/collect-realized-profit-loss-for-user-allgames conn email group-by-stock?)
-                   first
                    graphql.encoder/user->graphql)]
 
       (->> (payments.persistence/user-payments conn email)

@@ -23,8 +23,20 @@
                     :userName "Timothy Washington"})
 (def expected-user-keys #{:userEmail :userName :userExternalUid})
 
-(deftest query-user-test
+(defn create-exit-game! [message-id]
 
+  (let [{game-id :id :as result} (integration.util/start-game-workflow)
+        game-id-uuid (UUID/fromString game-id)]
+
+    (integration.util/exit-game game-id message-id)
+
+    (games.control/update-short-circuit-game! game-id-uuid true)
+
+    (test-util/consume-until message-id)
+
+    result))
+
+(deftest query-user-without-game-test
 
   ;; TODO complete
   (testing "User without Game and P/L"
@@ -124,20 +136,30 @@
         (testing "DELETEING test customer"
 
           (let [delete-customer-id 1010]
-            (integration.util/delete-test-customer! result-id delete-customer-id))))))
+            (integration.util/delete-test-customer! result-id delete-customer-id)))))))
 
+(deftest query-user-with-game-and-profit-loss-test
 
   (testing "User with Game and P/L"
 
     (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
           id-token (test-util/->id-token)
-          email "sun.ra@foo.com"]
+          client-id (UUID/randomUUID)
 
+          ;; email "sun.ra@foo.com"
+          email "twashing@gmail.com"
+          query-user-id 987]
 
-      (test-util/send-data {:id   987
-                            :type :start
-                            :payload
-                            {:query "query User($email: String!) {
+      (test-util/send-init {:client-id (str client-id)})
+      (test-util/login-assertion service id-token)
+
+      (let [{game-id1 :id} (create-exit-game! 1000)
+            {game-id2 :id} (create-exit-game! 1001)]
+
+        (test-util/send-data {:id   query-user-id
+                              :type :start
+                              :payload
+                              {:query "query User($email: String!) {
                                      user(email: $email) {
                                        userEmail
                                        userName
@@ -153,33 +175,27 @@
                                        }
                                      }
                                    }"
-                             :variables {:email email}}})
+                               :variables {:email email}}})
 
-      (ppi (test-util/consume-until 987))
+        (let [expected-user-query-result
+              {:type "data"
+               :id query-user-id
+               :payload
+               {:data
+                {:user
+                 {:userEmail "twashing@gmail.com"
+                  :userName "Timothy Washington"
+                  :userExternalUid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"
+                  :games
+                  [{:gameId game-id1
+                    :status "exited"
+                    :profitLoss []}
+                   {:gameId game-id2
+                    :status "exited"
+                    :profitLoss []}]}}}}]
 
-
-      #_(let [result-user (-> (test-util/<message!! 1000) :payload :data :user)]
-
-          (->> (keys result-user)
-               (into #{})
-               (= expected-user-keys)
-               is)
-
-          (->> (transform [identity] #(dissoc % :userExternalUid) result-user)
-               (= expected-user)
-               is)))))
-
-(defn create-exit-game! [message-id]
-
-  (let [{game-id :id} (integration.util/start-game-workflow)
-        game-id-uuid (UUID/fromString game-id)]
-
-    (integration.util/exit-game game-id message-id)
-
-    ;; (Thread/sleep 2000)
-    (games.control/update-short-circuit-game! game-id-uuid true)
-
-    (test-util/consume-until message-id)))
+          (is (= expected-user-query-result
+                 (ppi (test-util/consume-until query-user-id)))))))))
 
 (deftest query-users-test
 

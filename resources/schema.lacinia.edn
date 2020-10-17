@@ -183,7 +183,7 @@
    :description "Lists out a User's personal Profit/Loss, all, per game, per stock"}
 
   :userMarketProfitLoss
-  {:type (list (non-null :ProfitLoss))
+  {:type (list :ProfitLoss)
    :args {:email {:type (non-null String)}}
    :resolve :resolve-user-market-profit-loss
    :description "Lists out a User's market Profit/Loss, per stock"}

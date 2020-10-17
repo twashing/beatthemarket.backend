@@ -45,6 +45,36 @@
     :game.user/profit-loss profit-loss))
 
 
+(defn user-games->user-with-games [group-by-stock? games]
+
+  (let [user-game-tuples->user (comp :game.user/user first :game/users first)
+
+        {user-db-id   :db/id
+         email        :user/email
+         name         :user/name
+         external-uid :user/external-uid} (user-game-tuples->user games)
+
+        game-statuses
+        (map (fn [{game-id                                          :game/id
+                  {game-status :db/ident}                          :game/status
+                  [{game-user-profit-loss :game.user/profit-loss}] :game/users}]
+
+               (let [profit-loss (map (fn [{{tick-id :game.stock.tick/id}  :game.user.profit-loss/tick
+                                           {stock-id :game.stock/id}     :game.user.profit-loss/stock
+                                           amount                        :game.user.profit-loss/amount}]
+
+                                        (->profit-loss-event user-db-id tick-id game-id stock-id :realized-profit-loss amount))
+                                      game-user-profit-loss)
+
+                     profit-loss-possibly-grouped (if group-by-stock?
+                                                    (group-by-stock [game-id profit-loss])
+                                                    profit-loss)]
+
+                 (->game-status game-id game-status profit-loss-possibly-grouped)))
+             games)]
+
+    (->user email name external-uid game-statuses)))
+
 (defn collect-realized-profit-loss-for-user-allgames
 
   ([conn email]
@@ -53,96 +83,59 @@
 
   ([conn email group-by-stock?]
 
-   #_(->> (d/q '[:find (pull ?u [:db/id
-                               :user/email
-                               :user/name
-                               :user/external-uid
-                               {:game.user/_user
-                                [{:game.user/profit-loss [*]}
-                                 {:game/_users
-                                  [:game/id
-                                   {:game/status [:db/ident]}]}]}])
+   (->> (d/q '[:find (pull ?g [:game/id
+                               {:game/status [:db/ident]}
+                               {:game/users
+                                [{:game.user/profit-loss [{:game.user.profit-loss/tick [:game.stock.tick/id]}
+                                                          {:game.user.profit-loss/stock [:game.stock/id]}
+                                                          :game.user.profit-loss/amount]}
+                                 {:game.user/user
+                                  [:db/id
+                                   :user/email
+                                   :user/name
+                                   :user/external-uid]}]}])
                :in $ ?email
                :where
-               [?u :user/email ?email]]
+               [?g :game/id]
+               [?g :game/users ?gu]
+               [?gu :game.user/user ?guu]
+               [?guu :user/email ?email]]
              (d/db conn) email)
         (map first)
-        (map (fn [{user-db-id :db/id
-                  email :user/email
-                  name :user/name
-                  external-uid :user/external-uid
+        ((partial user-games->user-with-games group-by-stock?)))))
 
-                  {{game-id :game/id
-                    {game-status :db/ident} :game/status} :game/_users
-                   game-user-profit-loss :game.user/profit-loss} :game.user/_user}]
 
-               (let [profit-loss (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
-                                           {stock-id :game.stock/id} :game.user.profit-loss/stock
-                                           amount :game.user.profit-loss/amount}]
+(defn grouped-games->games-by-user [group-by-stock?
+                                    [{user-db-id :db/id
+                                      email :user/email
+                                      name :user/name
+                                      external-uid :user/external-uid
+                                      :as user}
 
-                                        (->profit-loss-event user-db-id tick-id game-id stock-id :realized-profit-loss amount))
-                                      game-user-profit-loss)
+                                     games]]
 
-                     profit-loss-possibly-grouped (if group-by-stock?
-                                                    (group-by-stock [game-id profit-loss])
-                                                    profit-loss)
+  (let [games->game-statuses (fn [[{game-id :game/id
+                                   {game-status :db/ident} :game/status
+                                   [{game-user-profit-loss :game.user/profit-loss}] :game/users
+                                   :as _game}
+                                  _user]]
 
-                     games (if (and game-id game-status)
-                             [(->game-status game-id game-status profit-loss-possibly-grouped)]
-                             [])]
+                               (let [profit-loss (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
+                                                           {stock-id :game.stock/id} :game.user.profit-loss/stock
+                                                           amount :game.user.profit-loss/amount}]
 
-                 (->user email name external-uid games)))))
+                                                        (->profit-loss-event user-db-id tick-id game-id stock-id :realized-profit-loss amount))
+                                                      game-user-profit-loss)
 
-   (let [game-user-tuples (d/q '[:find
-                                 (pull ?g [:game/id
-                                           :game/status
-                                           {:game/users
-                                            [:game.user/user
-                                             {:game.user/profit-loss [*]}]}])
-                                 (pull ?guu [:db/id
-                                             :user/email
-                                             :user/name
-                                             :user/external-uid])
-                                 :where
-                                 ;; [?g :game/id]
-                                 [?g :game/users ?gu]
-                                 [?gu :game.user/user ?guu]
-                                 [?guu :user/email ?email]]
-                               (d/db conn))
+                                     profit-loss-possibly-grouped (if group-by-stock?
+                                                                    (group-by-stock [game-id profit-loss])
+                                                                    profit-loss)]
 
-         grouped-games->games-by-user
-         (fn [[{user-db-id :db/id
-               email :user/email
-               name :user/name
-               external-uid :user/external-uid
-               :as user}
+                                 (->game-status game-id game-status profit-loss-possibly-grouped)))
 
-              games]]
+        game-statuses (map games->game-statuses games)]
 
-           (let [games->game-statuses (fn [[{game-id :game/id
-                                            {game-status :db/ident} :game/status
-                                            [{game-user-profit-loss :game.user/profit-loss}] :game/users
-                                            :as _game}
-                                           _user]]
-
-                                        (let [profit-loss (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
-                                                                    {stock-id :game.stock/id} :game.user.profit-loss/stock
-                                                                    amount :game.user.profit-loss/amount}]
-
-                                                                 (->profit-loss-event user-db-id tick-id game-id stock-id :realized-profit-loss amount))
-                                                               game-user-profit-loss)
-
-                                              profit-loss-possibly-grouped (if group-by-stock?
-                                                                             (group-by-stock [game-id profit-loss])
-                                                                             profit-loss)]
-
-                                          (->game-status game-id game-status profit-loss-possibly-grouped)))
-
-                 game-statuses (map games->game-statuses games)]
-
-             (->user email name external-uid game-statuses)))]
-
-     (map grouped-games->games-by-user (group-by second game-user-tuples)))))
+    (->user email name external-uid game-statuses)))
 
 (defn collect-realized-profit-loss-all-users-allgames
 
@@ -153,11 +146,16 @@
   ([conn group-by-stock?]
 
    (let [game-user-tuples (d/q '[:find
+
                                  (pull ?g [:game/id
                                            :game/status
                                            {:game/users
                                             [:game.user/user
-                                             {:game.user/profit-loss [*]}]}])
+                                             {:game.user/profit-loss
+                                              [{:game.user.profit-loss/tick [:game.stock.tick/id]}
+                                               {:game.user.profit-loss/stock [:game.stock/id]}
+                                               :game.user.profit-loss/amount]}]}])
+
                                  (pull ?guu [:db/id
                                              :user/email
                                              :user/name
@@ -167,41 +165,10 @@
                                  [?g :game/users ?gu]
                                  [?gu :game.user/user ?guu]
                                  [?guu :user/external-uid]]
-                               (d/db conn))
+                               (d/db conn))]
 
-         grouped-games->games-by-user
-         (fn [[{user-db-id :db/id
-               email :user/email
-               name :user/name
-               external-uid :user/external-uid
-               :as user}
-
-              games]]
-
-           (let [games->game-statuses (fn [[{game-id :game/id
-                                            {game-status :db/ident} :game/status
-                                            [{game-user-profit-loss :game.user/profit-loss}] :game/users
-                                            :as _game}
-                                           _user]]
-
-                                        (let [profit-loss (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
-                                                                    {stock-id :game.stock/id} :game.user.profit-loss/stock
-                                                                    amount :game.user.profit-loss/amount}]
-
-                                                                 (->profit-loss-event user-db-id tick-id game-id stock-id :realized-profit-loss amount))
-                                                               game-user-profit-loss)
-
-                                              profit-loss-possibly-grouped (if group-by-stock?
-                                                                             (group-by-stock [game-id profit-loss])
-                                                                             profit-loss)]
-
-                                          (->game-status game-id game-status profit-loss-possibly-grouped)))
-
-                 game-statuses (map games->game-statuses games)]
-
-             (->user email name external-uid game-statuses)))]
-
-     (map grouped-games->games-by-user (group-by second game-user-tuples)))))
+     (map (partial grouped-games->games-by-user group-by-stock?)
+          (group-by second game-user-tuples)))))
 
 (defn collect-realized-profit-loss-allgames
 
@@ -256,8 +223,8 @@
                           game-id user-id)
                      (map first)
                      (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
-                               {stock-id :game.stock/id} :game.user.profit-loss/stock
-                               amount :game.user.profit-loss/amount}]
+                               {stock-id :game.stock/id}     :game.user.profit-loss/stock
+                               amount                        :game.user.profit-loss/amount}]
                             (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount))))]
 
      (if (not group-by-stock?)
@@ -265,11 +232,11 @@
        result
 
        (for [[stock-id vs] (group-by :stock-id result)
-             :let [profit-loss-amount (->> (reduce (fn [ac {pl :profit-loss}]
-                                                     (+ ac pl))
-                                                   0.0
-                                                   vs)
-                                           (format "%.2f") (Float.))]]
+             :let          [profit-loss-amount (->> (reduce (fn [ac {pl :profit-loss}]
+                                                              (+ ac pl))
+                                                            0.0
+                                                            vs)
+                                                    (format "%.2f") (Float.))]]
 
          (->profit-loss-event nil nil game-id stock-id :realized-profit-loss profit-loss-amount))))))
 
@@ -549,7 +516,7 @@
   (let [direction (-> profit-loss last :counter-balance-direction)]
 
     #_(ppi [:trade-opposite-of-counter-balance-direction? [op profit-loss]
-                             (and direction (not (= op direction)))])
+            (and direction (not (= op direction)))])
 
     (and direction (not (= op direction)))))
 
