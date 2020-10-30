@@ -400,7 +400,7 @@
         gameId (UUID/fromString gameId)
         stockId (UUID/fromString stockId)
         tickId (UUID/fromString tickId)
-        tickPrice (Float. tickPrice)]
+        tickPrice (Float. ^float tickPrice)]
 
     (try
 
@@ -433,8 +433,8 @@
         user-db-id                                          (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
         gameId (UUID/fromString gameId)
         stockId (UUID/fromString stockId)
-          tickId (UUID/fromString tickId)
-        tickPrice (Float. tickPrice)]
+        tickId (UUID/fromString tickId)
+        tickPrice (Float. ^float tickPrice)]
 
     (try
 

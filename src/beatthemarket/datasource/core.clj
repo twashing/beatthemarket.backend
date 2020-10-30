@@ -2,7 +2,7 @@
   (:require [random-seed.core :refer :all])
   (:refer-clojure :exclude [rand rand-int rand-nth])
   (:import [org.apache.commons.math3.distribution BetaDistribution]
-           [org.apache.commons.math3.random RandomGeneratorFactory]
+           [org.apache.commons.math3.random RandomGenerator RandomGeneratorFactory]
            [java.util Random]))
 
 
@@ -32,12 +32,12 @@
 
 (defn ->beta-distribution
 
-  ([alpha beta]
+  ([^double alpha ^double beta]
    (->beta-distribution (random-seed 10000000) alpha beta))
 
-  ([seed alpha beta]
+  ([seed ^double alpha ^double beta]
 
-   (let [rng (RandomGeneratorFactory/createRandomGenerator (Random. seed))]
+   (let [^RandomGenerator rng (RandomGeneratorFactory/createRandomGenerator (Random. seed))]
      (BetaDistribution. rng alpha beta))))
 
 
