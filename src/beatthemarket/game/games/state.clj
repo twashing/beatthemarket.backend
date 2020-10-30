@@ -49,7 +49,8 @@
 
 (defn calculate-remaining-time [now end]
 
-  (let [interval (t/interval now end)]
+  (let [end (if (t/after? now end) now end)
+        interval (t/interval now end)]
     {:interval interval
      :remaining-in-minutes (t/in-minutes interval)
      :remaining-in-seconds (rem (t/in-seconds interval) 60)}))

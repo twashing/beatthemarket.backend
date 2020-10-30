@@ -87,9 +87,9 @@
                                 latest-tick?)]
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
-            [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-                        stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))
-                        tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId))]
+            [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId '[:db/id]))
+                        stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId '[:db/id]))
+                        tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId '[:db/id]))]
 
                     (bookkeeping/buy-stock! conn game-db-id user-db-id stock-db-id tick-db-id stockAmount tickPrice))))))
 
@@ -114,8 +114,8 @@
                                 latest-tick?)]
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
-            [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId))
-                        stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId))
-                        tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId))]
+            [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId '[:db/id]))
+                        stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId '[:db/id]))
+                        tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId '[:db/id]))]
 
                     (bookkeeping/sell-stock! conn game-db-id user-db-id stock-db-id tick-db-id stockAmount tickPrice))))))
