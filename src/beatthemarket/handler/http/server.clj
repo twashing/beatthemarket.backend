@@ -61,7 +61,6 @@
         {profile         :profile
          market-trading? :market-trading} (process-parsed-options options)]
 
-    (set! *warn-on-reflection* true)
     (println (format "\nCreating your server... %s" profile))
 
     (state.core/set-prep profile)
