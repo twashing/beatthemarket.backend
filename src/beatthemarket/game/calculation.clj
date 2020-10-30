@@ -1,11 +1,13 @@
 (ns beatthemarket.game.calculation
-  (:require [integrant.repl.state :as repl.state]
+  (:require [clojure.core.reducers :as r]
+            [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
             [io.pedestal.log :as log]
             [clojure.core.match :refer [match]]
 
             [beatthemarket.game.persistence :as game.persistence]
-            [beatthemarket.util :refer [ppi] :as util]))
+            [beatthemarket.util :refer [ppi] :as util]
+            [clojure.core.reducers :as r]))
 
 
 (defn ->profit-loss-event [user-id tick-id game-id stock-id profit-loss-type profit-loss]
@@ -275,7 +277,8 @@
               [?gus :game.user/accounts ?ua]]
             (d/db conn)
             game-id user-id)
-       (map first)))
+       (r/map first)
+       (into [])))
 
 (defn running-profit-loss-for-game [game-id]
   (-> repl.state/system :game/games deref (get game-id) :profit-loss))
@@ -300,11 +303,12 @@
               [?gus :game.user/profit-loss ?pls]]
             (d/db conn)
             game-id user-id)
-       (map first)
-       (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
+       (r/map first)
+       (r/map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
                  {stock-id :game.stock/id} :game.user.profit-loss/stock
                  amount :game.user.profit-loss/amount}]
-              (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount)))))
+                (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount)))
+       (into [])))
 
 (defn user-stock->profit-loss [user-id game-id game-stock-id]
   (-> repl.state/system :game/games deref (get game-id) :profit-loss (get user-id) (get game-stock-id [])))
@@ -337,15 +341,18 @@
 
 ;; trade batch increase
 (defn recalculate-PL-on-increase-mappingfn [op
-                                            updated-stock-account-amount
+                                            ^long updated-stock-account-amount
                                             latest-price
-                                            {:keys [amount price] :as calculation}]
+                                            calculation]
 
   ;; NOTE Calculaing difference between A and B
   ;; (- -25 -20) ;; -5
   ;; (- -10 14)  ;; -24
   ;; (- 25 20)   ;; 5
-  (let [amount (Math/abs amount)
+  (let [^long amount (:amount calculation)
+        ^float price (:price calculation)
+
+        amount (Math/abs ^long amount)
         updated-stock-account-amount (Math/abs updated-stock-account-amount)
 
         pershare-purchase-ratio (if (zero? updated-stock-account-amount)
@@ -414,12 +421,14 @@
                  0.0)
          (->profit-loss-event user-id tick-id game-id game-stock-id :realized-profit-loss))))
 
-(defn recalculate-PL-on-decrease-mappingfn [updated-stock-account-amount
+(defn recalculate-PL-on-decrease-mappingfn [^long updated-stock-account-amount
                                             latest-price
                                             {:keys [price counter-balance-amount
                                                     pershare-purchase-ratio] :as calculation}]
 
-  (let [updated-stock-account-amount (Math/abs updated-stock-account-amount)
+  (let [^long counter-balance-amount (:counter-balance-amount calculation)
+
+        updated-stock-account-amount (Math/abs updated-stock-account-amount)
         old-account-amount           (Math/abs counter-balance-amount)
 
         shrinkage                       (/ updated-stock-account-amount old-account-amount)
@@ -540,8 +549,8 @@
           (trade-opposite-of-counter-balance-direction? (:op profit-loss-calculation) profit-loss)
 
 
-          trade-amount-matches-counter-balance-amount? (= (-> profit-loss-calculation :amount (#(Math/abs %)))
-                                                          (-> profit-loss last (get :counter-balance-amount) (#(Math/abs %))))]
+          trade-amount-matches-counter-balance-amount? (= (-> profit-loss-calculation :amount ((fn [^long a] (Math/abs a))))
+                                                          (-> profit-loss last (get :counter-balance-amount) ((fn [^long a] (Math/abs a)))))]
 
       (and trading-in-opposite-direction-of-counter-balance-direction?
            trade-amount-matches-counter-balance-amount?))))
@@ -556,8 +565,8 @@
           (trade-opposite-of-counter-balance-direction? (:op profit-loss-calculation) profit-loss)
 
 
-          trade-amount-crosses-over-counter-balance-amount? (> (-> profit-loss-calculation :amount (#(Math/abs %)))
-                                                               (-> profit-loss last (get :counter-balance-amount) (#(Math/abs %))))]
+          trade-amount-crosses-over-counter-balance-amount? (> (-> profit-loss-calculation :amount ((fn [^long a] (Math/abs a))))
+                                                               (-> profit-loss last (get :counter-balance-amount) ((fn [^long a] (Math/abs a)))))]
 
       (and trading-in-opposite-direction-of-counter-balance-direction?
            trade-amount-crosses-over-counter-balance-amount?))))

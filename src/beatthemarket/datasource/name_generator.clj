@@ -6,7 +6,7 @@
 
 (defn generate-name []
   (let [stock-name (as-> (:name-generator/name-generator state/system) nme
-                     (#(.next %) nme)
+                     ((fn [^RandomNameGenerator nm] (.next nm)) nme)
                      (clojure.string/split nme #"_")
                      (map clojure.string/capitalize nme)
                      (clojure.string/join " " nme))

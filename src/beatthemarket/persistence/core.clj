@@ -7,9 +7,15 @@
 (defn bind-temporary-id [entity]
   (assoc entity :db/id (str (UUID/randomUUID))))
 
-(defn pull-entity [conn entity-id]
-  {:pre (util/exists? entity-id)}
-  (d/pull (d/db conn) '[*] entity-id))
+(defn pull-entity
+
+  ([conn entity-id]
+   (pull-entity conn entity-id '[*]))
+
+  ([conn entity-id pull-expr]
+   {:pre (util/exists? entity-id)}
+
+   (d/pull (d/db conn) pull-expr entity-id)))
 
 (defn entity-by-domain-id
 

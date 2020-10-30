@@ -1,14 +1,15 @@
 (ns beatthemarket.datasource.oscillating
   (:require [beatthemarket.datasource.core :as datasource.core]
-            [beatthemarket.util :refer [ppi] :as util]))
+            [beatthemarket.util :refer [ppi] :as util])
+  (:import [org.apache.commons.math3.distribution BetaDistribution]))
 
 
-(defn price-swing-occurence-sequence [chunk-multiple beta-distribution]
+(defn price-swing-occurence-sequence [chunk-multiple ^BetaDistribution beta-distribution]
   (->> (repeatedly #(.sample beta-distribution))
        (map #(* % chunk-multiple))
-       (map #(Math/round %))))
+       (map (fn [^double sample] (Math/round sample)))))
 
-(defn price-change-sequence [beta-distribution]
+(defn price-change-sequence [^BetaDistribution beta-distribution]
   (->> (repeatedly #(.sample beta-distribution))
        (map #(if (> % 0.5) + -))))
 
@@ -24,8 +25,11 @@
    0.31 - 0.45 / low
    0.46 - 0.6  / midpoint
    0.61 - 1    / bigswings"
-  [beta-left-leaning
-   beta-highend beta-lowend beta-midpoint beta-bigswings]
+  [^BetaDistribution beta-left-leaning
+   ^BetaDistribution beta-highend
+   ^BetaDistribution beta-lowend
+   ^BetaDistribution beta-midpoint
+   ^BetaDistribution beta-bigswings]
 
   (->> (repeatedly #(.sample beta-left-leaning))
        (map #(cond

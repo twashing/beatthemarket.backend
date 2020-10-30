@@ -352,7 +352,9 @@
             debits+credits                    [(->debit updated-debit-account debit-value tick-db-id nil nil)
                                                (->credit updated-credit-account credit-value tick-db-id stock-price stock-amount)]
             tentry                            (apply ->tentry debits+credits)
-            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id)
+            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id '[:game/id
+                                                                                              {:game/users
+                                                                                               [{:game.user/portfolio [:bookkeeping.portfolio/journals]}]}])
             updated-journal-entries           (-> game-entity
                                                   :game/users first
                                                   :game.user/portfolio
@@ -413,7 +415,9 @@
             debits+credits                  [(->debit updated-debit-account debit-value tick-db-id stock-price stock-amount)
                                              (->credit updated-credit-account credit-value tick-db-id nil nil)]
             tentry                          (apply ->tentry debits+credits)
-            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id)
+            {gameId :game/id :as game-entity} (persistence.core/pull-entity conn game-db-id '[:game/id
+                                                                                              {:game/users
+                                                                                               [{:game.user/portfolio [:bookkeeping.portfolio/journals]}]}])
             updated-journal-entries         (-> game-entity
                                                 :game/users first
                                                 :game.user/portfolio
