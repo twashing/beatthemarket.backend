@@ -1,5 +1,6 @@
 (ns beatthemarket.game.persistence
-  (:require [integrant.repl.state :as repl.state]
+  (:require [clojure.core.reducers :as r]
+            [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
             [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
@@ -110,7 +111,8 @@
   (->> profit-loss
        (partition-by #(= 0 (:stock-account-amount %)))
        (partition-all 2)
-       (map flatten)))
+       (r/map flatten)
+       (into [])))
 
 (defn calculate-running-aggregate-profit-loss-on-BUY! [data]
 
@@ -153,18 +155,20 @@
 
             updated-profit-loss-calculations
             (->> profit-loss
-                 (map (fn [[k v]]
-                        (if (= game-stock-id k)
-                          (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
-                                                                   (concat v)
-                                                                   profit-loss->chunks
-                                                                   ((juxt butlast last)))]
-                            [k (->> latest-chunk
-                                    (map (partial recalculate-profit-loss-on-buy stock-account-amount price))
-                                    (concat butlast-chunks)
-                                    flatten)])
-                          [k v])))
-                 (map #(apply hash-map %))
+                 (r/map (fn [[k v]]
+                          (if (= game-stock-id k)
+                            (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
+                                                                     (concat v)
+                                                                     profit-loss->chunks
+                                                                     ((juxt butlast last)))]
+                              [k (->> latest-chunk
+                                      (r/map (partial recalculate-profit-loss-on-buy stock-account-amount price))
+                                      (into [])
+                                      (concat butlast-chunks)
+                                      flatten)])
+                            [k v])))
+                 (r/map #(apply hash-map %))
+                 (into [])
                  (apply merge))]
 
         (update-profit-loss-state! game-id updated-profit-loss-calculations)))))
@@ -219,19 +223,21 @@
 
             updated-profit-loss-calculations
             (->> profit-loss
-                 (map (fn [[k v]]
-                        (if (= game-stock-id k)
-                          (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
-                                                                   (concat v)
-                                                                   profit-loss->chunks
-                                                                   ((juxt butlast last)))]
-                            [k (->> latest-chunk
-                                    (map (partial recalculate-profit-loss-on-sell old-account-amount stock-account-amount price))
-                                    calculate-realized-profit-loss
-                                    (concat butlast-chunks)
-                                    flatten)])
-                          [k v])))
-                 (map #(apply hash-map %))
+                 (r/map (fn [[k v]]
+                          (if (= game-stock-id k)
+                            (let [[butlast-chunks latest-chunk] (->> [profit-loss-calculation]
+                                                                     (concat v)
+                                                                     profit-loss->chunks
+                                                                     ((juxt butlast last)))]
+                              [k (->> latest-chunk
+                                      (r/map (partial recalculate-profit-loss-on-sell old-account-amount stock-account-amount price))
+                                      (into [])
+                                      calculate-realized-profit-loss
+                                      (concat butlast-chunks)
+                                      flatten)])
+                            [k v])))
+                 (r/map #(apply hash-map %))
+                 (into [])
                  (apply merge))]
 
         (update-profit-loss-state! game-id updated-profit-loss-calculations)))))

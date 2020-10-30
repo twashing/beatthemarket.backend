@@ -1,11 +1,13 @@
 (ns beatthemarket.game.calculation
-  (:require [integrant.repl.state :as repl.state]
+  (:require [clojure.core.reducers :as r]
+            [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
             [io.pedestal.log :as log]
             [clojure.core.match :refer [match]]
 
             [beatthemarket.game.persistence :as game.persistence]
-            [beatthemarket.util :refer [ppi] :as util]))
+            [beatthemarket.util :refer [ppi] :as util]
+            [clojure.core.reducers :as r]))
 
 
 (defn ->profit-loss-event [user-id tick-id game-id stock-id profit-loss-type profit-loss]
@@ -275,7 +277,8 @@
               [?gus :game.user/accounts ?ua]]
             (d/db conn)
             game-id user-id)
-       (map first)))
+       (r/map first)
+       (into [])))
 
 (defn running-profit-loss-for-game [game-id]
   (-> repl.state/system :game/games deref (get game-id) :profit-loss))
@@ -300,11 +303,12 @@
               [?gus :game.user/profit-loss ?pls]]
             (d/db conn)
             game-id user-id)
-       (map first)
-       (map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
+       (r/map first)
+       (r/map (fn [{{tick-id :game.stock.tick/id} :game.user.profit-loss/tick
                  {stock-id :game.stock/id} :game.user.profit-loss/stock
                  amount :game.user.profit-loss/amount}]
-              (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount)))))
+                (->profit-loss-event user-id tick-id game-id stock-id :realized-profit-loss amount)))
+       (into [])))
 
 (defn user-stock->profit-loss [user-id game-id game-stock-id]
   (-> repl.state/system :game/games deref (get game-id) :profit-loss (get user-id) (get game-stock-id [])))

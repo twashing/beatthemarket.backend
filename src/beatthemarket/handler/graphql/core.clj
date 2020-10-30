@@ -1,5 +1,6 @@
 (ns beatthemarket.handler.graphql.core
-  (:require [clojure.core.async :as core.async
+  (:require [clojure.core.reducers :as r]
+            [clojure.core.async :as core.async
              :refer [>!!]]
             [datomic.client.api :as d]
             [clojure.data.json :as json]
@@ -379,8 +380,9 @@
             game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
 
         (->> (game.games/start-game! conn game-control (get args :startPosition 0))
-             (map :stock-ticks)
-             (map #(map graphql.encoder/stock-tick->graphql %)))))
+             (r/map :stock-ticks)
+             (r/map #(map graphql.encoder/stock-tick->graphql %))
+             (into []))))
 
     (catch Exception e
       (do
@@ -475,7 +477,8 @@
 
       (->> (payments.persistence/user-payments conn email)
            (filter filter-subscriptions)
-           (map graphql.encoder/payment-purchase->graphql)
+           (r/map graphql.encoder/payment-purchase->graphql)
+           (into [])
            (assoc user :subscriptions)))
 
     (catch Throwable e
@@ -491,7 +494,8 @@
           group-by-stock? true]
 
       (->> (game.calculation/collect-realized-profit-loss-all-users-allgames conn group-by-stock?)
-           (map graphql.encoder/user->graphql)))
+           (r/map graphql.encoder/user->graphql)
+           (into [])))
 
     (catch Throwable e
       (do
@@ -516,10 +520,12 @@
         (let [game-id (UUID/fromString gameId)]
 
           (->> (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id group-by-stock?)
-               (map graphql.encoder/profit-loss->graphql)))
+               (r/map graphql.encoder/profit-loss->graphql)
+               (into [])))
 
         (->> (game.calculation/collect-realized-profit-loss-allgames conn user-db-id group-by-stock?)
-             (map graphql.encoder/profit-loss->graphql))))
+             (r/map graphql.encoder/profit-loss->graphql)
+             (into []))))
 
     (catch Throwable e
       (do
@@ -550,7 +556,8 @@
           user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))]
 
       (->> (game.calculation/collect-account-balances conn game-db-id user-db-id)
-           (map graphql.encoder/portfolio-update->graphql)))
+           (r/map graphql.encoder/portfolio-update->graphql)
+           (into [])))
 
     (catch Throwable e
       (do
@@ -769,7 +776,8 @@
     (let [{{client :client} :payment.provider/stripe} repl.state/system]
       (->> (payments.stripe/conditionally-create-customer! client email)
            :customers
-           (map graphql.encoder/stripe-customer->graphql)))
+           (r/map graphql.encoder/stripe-customer->graphql)
+           (into [])))
 
     (catch Throwable e
       (do
@@ -796,7 +804,8 @@
           {{{email :email} :checked-authentication} :request} context]
 
       (->> (payments.persistence/user-payments conn email)
-           (map graphql.encoder/payment-purchase->graphql)))
+           (r/map graphql.encoder/payment-purchase->graphql)
+           (into [])))
 
     (catch Throwable e
       (do
@@ -816,7 +825,8 @@
         apple-hash (json/read-str token :key-fn keyword)]
 
     (->> (payments.apple/verify-payment-workflow conn client-id email verify-receipt-endpoint primary-shared-secret apple-hash)
-         (map graphql.encoder/payment-purchase->graphql))))
+         (r/map graphql.encoder/payment-purchase->graphql)
+         (into []))))
 
 (defmethod verify-payment-handler "google" [context {product-id :productId :as args} _]
 
@@ -829,11 +839,13 @@
 
       (valid-google-product-id? product-id)
       (->> (payments.google/verify-product-payment-workflow conn client-id email payment-config args)
-           (map graphql.encoder/payment-purchase->graphql))
+           (r/map graphql.encoder/payment-purchase->graphql)
+           (into []))
 
       (valid-google-subscription-id? product-id)
       (->> (payments.google/verify-subscription-payment-workflow conn client-id email payment-config args)
-           (map graphql.encoder/payment-purchase->graphql))
+           (r/map graphql.encoder/payment-purchase->graphql)
+           (into []))
 
       :else (throw (Exception. (format "Invalid product ID given %s" product-id))))))
 
@@ -857,12 +869,14 @@
        (valid-stripe-product-id? product-id)
        (->> (update args :token #(json/read-str % :key-fn keyword))
             (payments.stripe/verify-product-workflow conn client-id email component)
-            (map graphql.encoder/payment-purchase->graphql))
+            (r/map graphql.encoder/payment-purchase->graphql)
+            (into []))
 
        (valid-stripe-subscription-id? product-id)
        (->> (update args :token #(json/read-str % :key-fn keyword))
             (payments.stripe/verify-subscription-workflow conn client-id email component)
-            (map graphql.encoder/payment-purchase->graphql))
+            (r/map graphql.encoder/payment-purchase->graphql)
+            (into []))
 
        :else (throw (Exception. (format "Invalid product ID given %s" product-id))))))
 
@@ -907,7 +921,9 @@
 
     (core.async/go-loop []
       (when-let [stock-ticks (core.async/<! stock-tick-stream)]
-        (source-stream (map graphql.encoder/stock-tick->graphql stock-ticks))
+        (->> (r/map graphql.encoder/stock-tick->graphql stock-ticks)
+             (into [])
+             source-stream)
         (recur)))
 
     ;; Return a cleanup fn
@@ -936,8 +952,9 @@
       (when-let [portfolio-update (core.async/<! portfolio-update-stream)]
 
         (when-not (empty? portfolio-update)
-          (source-stream
-            (map graphql.encoder/portfolio-update->graphql portfolio-update)))
+          (->> (r/map graphql.encoder/portfolio-update->graphql portfolio-update)
+               (into [])
+               source-stream))
 
         (recur)))
 

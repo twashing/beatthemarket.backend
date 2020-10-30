@@ -1,5 +1,6 @@
 (ns beatthemarket.game.games.processing
-  (:require [io.pedestal.log :as log]
+  (:require [clojure.core.reducers :as r]
+            [io.pedestal.log :as log]
             [integrant.repl.state :as repl.state]
             [com.rpl.specter :refer [select transform ALL MAP-VALS MAP-KEYS]]
             [datomic.client.api :as d]
@@ -10,7 +11,8 @@
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games.state :as game.games.state]
             [clojure.core.async :as core.async]
-            [beatthemarket.util :refer [ppi] :as util]))
+            [beatthemarket.util :refer [ppi] :as util]
+            [clojure.core.reducers :as r]))
 
 
 (defn ->level-status [event gameId profitLoss level]
@@ -21,20 +23,23 @@
 
 (defn group-stock-tick-pairs [stock-tick-pairs]
   (->> (partition 2 stock-tick-pairs)
-       (map (fn [[tick stock]]
+       (r/map (fn [[tick stock]]
               (merge (select-keys tick [:game.stock.tick/id :game.stock.tick/trade-time :game.stock.tick/close])
-                     (select-keys stock [:game.stock/id :game.stock/name]))))))
+                     (select-keys stock [:game.stock/id :game.stock/name]))))
+       (into [])))
 
 (defn stock-tick-by-id [id stock-ticks]
-  (first (filter #(= id (:game.stock/id %))
-                 stock-ticks)))
+  (->> (r/filter #(= id (:game.stock/id %))
+                 stock-ticks)
+       (into [])
+       first))
 
 (defn latest-chunk-closed? [latest-chunk]
   (-> latest-chunk last :stock-account-amount (= 0)))
 
 (defn recalculate-profit-loss-on-tick-perstock [price profit-loss-perstock]
 
-  (map (partial game.persistence/recalculate-profit-loss-on-tick price) profit-loss-perstock))
+  (into [] (r/map (partial game.persistence/recalculate-profit-loss-on-tick price) profit-loss-perstock)))
 
 (defn recalculate-profitloss-perstock-fn [stock-ticks profit-loss]
 
@@ -123,8 +128,9 @@
 
   (log/debug :game.games.processing (format ">> TRANSACT :profit-loss / " (pr-str data)))
   ;; (ppi data)
-  (let [realized-profit-loss (->> (filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
-                                  (map (partial profit-loss->entity conn)))]
+  (let [realized-profit-loss (->> (r/filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
+                                  (r/map (partial profit-loss->entity conn))
+                                  (into []))]
 
     ;; (ppi [:realized-profit-loss realized-profit-loss])
     (when (not (empty? realized-profit-loss))
@@ -138,7 +144,8 @@
   (let [profit-loss (->> data
                          :profit-loss
                          flatten
-                         (map #(dissoc % :user-id :tick-id)))]
+                         (r/map #(dissoc % :user-id :tick-id))
+                         (into []))]
 
     ;; (ppi profit-loss)
 
@@ -156,7 +163,8 @@
   (->> repl.state/config :game/game :levels seq
        (sort-by (comp :order second))
        (partition 2 1)
-       (filter (fn [[[level-name _] r]] (= level level-name)))
+       (r/filter (fn [[[level-name _] r]] (= level level-name)))
+       (into [])
        first))
 
 (defn- update-inmemory-game-level!* [game-id level]
