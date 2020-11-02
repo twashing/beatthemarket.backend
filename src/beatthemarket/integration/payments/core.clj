@@ -233,7 +233,10 @@
          #(when (util/exists? %)
             (persistence.datomic/transact-entities! conn %))]
 
-     (->> (map #(assoc % :payment.applied/applied (c/to-date (t/now))) payment-entities)
+     (->> payment-entities
+          (map #(assoc %
+                       :payment.applied/game (select-keys game-entity [:db/id])
+                       :payment.applied/applied (c/to-date (t/now))))
           transact-entities-when-exists
           doall))
 
@@ -249,6 +252,24 @@
           (map #(apply-feature (:feature %) conn email % game-entity))
           ;; ppi
           doall))))
+
+(defn apply-previous-games-unused-payments-for-user
+  [conn {user-db-id :db/id :as user-entity} game-entity]
+
+  (beatthemarket.game.persistence/user-games conn user-db-id)
+
+  ;;  TODO
+  ;; Collect previous games
+  ;; Collect previous games Starting Cash
+  ;; Collect previous games Cumulative losses
+
+  ;; Collect previous games Applied payment(s)
+  ;; Per game
+  ;;   [x] Starting Cash + (Applied payment(s)) - cumulative losses
+  ;;   (Applied payment(s)) - cumulative losses => Apply any positive remaining cash, to new game
+
+  )
+
 
 (comment
 

@@ -20,6 +20,7 @@
             [beatthemarket.iam.authentication :as iam.auth]
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.core :as game.core]
+            [beatthemarket.game.games.pipeline :as games.pipeline]
             [beatthemarket.migration.core :as migration.core]
             [beatthemarket.migration.schema-init :as schema-init]
             [beatthemarket.persistence.core :as persistence.core]
@@ -160,7 +161,6 @@
         :idToken)))
 
 
-
 ;; USER
 (defn generate-user! [conn]
 
@@ -268,7 +268,6 @@
            (finally
              (log/debug :reason ::test-end)
              (g/close session))))))))
-
 
 
 ;; Miscellaneous
@@ -412,3 +411,31 @@
       (when message
         (swap! container #(conj % message))
         (recur)))))
+
+(defn local-transact-stock! [{conn :conn
+                               userId :userId
+                               game-id :gameId
+                               stockId :stockId
+                               game-control :game-control}
+                              {{tickId      :game.stock.tick/id
+                                tickPrice   :game.stock.tick/close
+                                op          :op
+                                stockAmount :stockAmount} :local-transact-input :as v}]
+
+  (case op
+    :buy (games.pipeline/buy-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
+    :sell (games.pipeline/sell-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
+    :noop)
+  v)
+
+(defn run-trades! [iterations stock-id opts ops ops-count]
+
+  (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
+
+              (let [stock-tick (util/narrow-stock-ticks stock-id stock-ticks)]
+                (assoc v :local-transact-input (merge stock-tick op))))
+            (take ops-count iterations)
+            (take ops-count ops))
+       (map #(local-transact-stock! opts %))
+       doall))
+

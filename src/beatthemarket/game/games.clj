@@ -216,12 +216,11 @@
 
    ;; A
    (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
+   (integration.payments.core/apply-previous-games-unused-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
 
    ;; B
-   (let [{:keys [control-channel
-                 tick-sleep-atom]} game-control
-
+   (let [{:keys [control-channel tick-sleep-atom]} game-control
          [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
 

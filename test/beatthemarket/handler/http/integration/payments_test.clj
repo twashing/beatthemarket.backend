@@ -6,7 +6,10 @@
             [integrant.repl.state :as repl.state]
             [datomic.client.api :as d]
 
+            [beatthemarket.handler.graphql.core :as graphql.core]
             [beatthemarket.iam.persistence :as iam.persistence]
+            [beatthemarket.game.core :as game.core]
+            [beatthemarket.game.games :as game.games]
             [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games.control :as games.control]
@@ -99,12 +102,12 @@
                           :type :start
                           :payload
                           {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"
+                                     verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                       paymentId
+                                       productId
+                                       provider
+                                     }
+                                   }"
                            :variables {:productId product-id
                                        :provider provider
                                        :token token}}})
@@ -124,12 +127,12 @@
                                 :type :start
                                 :payload
                                 {:query "query UserPayments {
-                                       userPayments {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"}})
+                                           userPayments {
+                                             paymentId
+                                             productId
+                                             provider
+                                           }
+                                         }"}})
 
           (let [user-payments-response (-> (test-util/consume-until 988) :payload :data :userPayments)
                 expected-user-payment-keys #{:paymentId :productId :provider}
@@ -426,8 +429,8 @@
         provider "google"
 
         product-id "margin_trading_1month"
-	      provider "google"
-	      android-token (ppi (-> "android.margintrading.token.json" resource slurp))]
+        provider "google"
+        android-token (ppi (-> "android.margintrading.token.json" resource slurp))]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
@@ -930,6 +933,183 @@
 
         (testing "DELETEING test customer"
           (integration.util/delete-test-customer! result-id))))))
+
+
+(defn run-trades! [conn
+                   {user-db-id :db/id
+                    userId :user/external-uid} ops data-sequence]
+
+  (let [;; A
+        data-sequence-fn (constantly data-sequence)
+        tick-length      (count (data-sequence-fn))
+
+        ;; C
+        sink-fn                identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+
+        opts       {:level-timer-sec 5
+                    :user            {:db/id user-db-id}
+                    :accounts        (game.core/->game-user-accounts)
+                    :game-level      :game-level/one}
+
+
+        ;; D Launch Game
+        {{game-id    :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations] (game.games/start-game!-workbench conn game-control)
+
+
+        ;; E Buy Stock
+        {stock-id   :game.stock/id
+         stockName :game.stock/name} (first stocks)
+
+        opts {:conn    conn
+              :userId  userId
+              :gameId  game-id
+              :stockId stock-id
+              :game-control game-control}
+
+        ops-count (count ops)]
+
+    (test-util/run-trades! iterations stock-id opts ops ops-count)
+    game-control))
+
+(deftest apply-previous-games-unused-payments-for-user-test
+
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
+
+        verify-payment-args {:productId "additional_balance_100k"
+                             :provider "apple"
+                             :token (-> "example-hash-apple.json" resource slurp)}]
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (testing "Adding payment"
+
+      (let [verify-payment-id 987]
+
+        (test-util/send-data {:id verify-payment-id
+                              :type :start
+                              :payload
+                              {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                         verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                           paymentId
+                                           productId
+                                           provider
+                                         }
+                                       }"
+                               :variables verify-payment-args}})
+
+        (test-util/consume-until verify-payment-id)))
+
+
+    (let [conn       (-> repl.state/system :persistence/datomic :opts :conn)
+          user-email "twashing@gmail.com"
+
+          {user-db-id :db/id
+           userId     :user/external-uid
+           :as        user} (ffirst (iam.persistence/user-by-email conn user-email '[:db/id :user/external-uid]))
+
+          data-sequence [120.0 110.0 100.0]
+          ops           [{:op :buy :stockAmount 200}
+                         {:op :sell :stockAmount 100}
+                         {:op :sell :stockAmount 100}]]
+
+      (testing "Game Lose 1"
+
+        (let [{{game-id :game/id} :game} (run-trades! conn user ops data-sequence)]
+
+          (games.control/exit-game! conn game-id)
+          (ppi (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id true))))
+
+      (testing "Game Lose 2"
+
+        (let [{{game-id :game/id} :game} (run-trades! conn user ops data-sequence)]
+
+          (games.control/exit-game! conn game-id)
+          (ppi (game.calculation/collect-realized-profit-loss-allgames conn user-db-id true)))))
+    ))
+
+
+#_(deftest verify-payment-apple-test-no-game
+
+  (let
+
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
+
+    (test-util/send-data {:id   987
+                          :type :start
+                          :payload
+                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                     verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                       paymentId
+                                       productId
+                                       provider
+                                     }
+                                   }"
+                           :variables {:productId product-id
+                                       :provider provider
+                                       :token token}}})
+
+    (test-util/<message!! 1000)
+
+    (testing "Basic verify payment"
+
+      (let [payment-response (-> (test-util/consume-until 987) :payload :data :verifyPayment)]
+
+        (verify-payment-response payment-response product-id provider)
+
+
+        (testing "Subsequent call to list payments, includes the most recent"
+
+          (test-util/send-data {:id   988
+                                :type :start
+                                :payload
+                                {:query "query UserPayments {
+                                           userPayments {
+                                             paymentId
+                                             productId
+                                             provider
+                                           }
+                                         }"}})
+
+          (let [user-payments-response (-> (test-util/consume-until 988) :payload :data :userPayments)
+                expected-user-payment-keys #{:paymentId :productId :provider}
+                expected-user-payments-response [{:productId product-id
+                                                  :provider provider}]]
+
+            (->> user-payments-response
+                 (map keys)
+                 (map #(into #{} %))
+                 (every? #(= expected-user-payment-keys %))
+                 is)
+
+            (is (= expected-user-payments-response
+                   (->> user-payments-response
+                        (filter #(= product-id (:productId %)))
+                        (map #(select-keys % [:productId :provider])))))))
+
+
+        (testing "With no game, charge is not applied"
+
+          (let [[{payment-id :paymentId}] payment-response
+                conn (-> repl.state/system :persistence/datomic :opts :conn)
+
+                {payment-applied :payment.applied/applied}
+                (ffirst (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))]
+
+            (is (nil? payment-applied))))))))
+
 
 (defn subscribe-to-game-events [subscription-id game-id]
 

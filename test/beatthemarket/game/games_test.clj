@@ -35,33 +35,6 @@
   test-util/migration-fixture)
 
 
-(defn- local-transact-stock! [{conn :conn
-                               userId :userId
-                               game-id :gameId
-                               stockId :stockId
-                               game-control :game-control}
-                              {{tickId      :game.stock.tick/id
-                                tickPrice   :game.stock.tick/close
-                                op          :op
-                                stockAmount :stockAmount} :local-transact-input :as v}]
-
-  (case op
-    :buy (games.pipeline/buy-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
-    :sell (games.pipeline/sell-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
-    :noop)
-  v)
-
-(defn- run-trades! [iterations stock-id opts ops ops-count]
-
-  (->> (map (fn [[{stock-ticks :stock-ticks :as v} vs] op]
-
-              (let [stock-tick (util/narrow-stock-ticks stock-id stock-ticks)]
-                (assoc v :local-transact-input (merge stock-tick op))))
-            (take ops-count iterations)
-            (take ops-count ops))
-       (map #(local-transact-stock! opts %))
-       doall))
-
 (defn- pull-from-stock-tick-pipeline! [stock-tick-pipeline ops-before-count]
 
   (->> (drop ops-before-count stock-tick-pipeline)
@@ -216,7 +189,7 @@
       (let [ops-before [{:op :buy :stockAmount 100}]
             ops-before-count (count ops-before)]
 
-        (run-trades! iterations stock-id opts ops-before ops-before-count)
+        (test-util/run-trades! iterations stock-id opts ops-before ops-before-count)
 
         (let [expected-before-running-profit-loss {user-db-id
                                                    {stock-id
@@ -242,7 +215,7 @@
       (let [ops-after [{:op :noop}]
             ops-after-count (count ops-after)]
 
-        (run-trades! (drop 1 iterations) stock-id opts ops-after ops-after-count)
+        (test-util/run-trades! (drop 1 iterations) stock-id opts ops-after ops-after-count)
 
         (let [expected-after-running-profit-loss {user-db-id
                                                   {stock-id
@@ -311,7 +284,7 @@
 
     (testing "Expected profit-loss data after multiple buys"
 
-      (run-trades! iterations stock-id opts ops ops-count)
+      (test-util/run-trades! iterations stock-id opts ops ops-count)
 
       (let [expected-profit-loss {user-db-id
                                   {stock-id
@@ -394,7 +367,7 @@
 
     (testing "We are seeing the correct running profit-loss, after realizing a portion of the P/L"
 
-      (run-trades! iterations stock-id opts ops ops-count)
+      (test-util/run-trades! iterations stock-id opts ops ops-count)
 
       (let [expected-running-profit-loss {user-db-id
                                           {stock-id
@@ -495,7 +468,7 @@
 
     (testing "We are seeing the correct running profit-loss, after realizing all of the P/L"
 
-      (run-trades! iterations stock-id opts ops ops-count)
+      (test-util/run-trades! iterations stock-id opts ops ops-count)
 
       (let [expected-running-profit-loss {user-db-id {stock-id []}}
             expected-realized-profit-loss #{{:user-id user-db-id
@@ -570,7 +543,7 @@
 
 
     ;; Run Stock & Trade pipeline
-    (run-trades! iterations stock-id opts ops ops-count)
+    (test-util/run-trades! iterations stock-id opts ops ops-count)
 
 
     (testing "Collect realized profit-losses (all)"
@@ -709,7 +682,7 @@
 
 
     ;; Run Stock & Trade pipeline
-    (run-trades! iterations stock-id opts ops ops-count)
+    (test-util/run-trades! iterations stock-id opts ops ops-count)
 
 
     ;; (ppi (game.calculation/collect-realized-profit-loss-all-users-allgames conn false))
@@ -792,7 +765,7 @@
 
       (testing "The stock account amount can go negative"
 
-        (run-trades! iterations stock-id opts ops-before ops-before-count)
+        (test-util/run-trades! iterations stock-id opts ops-before ops-before-count)
 
         (let [running-profit-loss (game.calculation/running-profit-loss-for-game game-id)
               expected-running-profit-loss-before {user-db-id
@@ -839,7 +812,7 @@
 
       (testing "Filling a short sell, correctly i. resolves the running P/L AND ii. stores the realized profit"
 
-        (run-trades! (drop (+ ops-before-count ops-after-count) iterations) stock-id opts ops-short-sell ops-short-sell-count)
+        (test-util/run-trades! (drop (+ ops-before-count ops-after-count) iterations) stock-id opts ops-short-sell ops-short-sell-count)
 
         (let [running-profit-loss (game.calculation/running-profit-loss-for-game game-id)
               realized-profit-loss (->> (game.calculation/realized-profit-loss-for-game conn user-db-id game-id)
@@ -928,7 +901,7 @@
 
     (testing "Testing the correct level win message is shown"
 
-      (run-trades! iterations stock-id opts ops-before ops-before-count)
+      (test-util/run-trades! iterations stock-id opts ops-before ops-before-count)
 
       (Thread/sleep 1000) ;; NOTE kludge to get around timing transact of new level
       (let [{{level :db/ident} :game/level :as game1} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
@@ -1002,7 +975,7 @@
 
     (testing "Testing the correct level lose message is shown"
 
-      (run-trades! iterations stock-id opts ops-before ops-before-count)
+      (test-util/run-trades! iterations stock-id opts ops-before ops-before-count)
       (pull-from-stock-tick-pipeline! (games.pipeline/stock-tick-pipeline game-control) ops-before-count)
 
 
@@ -1077,7 +1050,7 @@
 
       (with-redefs [integration.payments.core/margin-trading? (constantly true)]
 
-        (run-trades! iterations stock-id opts ops-before ops-before-count)
+        (test-util/run-trades! iterations stock-id opts ops-before ops-before-count)
 
         (Thread/sleep 2000)
 
@@ -1335,7 +1308,7 @@
     (is true)
 
     ;; BEFORE :pause
-    (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
+    (test-util/run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
 
     ;; :pause
     (games.control/pause-game! conn game-id)
@@ -1414,7 +1387,7 @@
 
 
     ;; BEFORE :pause
-    (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
+    (test-util/run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
 
 
     ;; :pause
@@ -1544,7 +1517,7 @@
 
 
     ;; BEFORE :pause
-    (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
+    (test-util/run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
 
 
     ;; :Pause
@@ -1617,7 +1590,7 @@
 
         (testing "Checking Running and Realized P/L, after a buy and sell"
 
-          (run-trades! iterations-after-join stock-id opts ops-after-pause ops-after-pause-count)
+          (test-util/run-trades! iterations-after-join stock-id opts ops-after-pause ops-after-pause-count)
 
           (let [expected-realized-profit-loss #{{:user-id user-db-id
                                                  ;; :tick-id #uuid "c44626cf-b751-4fe1-9753-39abf7f1f966"
@@ -1711,7 +1684,7 @@
 
 
     ;; BEFORE :pause
-    (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
+    (test-util/run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
 
 
     ;; :Pause
@@ -1819,7 +1792,7 @@
 
 
     ;; BEFORE :pause
-    (run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
+    (test-util/run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
 
 
     ;; :pause

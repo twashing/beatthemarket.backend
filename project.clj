@@ -135,7 +135,7 @@
   :profiles {:dev     {:aliases      {"run-dev"        ["trampoline" "run" "-m" "beatthemarket.handler.http.server/run-dev"]
                                       "run-migrations" ["run" "-m" "beatthemarket.migration.core"]}
                        :resource-paths ["test/resources"]
-                       :dependencies [[com.datomic/dev-local    "0.9.203"]
+                       :dependencies [[com.datomic/dev-local "0.9.203"]
 
                                       ;; NOTE Kludge as transitive deps start breaking for dev-local when removed
                                       [datomic-client-memdb "1.1.1"

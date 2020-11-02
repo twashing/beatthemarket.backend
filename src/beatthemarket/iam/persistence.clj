@@ -35,13 +35,6 @@
 
   ([conn user-id game-id expr]
 
-   #_(d/q '[:find (pull ?u pexpr)
-            :in $ ?u pexpr
-            :where
-            [?u]]
-          (d/db conn)
-          user-id pexpr)
-
    (d/q '[:find (pull ?gus pexpr)
           :in $ ?gameId ?user-id pexpr
           :where
