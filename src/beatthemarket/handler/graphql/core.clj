@@ -905,11 +905,12 @@
     (core.async/go-loop []
       (when-let [game-event (core.async/<! game-event-stream)]
 
-        (source-stream
-          (let [a (graphql.encoder/game-event->graphql game-event)]
+        (let [a (graphql.encoder/game-event->graphql game-event)]
+
+          (when (:type a)
 
             (println [:game-event a])
-            a))
+            (source-stream a)))
 
         (recur)))
 

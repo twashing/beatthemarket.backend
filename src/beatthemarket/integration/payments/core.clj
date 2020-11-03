@@ -316,7 +316,6 @@
 
      (->> (map lookup-feature payment-entities)
           (map #(apply-feature (:feature %) conn email % game-entity))
-          ;; ppi
           doall))))
 
 (defn filter-exited-games [{{status :db/ident} :game/status}]

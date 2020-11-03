@@ -5,7 +5,8 @@
 
 
 (def game-level-map
-  {1 :game-level/one
+  {0 :game-level/one
+   1 :game-level/one
    2 :game-level/two
    3 :game-level/three
    4 :game-level/four
