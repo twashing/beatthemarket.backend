@@ -281,6 +281,7 @@
 
    ;; A
    (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
+   (integration.payments.core/apply-previous-games-unused-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
    (game-workbench-loop conn game-control tick-sleep-atom)
 

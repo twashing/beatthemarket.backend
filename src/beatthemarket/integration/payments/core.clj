@@ -5,7 +5,7 @@
             [datomic.client.api :as d]
             [clj-time.core :as t]
             [clj-time.coerce :as c]
-            [com.rpl.specter :refer [transform ALL MAP-VALS]]
+            [com.rpl.specter :refer [select transform ALL MAP-VALS]]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.games.state :as game.games.state]
             [beatthemarket.persistence.datomic :as persistence.datomic]
@@ -40,9 +40,69 @@
 (defn product-lookup [products]
   (clojure.set/map-invert products))
 
+(defn valid-apple-product-id? [product-id]
+
+  (let [products (-> repl.state/config :payment.provider/apple :products)]
+
+    (as-> (vals products) v
+      (into #{} v)
+      (some v #{product-id})
+      (util/exists? v))))
+
+(defn valid-apple-subscription-id? [subscription-id]
+
+  (let [subscriptions (-> repl.state/config :payment.provider/apple :subscriptions)]
+
+    (as-> (vals subscriptions) v
+      (into #{} v)
+      (some v #{subscription-id})
+      (util/exists? v))))
+
+(defn valid-google-product-id? [product-id]
+
+  (let [products (-> repl.state/config :payment.provider/google :products)]
+
+    (as-> (vals products) v
+      (into #{} v)
+      (some v #{product-id})
+      (util/exists? v))))
+
+(defn valid-google-subscription-id? [subscription-id]
+
+  (let [subscriptions (-> repl.state/config :payment.provider/google :subscriptions)]
+
+    (as-> (vals subscriptions) v
+      (into #{} v)
+      (some v #{subscription-id})
+      (util/exists? v))))
+
+(defn valid-stripe-product-id? [product-id]
+
+  (let [products (-> repl.state/config :payment.provider/stripe :products)]
+
+    (as-> (vals products) v
+      (into #{} v)
+      (some v #{product-id})
+      (util/exists? v))))
+
+(defn valid-stripe-subscription-id? [subscription-id]
+
+  (let [subscriptions (-> repl.state/system :payment.provider/stripe :subscriptions)]
+
+    (as-> (vals subscriptions) v
+      (into #{} v)
+      (some v #{subscription-id})
+      (util/exists? v))))
+
 (defn credit-cash-account [amount account]
   (update account :bookkeeping.account/balance #(+ % amount)))
 
+(def feature->amount
+  {:additional_balance_100k 100000.0
+   :additional_100k         100000.0
+   :additional_200k         200000.0
+   :additional_300k         300000.0
+   :additional_400k         400000.0})
 
 (defmulti apply-feature (fn [feature conn email payment-entity game-entity] feature))
 
@@ -53,49 +113,49 @@
   ;; NOTE subscriptions (margin trading) stored in DB
   :noop)
 
-(defmethod apply-feature :additional_balance_100k [_ conn email
+(defmethod apply-feature :additional_balance_100k [feature conn email
                                                    payment-entity
                                                    {game-id :game/id :as game-entity}]
 
   (->> (game.persistence/cash-account-for-user-game conn email game-id)
        ffirst
-       (credit-cash-account 100000.0)
+       (credit-cash-account (feature->amount feature))
        (persistence.datomic/transact-entities! conn)))
 
-(defmethod apply-feature :additional_100k [_ conn email
+(defmethod apply-feature :additional_100k [feature conn email
                                            payment-entity
                                            {game-id :game/id :as game-entity}]
 
   (->> (game.persistence/cash-account-for-user-game conn email game-id)
        ffirst
-       (credit-cash-account 100000.0)
+       (credit-cash-account (feature->amount feature))
        (persistence.datomic/transact-entities! conn)))
 
-(defmethod apply-feature :additional_200k [_ conn email
+(defmethod apply-feature :additional_200k [feature conn email
                                            payment-entity
                                            {game-id :game/id :as game-entity}]
 
   (->> (game.persistence/cash-account-for-user-game conn email game-id)
        ffirst
-       (credit-cash-account 200000.0)
+       (credit-cash-account (feature->amount feature))
        (persistence.datomic/transact-entities! conn)))
 
-(defmethod apply-feature :additional_300k [_ conn email
+(defmethod apply-feature :additional_300k [feature conn email
                                            payment-entity
                                            {game-id :game/id :as game-entity}]
 
   (->> (game.persistence/cash-account-for-user-game conn email game-id)
        ffirst
-       (credit-cash-account 300000.0)
+       (credit-cash-account (feature->amount feature))
        (persistence.datomic/transact-entities! conn)))
 
-(defmethod apply-feature :additional_400k [_ conn email
+(defmethod apply-feature :additional_400k [feature conn email
                                            payment-entity
                                            {game-id :game/id :as game-entity}]
 
   (->> (game.persistence/cash-account-for-user-game conn email game-id)
        ffirst
-       (credit-cash-account 400000.0)
+       (credit-cash-account (feature->amount feature))
        (persistence.datomic/transact-entities! conn)))
 
 (defmethod apply-feature :additional_5_minutes [feature _ _ _ {game-id :game/id :as game-entity}]
@@ -254,21 +314,60 @@
           doall))))
 
 (defn apply-previous-games-unused-payments-for-user
-  [conn {user-db-id :db/id :as user-entity} game-entity]
+  [conn
+   {user-db-id :db/id
+    email :user/email :as user-entity}
+   {game-id :game/id}]
 
-  (beatthemarket.game.persistence/user-games conn user-db-id)
+  (let [filter-exited-games (fn [{{status :db/ident} :game/status}]
+                              (= status :game-status/exited))
 
-  ;;  TODO
-  ;; Collect previous games
-  ;; Collect previous games Starting Cash
-  ;; Collect previous games Cumulative losses
+        extract-profit-loss (comp :game.user/profit-loss first :game/users)
 
-  ;; Collect previous games Applied payment(s)
-  ;; Per game
-  ;;   [x] Starting Cash + (Applied payment(s)) - cumulative losses
-  ;;   (Applied payment(s)) - cumulative losses => Apply any positive remaining cash, to new game
+        exited-games (->> '[:game/id
+                            :game/start-time
+                            :game/end-time
+                            :game/status
 
-  )
+                            {:game/users
+                             [{:game.user/profit-loss
+                               [:game.user.profit-loss/amount]}]}
+                            {:payment.applied/_game [*]}]
+                          (beatthemarket.game.persistence/user-games conn user-db-id)
+                          (map first)
+                          (filter filter-exited-games))
+
+        applied-payments (->> exited-games
+                              (select [ALL :payment.applied/_game ALL])
+                              (filter :payment.applied/applied)
+                              (map :payment/product-id)
+                              (filter #(some #{true}
+                                             (into #{}
+                                                   ((juxt valid-apple-product-id?
+                                                          valid-google-product-id?
+                                                          valid-stripe-product-id?)
+                                                    %))))
+                              (map keyword)
+                              (map feature->amount)
+                              (remove nil?)
+                              (reduce +))
+
+        cumulative-losses (->> (map extract-profit-loss exited-games)
+                               flatten
+                               (remove nil?)
+                               (map :game.user.profit-loss/amount)
+                               (filter neg?)
+                               (reduce +))
+
+        applied-payments-less-cumulative-losses (+ applied-payments cumulative-losses)]
+
+    (when (pos? applied-payments-less-cumulative-losses)
+
+      ;; Apply remaining positive cash, to new game
+      (->> (game.persistence/cash-account-for-user-game conn email game-id)
+           ffirst
+           (credit-cash-account applied-payments-less-cumulative-losses)
+           (persistence.datomic/transact-entities! conn)))))
 
 
 (comment

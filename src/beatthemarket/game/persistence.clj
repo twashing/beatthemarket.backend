@@ -5,27 +5,27 @@
             [beatthemarket.util :refer [ppi] :as util])
   (:import [java.util UUID]))
 
-(defn user-games [conn email]
 
-  (d/q '[:find (pull ?g [:game/id
-                         :game/start-time
-                         :game/end-time
-                         :game/status
-                         {:game/users [:game.user/user-client
-                                       :game.user/user]}])
-         :in $ ?email
-         :where
-         [?g :game/start-time]
-         ;; [(missing? $ ?g :game/end-time)] ;; game still active?
-         ;; (not (or [?g :game/status :game-status/won]
-         ;;          [?g :game/status :game-status/lost]
-         ;;          [?g :game/status :game-status/exited])) ;; game not exited?
-         [?g :game/users ?us]
-         ;; [?us :game.user/user-client ?client-id]  ;; For a Device
-         [?us :game.user/user ?u]
-         [?u :user/email ?email] ;; For a User
-         ]
-       (d/db conn) email))
+(defn user-games
+
+  ([conn user-db-id]
+   (user-games conn user-db-id '[*]))
+
+  ([conn user-db-id pull-expr]
+
+   (d/q '[:find (pull ?g pexpr)
+          :in $ ?user-db-id pexpr
+          :where
+          [?g :game/start-time]
+          ;; [(missing? $ ?g :game/end-time)] ;; game still active?
+          ;; (not (or [?g :game/status :game-status/won]
+          ;;          [?g :game/status :game-status/lost]
+          ;;          [?g :game/status :game-status/exited])) ;; game not exited?
+          [?g :game/users ?us]
+          ;; [?us :game.user/user-client ?client-id]  ;; For a Device
+          [?us :game.user/user ?user-db-id] ;; For a User
+          ]
+        (d/db conn) user-db-id pull-expr)))
 
 (defn running-game-for-user-device [conn email client-id]
 

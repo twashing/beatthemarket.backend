@@ -966,7 +966,7 @@
 
 
         ;; E Buy Stock
-        {stock-id   :game.stock/id
+        {stock-id  :game.stock/id
          stockName :game.stock/name} (first stocks)
 
         opts {:conn    conn
@@ -992,6 +992,7 @@
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
+
 
     (testing "Adding payment"
 
@@ -1024,92 +1025,63 @@
                          {:op :sell :stockAmount 100}
                          {:op :sell :stockAmount 100}]]
 
-      (testing "Game Lose 1"
+      (testing "Running Game Lose 1"
 
-        (let [{{game-id :game/id} :game} (run-trades! conn user ops data-sequence)]
+        (let [{{game-id :game/id} :game} (run-trades! conn user ops data-sequence)
 
-          (games.control/exit-game! conn game-id)
-          (ppi (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id true))))
-
-      (testing "Game Lose 2"
-
-        (let [{{game-id :game/id} :game} (run-trades! conn user ops data-sequence)]
+              expected-profitloss1 '({:profit-loss-type :realized-profit-loss
+                                      :profit-loss -3000.0})]
 
           (games.control/exit-game! conn game-id)
-          (ppi (game.calculation/collect-realized-profit-loss-allgames conn user-db-id true)))))
-    ))
+          (->> (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id true)
+               (map #(select-keys % [:profit-loss-type :profit-loss]))
+               (= expected-profitloss1)
+               is)))
 
+      (testing "Running Game Lose 2"
 
-#_(deftest verify-payment-apple-test-no-game
+        (let [{{game-id :game/id} :game} (run-trades! conn user ops data-sequence)
 
-  (let
+              expected-profitloss2 '({:profit-loss-type :realized-profit-loss
+                                      :profit-loss -3000.0}
+                                     {:profit-loss-type :realized-profit-loss
+                                      :profit-loss -3000.0})]
 
-    (test-util/send-init {:client-id (str client-id)})
-    (test-util/login-assertion service id-token)
+          (games.control/exit-game! conn game-id)
+          (->> (game.calculation/collect-realized-profit-loss-allgames conn user-db-id true)
+               (map #(select-keys % [:profit-loss-type :profit-loss]))
+               (= expected-profitloss2)
+               is)))
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                     verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                       paymentId
-                                       productId
-                                       provider
-                                     }
-                                   }"
-                           :variables {:productId product-id
-                                       :provider provider
-                                       :token token}}})
+      (testing "Running subsequent game should apply unused payment balance"
 
-    (test-util/<message!! 1000)
+        (let [;; A
+              data-sequence-fn (constantly data-sequence)
+              tick-length      (count (data-sequence-fn))
 
-    (testing "Basic verify payment"
+              ;; C
+              sink-fn    identity
+              opts       {:level-timer-sec 5
+                          :user            {:db/id user-db-id}
+                          :accounts        (game.core/->game-user-accounts)
+                          :game-level      :game-level/one}
 
-      (let [payment-response (-> (test-util/consume-until 987) :payload :data :verifyPayment)]
+              ;; D Launch Game
+              {{game-id    :game/id
+                game-db-id :db/id
+                stocks     :game/stocks
+                :as        game} :game
+               :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
+              [_ iterations] (game.games/start-game!-workbench conn game-control)]
 
-        (verify-payment-response payment-response product-id provider)
+          (games.control/update-short-circuit-game! game-id true)
 
+          (let [expected-applied-balance 194000.0
 
-        (testing "Subsequent call to list payments, includes the most recent"
+                {applied-balance :bookkeeping.account/balance}
+                (ffirst (game.persistence/cash-account-for-user-game conn user-email game-id))]
 
-          (test-util/send-data {:id   988
-                                :type :start
-                                :payload
-                                {:query "query UserPayments {
-                                           userPayments {
-                                             paymentId
-                                             productId
-                                             provider
-                                           }
-                                         }"}})
-
-          (let [user-payments-response (-> (test-util/consume-until 988) :payload :data :userPayments)
-                expected-user-payment-keys #{:paymentId :productId :provider}
-                expected-user-payments-response [{:productId product-id
-                                                  :provider provider}]]
-
-            (->> user-payments-response
-                 (map keys)
-                 (map #(into #{} %))
-                 (every? #(= expected-user-payment-keys %))
-                 is)
-
-            (is (= expected-user-payments-response
-                   (->> user-payments-response
-                        (filter #(= product-id (:productId %)))
-                        (map #(select-keys % [:productId :provider])))))))
-
-
-        (testing "With no game, charge is not applied"
-
-          (let [[{payment-id :paymentId}] payment-response
-                conn (-> repl.state/system :persistence/datomic :opts :conn)
-
-                {payment-applied :payment.applied/applied}
-                (ffirst (payments.persistence/payment-by-id conn (UUID/fromString payment-id)))]
-
-            (is (nil? payment-applied))))))))
-
+            (is (= expected-applied-balance applied-balance))))))))
 
 (defn subscribe-to-game-events [subscription-id game-id]
 
@@ -1298,7 +1270,7 @@
                               {:gameId game-id
                                :level 1
                                :minutesRemaining 9
-                               :secondsRemaining 58}}}}]
+                               :secondsRemaining 56}}}}]
 
               (is (= expected-timer-response payment-response)))))
 
