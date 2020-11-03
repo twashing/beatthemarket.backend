@@ -90,6 +90,7 @@
     (def conn (-> integrant.repl.state/system :persistence/datomic :opts :conn))
     (def email "twashing@gmail.com"))
 
+
   ;; B Single User
   (->> (d/q '[:find (pull ?g [:game/id
                               {:game/status [:db/ident]}

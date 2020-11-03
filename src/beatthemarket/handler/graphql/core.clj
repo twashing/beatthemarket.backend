@@ -42,28 +42,6 @@
     (str v)
     v))
 
-(defn user-games [conn email]
-
-  (d/q '[:find (pull ?g [:game/id
-                         :game/start-time
-                         :game/end-time
-                         :game/status
-                         {:game/users [:game.user/user-client
-                                       :game.user/user]}])
-         :in $ ?email
-         :where
-         [?g :game/start-time]
-         [(missing? $ ?g :game/end-time)] ;; game still active?
-         (not (or [?g :game/status :game-status/won]
-                  [?g :game/status :game-status/lost]
-                  [?g :game/status :game-status/exited])) ;; game not exited?
-         [?g :game/users ?us]
-         [?us :game.user/user-client ?client-id]  ;; For a Device
-         [?us :game.user/user ?u]
-         [?u :user/email ?email] ;; For a User
-         ]
-       (d/db conn) email))
-
 #_(defn running-games-for-user-device [conn email client-id]
 
     (d/q '[:find (pull ?g [:db/id
@@ -210,63 +188,6 @@
                          (-> context :com.walmartlabs.lacinia/connection-params :client-id))]
     (UUID/fromString client-id)
     (throw (Exception. "Missing :client-id in your connection_init"))))
-
-
-(defn valid-apple-product-id? [product-id]
-
-  (let [products (-> repl.state/system :payment.provider/apple :products)]
-
-    (as-> (vals products) v
-      (into #{} v)
-      (some v #{product-id})
-      (util/exists? v))))
-
-(defn valid-apple-subscription-id? [subscription-id]
-
-  (let [subscriptions (-> repl.state/system :payment.provider/apple :subscriptions)]
-
-    (as-> (vals subscriptions) v
-      (into #{} v)
-      (some v #{subscription-id})
-      (util/exists? v))))
-
-
-(defn valid-google-product-id? [product-id]
-
-  (let [products (-> repl.state/config :payment.provider/google :products)]
-
-    (as-> (vals products) v
-      (into #{} v)
-      (some v #{product-id})
-      (util/exists? v))))
-
-(defn valid-google-subscription-id? [subscription-id]
-
-  (let [subscriptions (-> repl.state/config :payment.provider/google :subscriptions)]
-
-    (as-> (vals subscriptions) v
-      (into #{} v)
-      (some v #{subscription-id})
-      (util/exists? v))))
-
-
-(defn valid-stripe-product-id? [product-id]
-
-  (let [products (-> repl.state/system :payment.provider/stripe :products)]
-
-    (as-> (vals products) v
-      (into #{} v)
-      (some v #{product-id})
-      (util/exists? v))))
-
-(defn valid-stripe-subscription-id? [subscription-id]
-
-  (let [subscriptions (-> repl.state/system :payment.provider/stripe :subscriptions)]
-
-    (as-> (vals subscriptions) v
-      (into #{} v)
-      (some v #{subscription-id})
-      (util/exists? v))))
 
 
 ;; RESOLVERS
@@ -466,7 +387,10 @@
 
           filter-subscriptions (fn [{product-id :payment/product-id :as payment}]
 
-                                 (let [subscription? (juxt valid-apple-subscription-id? valid-google-subscription-id? valid-stripe-subscription-id?)]
+                                 (let [subscription?
+                                       (juxt payments.core/valid-apple-subscription-id?
+                                             payments.core/valid-google-subscription-id?
+                                             payments.core/valid-stripe-subscription-id?)]
 
                                    (->> (subscription? product-id)
                                         (into #{})
@@ -837,12 +761,12 @@
 
     (cond
 
-      (valid-google-product-id? product-id)
+      (payments.core/valid-google-product-id? product-id)
       (->> (payments.google/verify-product-payment-workflow conn client-id email payment-config args)
            (r/map graphql.encoder/payment-purchase->graphql)
            (into []))
 
-      (valid-google-subscription-id? product-id)
+      (payments.core/valid-google-subscription-id? product-id)
       (->> (payments.google/verify-subscription-payment-workflow conn client-id email payment-config args)
            (r/map graphql.encoder/payment-purchase->graphql)
            (into []))
@@ -860,19 +784,19 @@
         {{{conn :conn} :opts} :persistence/datomic
          component            :payment.provider/stripe}     repl.state/system]
 
-    ;; (println (format "Valid product %s" (valid-stripe-product-id? product-id)))
-    ;; (println (format "Valid subscription %s" (valid-stripe-subscription-id? product-id)))
+    ;; (println (format "Valid product %s" (payments.core/valid-stripe-product-id? product-id)))
+    ;; (println (format "Valid subscription %s" (payments.core/valid-stripe-subscription-id? product-id)))
     ;; (update args :token #(json/read-str % :key-fn keyword))
 
      (cond
 
-       (valid-stripe-product-id? product-id)
+       (payments.core/valid-stripe-product-id? product-id)
        (->> (update args :token #(json/read-str % :key-fn keyword))
             (payments.stripe/verify-product-workflow conn client-id email component)
             (r/map graphql.encoder/payment-purchase->graphql)
             (into []))
 
-       (valid-stripe-subscription-id? product-id)
+       (payments.core/valid-stripe-subscription-id? product-id)
        (->> (update args :token #(json/read-str % :key-fn keyword))
             (payments.stripe/verify-subscription-workflow conn client-id email component)
             (r/map graphql.encoder/payment-purchase->graphql)

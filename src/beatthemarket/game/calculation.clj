@@ -201,10 +201,10 @@
      (if (not group-by-stock?)
 
        (->> (map #(apply hash-map %) game-grouping)
-            (apply merge))
+            (apply concat))
 
        (->> (map group-by-stock game-grouping)
-            (apply merge))))))
+            (apply concat))))))
 
 (defn collect-realized-profit-loss-pergame
 
