@@ -182,6 +182,28 @@
     (core.async/go (core.async/>! control-channel game-event-message))))
 
 
+(defn product-and-subscription-reverse-lookup [product-id]
+
+  (let [{{subscriptions-apple :subscriptions
+          products-apple :products} :payment.provider/apple
+
+         {subscriptions-google :subscriptions
+          products-google :products} :payment.provider/google
+
+         {subscriptions-stripe :subscriptions
+          products-stripe :products} :payment.provider/stripe} repl.state/config]
+
+    (get (merge (subscription-lookup subscriptions-apple)
+                (product-lookup products-apple)
+
+                (subscription-lookup subscriptions-google)
+                (product-lookup products-google)
+
+                (subscription-lookup subscriptions-stripe)
+                (product-lookup products-stripe))
+
+         product-id)))
+
 (defn mark-payment-applied-conditionally-on-running-game [conn email client-id payment]
 
   (let [game-entity (game.persistence/running-game-for-user-device conn email client-id)]
@@ -205,26 +227,10 @@
 
   (when game-entity
 
-    (let [{{subscriptions-apple :subscriptions
-            products-apple :products} :payment.provider/apple
+    (let [feature (product-and-subscription-reverse-lookup
+                    (:payment/product-id payment-entity))]
 
-           {subscriptions-google :subscriptions
-            products-google :products} :payment.provider/google
-
-           {subscriptions-stripe :subscriptions
-            products-stripe :products} :payment.provider/stripe} repl.state/config
-
-          feature (get (merge (subscription-lookup subscriptions-apple)
-                              (product-lookup products-apple)
-
-                              (subscription-lookup subscriptions-google)
-                              (product-lookup products-google)
-
-                              (subscription-lookup subscriptions-stripe)
-                              (product-lookup products-stripe))
-                       (:payment/product-id payment-entity))]
-
-      (apply-feature feature conn email payment-entity game-entity))))
+        (apply-feature feature conn email payment-entity game-entity))))
 
 (defn margin-trading? [conn user-db-id]
 
@@ -310,8 +316,12 @@
 
      (->> (map lookup-feature payment-entities)
           (map #(apply-feature (:feature %) conn email % game-entity))
-          ;; ppi
           doall))))
+
+(defn filter-exited-games [{{status :db/ident} :game/status}]
+  (= status :game-status/exited))
+
+(def extract-profit-loss (comp :game.user/profit-loss first :game/users))
 
 (defn apply-previous-games-unused-payments-for-user
   [conn
@@ -319,12 +329,7 @@
     email :user/email :as user-entity}
    {game-id :game/id}]
 
-  (let [filter-exited-games (fn [{{status :db/ident} :game/status}]
-                              (= status :game-status/exited))
-
-        extract-profit-loss (comp :game.user/profit-loss first :game/users)
-
-        exited-games (->> '[:game/id
+  (let [exited-games (->> '[:game/id
                             :game/start-time
                             :game/end-time
                             :game/status
@@ -347,7 +352,7 @@
                                                           valid-google-product-id?
                                                           valid-stripe-product-id?)
                                                     %))))
-                              (map keyword)
+                              (map product-and-subscription-reverse-lookup)
                               (map feature->amount)
                               (remove nil?)
                               (reduce +))
@@ -368,7 +373,6 @@
            ffirst
            (credit-cash-account applied-payments-less-cumulative-losses)
            (persistence.datomic/transact-entities! conn)))))
-
 
 (comment
 
