@@ -12,16 +12,13 @@
                           :datasource.sine/generate-cosine-sequence
                           :datasource.oscillating/generate-oscillating-sequence]
 
-        :levels                {;; thousands
-                                :game-level/one {:profit-threshold 1000.0
+        :levels                {:game-level/one {:profit-threshold 1000.0
                                                  :lose-threshold 1000.0
                                                  :tick-sleep-ms 1000
                                                  :order 1
 
                                                  ;; TODO stock behaviours for this level
-                                                 :beta-distributions 1
-                                                 ;; :time-limit         1
-                                                 }
+                                                 :beta-distributions 1}
                                 :game-level/two {:profit-threshold 5000.0
                                                  :lose-threshold 2000.0
                                                  :tick-sleep-ms 900
@@ -61,7 +58,7 @@
                                                  :tick-sleep-ms 500
                                                  :order 10}
 
-                                
+
                                 :game-level/bluesky {:profit-threshold ##Inf
                                                      :lose-threshold 100000.0
                                                      :tick-sleep-ms 500
@@ -117,12 +114,12 @@
                                                                   :additional_400k "additional_400k"
                                                                   :additional_5_minutes "additional_5_minutes"}}
                :payment.provider/stripe        {:service #ref [:secrets :production :payment.provider/stripe]
-                                                :subscriptions {:margin_trading_1month "prod_I1RAoB8UK5GDab"}
-                                                :products {:additional_100k "prod_I1RCtpy369Bu4g"
-                                                           :additional_200k "prod_I1RC5THYQrZdYO"
-                                                           :additional_300k "prod_I1RDVzSR4oZKJ3"
-                                                           :additional_400k "prod_I1RDqXXxLnMXdb"
-                                                           :additional_5_minutes "prod_I1REIJ0bKeXG37"}}
+                                                :subscriptions {:margin_trading_1month "prod_I6fV3V7OI45BpD"}
+                                                :products {:additional_100k "prod_I6fV7ddm8eNEnf"
+                                                           :additional_200k "prod_I6fVNypoTG2LQj"
+                                                           :additional_300k "prod_I6fVgO12G6uZnm"
+                                                           :additional_400k "prod_I6fVmyGuO2MDMC"
+                                                           :additional_5_minutes "prod_I6fVQ8litwGcN0"}}
                :payments/feature-registry {:apple #ref [:payment.provider/apple]
                                            :google #ref [:payment.provider/google]
                                            :stripe #ref [:payment.provider/stripe]}
