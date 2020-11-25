@@ -47,6 +47,12 @@
          (fn [gs]
            (update-in gs [game-id :tick-sleep-atom] (constantly (atom tick-sleep))))))
 
+(defn update-inmemory-cash-position-at-game-start! [game-id cash-position-at-game-start]
+
+  (swap! (:game/games repl.state/system)
+         (fn [gs]
+           (update-in gs [game-id :cash-position-at-game-start] (constantly (atom cash-position-at-game-start))))))
+
 (defn calculate-remaining-time [now end]
 
   (let [end (if (t/after? now end) now end)

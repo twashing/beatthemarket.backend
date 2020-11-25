@@ -63,6 +63,7 @@
 
             :level-timer
             :tick-sleep-atom
+            :cash-position-at-game-start
 
             :group-stock-tick-pairs
             :process-transact!
@@ -166,7 +167,7 @@
 
 
         ;; D Launch Game
-        {{game-id     :game/id
+        {{game-id    :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
@@ -175,7 +176,7 @@
 
 
         ;; E Buy Stock
-        {stock-id   :game.stock/id
+        {stock-id  :game.stock/id
          stockName :game.stock/name} (first stocks)
 
         opts {:conn         conn
@@ -1132,11 +1133,97 @@
 ;; PortfolioUpdates & Streaming
 ;; stream-portfolio-update!-on-transact-test
 
+(deftest start-game!-test
 
-;; TODO
+  (let [;; A
+        conn       (-> repl.state/system :persistence/datomic :opts :conn)
+        user       (test-util/generate-user! conn)
+        user-db-id (:db/id user)
+        userId     (:user/external-uid user)
 
-;; start-game!-test - ? test game loop is running
+        ;; B
+        data-sequence-fn (constantly [100.0 80.0])
+        tick-length      (count (data-sequence-fn))
 
+        ;; C
+        sink-fn identity
+
+        test-stock-ticks       (atom [])
+        test-portfolio-updates (atom [])
+
+        game-event-stream (core.async/chan)
+        opts              {:level-timer-sec   5
+                           :user              {:db/id user-db-id}
+                           :accounts          (game.core/->game-user-accounts)
+                           :game-level        :game-level/one
+                           :game-event-stream game-event-stream}
+
+        ;; D Launch Game
+        {{game-id    :game/id
+          game-db-id :db/id
+          stocks     :game/stocks
+          :as        game} :game
+         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)]
+
+    (testing "We have :cash-position-at-game-start"
+
+      (let [expected-cash-position-at-game-create 0.0
+            cash-position-at-game-start (:cash-position-at-game-start game-control)]
+
+        (is (= expected-cash-position-at-game-create @cash-position-at-game-start))
+
+
+        (testing ":cash-position-at-game-start has been updated to the DB value"
+
+          (let [[_ iterations] (game.games/start-game!-workbench conn game-control)
+                expected-cash-position-at-game-start 100000.0
+                inmemory-game (games.state/inmemory-game-by-id game-id)]
+
+            (is (= expected-cash-position-at-game-start @(:cash-position-at-game-start inmemory-game)))
+
+
+            (testing "Margin trading + buy/sell, uses 10x the :cash-position-at-game-start"
+
+              (let [;; E Buy Stock
+                    {stock-id  :game.stock/id
+                     stockName :game.stock/name} (first stocks)
+
+                    opts {:conn         conn
+                          :userId       userId
+                          :gameId       game-id
+                          :stockId      stock-id
+                          :game-control game-control}
+
+                    ;; i.
+                    ops-before       [{:op :buy :stockAmount 9500}
+                                      {:op :noop}]
+                    ops-before-count (count ops-before)]
+
+                (with-redefs [integration.payments.core/margin-trading? (constantly true)]
+
+                  (let [expected-successful-trade-count 2]
+
+                    (is (= expected-successful-trade-count
+                           (count (test-util/run-trades! iterations stock-id opts ops-before ops-before-count))))))
+
+                (let [expected-before-running-profit-loss {user-db-id
+                                                           {stock-id
+                                                            [{:amount 9500
+                                                              :counter-balance-direction :buy
+                                                              :stock-account-amount 9500
+                                                              :stock-account-name (bookkeeping.core/->stock-account-name stockName)
+                                                              :op :buy
+                                                              :latest-price->price [80.0 100.0]
+                                                              :counter-balance-amount 9500
+                                                              :pershare-gain-or-loss -20.0
+                                                              :running-profit-loss -190000.0
+                                                              :price 100.0
+                                                              :pershare-purchase-ratio 1}]}}
+
+                      running-profit-loss (-> (game.calculation/running-profit-loss-for-game game-id)
+                                              (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x))))]
+
+                  (is (= expected-before-running-profit-loss running-profit-loss)))))))))))
 
 #_(deftest end-game!-test
 
