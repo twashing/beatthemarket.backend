@@ -6,6 +6,7 @@
             [beatthemarket.bookkeeping.persistence :as bookkeeping.persistence]
             [beatthemarket.game.persistence :as game.persistence]
             [beatthemarket.game.calculation :as game.calculation]
+            [beatthemarket.game.games.state :as games.state]
             [beatthemarket.integration.payments.core :as integration.payments.core]
             [beatthemarket.persistence.datomic :as persistence.datomic]
             [beatthemarket.persistence.core :as persistence.core]
@@ -252,21 +253,25 @@
 (defn- cash-account-has-sufficient-funds-OR-trades-on-margin? [conn
                                                                debit-value
                                                                {{user-db-id :db/id :as user-pulled} :user-pulled
-                                                                game-pulled :game-pulled :as inputs}]
+                                                                {game-id :game/id :as game-pulled} :game-pulled
+                                                                :as inputs}]
 
-  (let [{cash-account-balance :bookkeeping.account/balance :as cash-account}
-        (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
+  (if (integration.payments.core/margin-trading? conn user-db-id)
 
-    (if (integration.payments.core/margin-trading? conn user-db-id)
+    (let [inmemory-game (games.state/inmemory-game-by-id game-id)
+          cash-position-at-game-start @(:cash-position-at-game-start inmemory-game)]
 
-      (if (check-within-margin-bounds inputs cash-account-balance debit-value)
+      (if (check-within-margin-bounds inputs cash-position-at-game-start debit-value)
 
         (rop/fail (ex-info (format "Insufficient Funds on Margin account (10x Cash) [%s] for purchase value [%s]"
-                                   cash-account-balance
+                                   cash-position-at-game-start
                                    debit-value)
                            inputs))
 
-        (rop/succeed inputs))
+        (rop/succeed inputs)))
+
+    (let [{cash-account-balance :bookkeeping.account/balance :as cash-account}
+          (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
 
       (if (> cash-account-balance debit-value)
         (rop/succeed inputs)

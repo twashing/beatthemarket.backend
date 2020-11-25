@@ -120,6 +120,7 @@
                                    :input-sequence        (or input-sequence input-sequence-local)
 
                                    :short-circuit-game? (atom false)
+                                   :cash-position-at-game-start (atom 0.0)
                                    :tick-sleep-atom (atom
                                                       (or tick-sleep-ms
                                                           (-> integrant.repl.state/config :game/game :tick-sleep-ms)))
@@ -210,7 +211,7 @@
    (start-game! conn game-control 0))
 
   ([conn
-    {user-entity :user
+    {{user-db-id :db/id :as user-entity} :user
      {game-id :game/id :as game-entity} :game :as game-control}
     start-position]
 
@@ -219,7 +220,15 @@
    (integration.payments.core/apply-previous-games-unused-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
 
+
    ;; B
+   (let [{cash-position-at-game-start :bookkeeping.account/balance}
+         (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)]
+
+     (games.state/update-inmemory-cash-position-at-game-start! game-id cash-position-at-game-start))
+
+
+   ;; C
    (let [{:keys [control-channel tick-sleep-atom]} game-control
          [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
@@ -270,7 +279,7 @@
    (start-game!-workbench conn game-control 0))
 
   ([conn
-    {user-entity :user
+    {{user-db-id :db/id :as user-entity} :user
      {game-id :game/id :as game-entity} :game
      level-timer :level-timer
      tick-sleep-atom :tick-sleep-atom
@@ -279,6 +288,7 @@
      :as game-control}
     start-position]
 
+
    ;; A
    (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (integration.payments.core/apply-previous-games-unused-payments-for-user conn user-entity game-entity)
@@ -286,6 +296,12 @@
    (game-workbench-loop conn game-control tick-sleep-atom)
 
    ;; B
+   (let [{cash-position-at-game-start :bookkeeping.account/balance}
+         (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)]
+
+     (games.state/update-inmemory-cash-position-at-game-start! game-id cash-position-at-game-start))
+
+   ;; C
    (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
 
