@@ -377,7 +377,16 @@
         (as-> entities v
           (persistence.datomic/transact-entities! conn v)
           (:db-after v)
-          (d/q '[:find (pull ?e [*])
+          (d/q '[:find (pull ?e [:bookkeeping.tentry/id
+                                 {:bookkeeping.tentry/credits
+                                  [:bookkeeping.credit/amount
+                                   :bookkeeping.credit/price
+                                   {:bookkeeping.credit/tick [:game.stock.tick/id]}
+                                   {:bookkeeping.credit/account
+                                    [:bookkeeping.account/id
+                                     :bookkeeping.account/amount
+                                     :bookkeeping.account/name
+                                     {:bookkeeping.account/counter-party [:game.stock/id]}]}]}])
                  :in $ ?entry-id
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                v
@@ -440,7 +449,16 @@
         (as-> entities ent
           (persistence.datomic/transact-entities! conn ent)
           (:db-after ent)
-          (d/q '[:find (pull ?e [*])
+          (d/q '[:find (pull ?e [:bookkeeping.tentry/id
+                                 {:bookkeeping.tentry/debits
+                                  [:bookkeeping.debit/amount
+                                   :bookkeeping.debit/price
+                                   {:bookkeeping.debit/tick [:game.stock.tick/id]}
+                                   {:bookkeeping.debit/account
+                                    [:bookkeeping.account/id
+                                     :bookkeeping.account/amount
+                                     :bookkeeping.account/name
+                                     {:bookkeeping.account/counter-party [:game.stock/id]}]}]}])
                  :in $ ?entry-id
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                ent
