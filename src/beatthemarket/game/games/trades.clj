@@ -87,7 +87,7 @@
                                 latest-tick?)]
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
-            [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId '[:db/id]))
+            [_ _] (let [game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId '[:db/id]))
                         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId '[:db/id]))
                         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId '[:db/id]))]
 

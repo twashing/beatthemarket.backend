@@ -211,7 +211,13 @@
                                            {stock-db-id :db/id :as stock-entity}]
 
   (let [stock-account-result-set
-        (d/q '[:find (pull ?gua [*])
+        (d/q '[:find (pull ?gua [:db/id
+                                 :bookkeeping.account/id
+                                 :bookkeeping.account/name
+                                 :bookkeeping.account/type
+                                 :bookkeeping.account/balance
+                                 :bookkeeping.account/amount
+                                 :bookkeeping.account/orientation])
                :in $ ?game-db-id ?game-user ?stock-db-id
                :where
                [?game-db-id]
@@ -343,8 +349,8 @@
       (let [{{game-id :game/id :as game-pulled} :game-pulled
              user-pulled :user-pulled
              stock-pulled :stock-pulled} result
-            stock-account                      (conditionally-create-stock-account! conn game-pulled user-pulled stock-pulled)
-            credit-value                       debit-value
+            stock-account                (conditionally-create-stock-account! conn game-pulled user-pulled stock-pulled)
+            credit-value                 debit-value
 
             ;; ACCOUNT BALANCE UPDATES
             updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)

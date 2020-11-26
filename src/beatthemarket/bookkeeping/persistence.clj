@@ -1,6 +1,7 @@
 (ns beatthemarket.bookkeeping.persistence
-  (:require [beatthemarket.persistence.core :as persistence.core]
-            [datomic.client.api :as d]))
+  (:require [datomic.client.api :as d]
+            [beatthemarket.persistence.core :as persistence.core]
+            [beatthemarket.util :as util :refer [ppi]]))
 
 
 (defn account-by-game-user [conn user-db-id game-id account-name]
