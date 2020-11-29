@@ -353,7 +353,7 @@
         {{:keys [gameId stockId stockAmount tickId tickPrice]} :input} args
         conn                                               (-> repl.state/system :persistence/datomic :opts :conn)
         game-control                                       (->> repl.state/system :game/games deref (#(get % (UUID/fromString gameId))))
-        user-db-id                                          (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
+        user-db-id                                         (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
         gameId (UUID/fromString gameId)
         stockId (UUID/fromString stockId)
         tickId (UUID/fromString tickId)

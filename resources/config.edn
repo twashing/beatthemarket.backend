@@ -6,7 +6,7 @@
  :game {:starting-balance      100000.00
         :tick-sleep-ms         1000
         :level-timer-sec       300 ;; (* 5 60)
-        :latest-tick-threshold 100
+        :latest-tick-threshold 5
         :stream-buffer-size    2
         :data-generators [:datasource.sine/generate-sine-sequence
                           :datasource.sine/generate-cosine-sequence

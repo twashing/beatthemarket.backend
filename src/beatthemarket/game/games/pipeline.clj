@@ -67,8 +67,8 @@
      :portfolio-update-stream :as game-control} conn user-external-id game-id stockId stockAmount tickId tickPrice validate?]
 
    (let [game-control-without-check-level (assoc game-control :check-level-complete identity)
-         user-db-id (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id))
-         game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id))
+         user-db-id (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id '[:db/id]))
+         game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id '[:db/id]))
          op :buy]
 
      (->> (games.trades/buy-stock! conn user-db-id user-external-id game-id stockId stockAmount tickId tickPrice validate?)
@@ -87,8 +87,8 @@
     conn user-external-id game-id stockId stockAmount tickId tickPrice validate?]
 
    (let [game-control-without-check-level (assoc game-control :check-level-complete identity)
-         user-db-id  (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id))
-         game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id))
+         user-db-id  (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id '[:db/id]))
+         game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id game-id '[:db/id]))
          op :sell]
 
      (->> (games.trades/sell-stock! conn user-db-id user-external-id game-id stockId stockAmount tickId tickPrice validate?)

@@ -242,7 +242,7 @@
                               (map :subscriptions)
                               (map :margin_trading_1month))]
 
-    (-> (d/q '[:find (pull ?p [*])
+    (-> (d/q '[:find (pull ?p [:db/id])
                :in $ ?u [?product-ids ...]
                :where
                [?u :user/payments ?p]

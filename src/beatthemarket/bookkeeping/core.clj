@@ -189,7 +189,8 @@
         game-user-with-account (->> (bookkeeping.persistence/pull-game-user
                                       conn
                                       (:db/id user-entity)
-                                      (:game/id game-entity))
+                                      (:game/id game-entity)
+                                      '[:db/id :game.user/accounts])
                                     (transform [:game.user/accounts] #(conj % account)))
 
         entities               [account game-user-with-account]]
@@ -203,7 +204,13 @@
            ent
            (-> account :bookkeeping.account/id))
       (ffirst ent)
-      (persistence.core/pull-entity conn ent))))
+      (persistence.core/pull-entity conn ent '[:db/id
+                                               :bookkeeping.account/id
+                                               :bookkeeping.account/name
+                                               :bookkeeping.account/type
+                                               :bookkeeping.account/balance
+                                               :bookkeeping.account/amount
+                                               :bookkeeping.account/orientation]))))
 
 (defn conditionally-create-stock-account! [conn
                                            {game-db-id :db/id :as game-entity}
@@ -277,7 +284,7 @@
         (rop/succeed inputs)))
 
     (let [{cash-account-balance :bookkeeping.account/balance :as cash-account}
-          (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
+          (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled) '[:bookkeeping.account/balance])]
 
       (if (> cash-account-balance debit-value)
         (rop/succeed inputs)
@@ -293,7 +300,9 @@
     (if-let [stock-account
              (ffirst (d/q '[:find (pull ?stock-id
                                         [:game.stock/id
-                                         {:bookkeeping.account/_counter-party [*]}])
+                                         {:bookkeeping.account/_counter-party [:db/id
+                                                                               :bookkeeping.account/balance
+                                                                               :bookkeeping.account/amount]}])
                             :in $ ?stock-id
                             :where
                             [?stock-id]]
@@ -353,7 +362,7 @@
             credit-value                 debit-value
 
             ;; ACCOUNT BALANCE UPDATES
-            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)
+            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id '[:db/id :bookkeeping.account/balance])
                                               [:bookkeeping.account/balance] - debit-value)
             updated-credit-account (-> stock-account
                                        (update-in [:bookkeeping.account/balance] + credit-value)
@@ -428,7 +437,7 @@
                                        :bookkeeping.account/_counter-party
                                        (update-in [:bookkeeping.account/balance] (constantly stock-account-balance-updated))
                                        (update-in [:bookkeeping.account/amount] - stock-amount))
-            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)
+            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id '[:db/id :bookkeeping.account/balance])
                                               [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
