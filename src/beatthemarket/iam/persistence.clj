@@ -18,15 +18,27 @@
         (d/db conn)
         email pull-expr)))
 
-(defn user-by-external-uid [conn external-uid]
-  (d/q '[:find (pull ?e [*])
-         :in $ ?external-uid
-         :where
-         [?e :user/external-uid ?external-uid]]
-       (d/db conn)
-       external-uid))
+(defn user-by-external-uid
 
-(defn user-by-id [conn id] (persistence.core/pull-entity conn id))
+  ([conn external-uid]
+   (user-by-external-uid conn external-uid '[:db/id]))
+
+  ([conn external-uid pull-expr]
+
+   (d/q '[:find (pull ?e pexpr)
+          :in $ ?external-uid pexpr
+          :where
+          [?e :user/external-uid ?external-uid]]
+        (d/db conn)
+        external-uid pull-expr)))
+
+(defn user-by-id
+
+  ([conn id]
+   (persistence.core/pull-entity conn id '[*]))
+
+  ([conn id pull-expr]
+   (persistence.core/pull-entity conn id pull-expr)))
 
 (defn game-user-by-user
 

@@ -189,7 +189,8 @@
         game-user-with-account (->> (bookkeeping.persistence/pull-game-user
                                       conn
                                       (:db/id user-entity)
-                                      (:game/id game-entity))
+                                      (:game/id game-entity)
+                                      '[:db/id :game.user/accounts])
                                     (transform [:game.user/accounts] #(conj % account)))
 
         entities               [account game-user-with-account]]
@@ -203,7 +204,13 @@
            ent
            (-> account :bookkeeping.account/id))
       (ffirst ent)
-      (persistence.core/pull-entity conn ent))))
+      (persistence.core/pull-entity conn ent '[:db/id
+                                               :bookkeeping.account/id
+                                               :bookkeeping.account/name
+                                               :bookkeeping.account/type
+                                               :bookkeeping.account/balance
+                                               :bookkeeping.account/amount
+                                               :bookkeeping.account/orientation]))))
 
 (defn conditionally-create-stock-account! [conn
                                            {game-db-id :db/id :as game-entity}
@@ -211,7 +218,13 @@
                                            {stock-db-id :db/id :as stock-entity}]
 
   (let [stock-account-result-set
-        (d/q '[:find (pull ?gua [*])
+        (d/q '[:find (pull ?gua [:db/id
+                                 :bookkeeping.account/id
+                                 :bookkeeping.account/name
+                                 :bookkeeping.account/type
+                                 :bookkeeping.account/balance
+                                 :bookkeeping.account/amount
+                                 :bookkeeping.account/orientation])
                :in $ ?game-db-id ?game-user ?stock-db-id
                :where
                [?game-db-id]
@@ -227,21 +240,21 @@
       (create-stock-account! conn game-entity user-entity stock-entity))))
 
 (defn- game-exists? [{:keys [conn game-id] :as inputs}]
-  (let [game-pulled (try (persistence.core/pull-entity conn game-id)
+  (let [game-pulled (try (persistence.core/pull-entity conn game-id '[:db/id :game/id])
                          (catch Throwable e nil))]
     (if (exists? game-pulled)
       (rop/succeed (assoc inputs :game-pulled game-pulled))
       (rop/fail (ex-info "No game bound to id" inputs)))))
 
 (defn- user-exists? [{:keys [conn user-id] :as inputs}]
-  (let [user-pulled (try (iam.persistence/user-by-id conn user-id)
+  (let [user-pulled (try (iam.persistence/user-by-id conn user-id '[:db/id])
                          (catch Throwable e nil))]
     (if (exists? user-pulled)
       (rop/succeed (assoc inputs :user-pulled user-pulled))
       (rop/fail (ex-info "No user bound to id" inputs)))))
 
 (defn- stock-exists? [{:keys [conn stock-id] :as inputs}]
-  (let [stock-pulled (try (persistence.core/pull-entity conn stock-id)
+  (let [stock-pulled (try (persistence.core/pull-entity conn stock-id '[:db/id])
                           (catch Throwable e nil))]
     (if (exists? stock-pulled)
       (rop/succeed (assoc inputs :stock-pulled stock-pulled))
@@ -271,7 +284,7 @@
         (rop/succeed inputs)))
 
     (let [{cash-account-balance :bookkeeping.account/balance :as cash-account}
-          (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled))]
+          (bookkeeping.persistence/cash-account-by-game-user conn (:db/id user-pulled) (:game/id game-pulled) '[:bookkeeping.account/balance])]
 
       (if (> cash-account-balance debit-value)
         (rop/succeed inputs)
@@ -287,7 +300,9 @@
     (if-let [stock-account
              (ffirst (d/q '[:find (pull ?stock-id
                                         [:game.stock/id
-                                         {:bookkeeping.account/_counter-party [*]}])
+                                         {:bookkeeping.account/_counter-party [:db/id
+                                                                               :bookkeeping.account/balance
+                                                                               :bookkeeping.account/amount]}])
                             :in $ ?stock-id
                             :where
                             [?stock-id]]
@@ -343,11 +358,11 @@
       (let [{{game-id :game/id :as game-pulled} :game-pulled
              user-pulled :user-pulled
              stock-pulled :stock-pulled} result
-            stock-account                      (conditionally-create-stock-account! conn game-pulled user-pulled stock-pulled)
-            credit-value                       debit-value
+            stock-account                (conditionally-create-stock-account! conn game-pulled user-pulled stock-pulled)
+            credit-value                 debit-value
 
             ;; ACCOUNT BALANCE UPDATES
-            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)
+            updated-debit-account  (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id '[:db/id :bookkeeping.account/balance])
                                               [:bookkeeping.account/balance] - debit-value)
             updated-credit-account (-> stock-account
                                        (update-in [:bookkeeping.account/balance] + credit-value)
@@ -371,7 +386,16 @@
         (as-> entities v
           (persistence.datomic/transact-entities! conn v)
           (:db-after v)
-          (d/q '[:find (pull ?e [*])
+          (d/q '[:find (pull ?e [:bookkeeping.tentry/id
+                                 {:bookkeeping.tentry/credits
+                                  [:bookkeeping.credit/amount
+                                   :bookkeeping.credit/price
+                                   {:bookkeeping.credit/tick [:game.stock.tick/id]}
+                                   {:bookkeeping.credit/account
+                                    [:bookkeeping.account/id
+                                     :bookkeeping.account/amount
+                                     :bookkeeping.account/name
+                                     {:bookkeeping.account/counter-party [:game.stock/id]}]}]}])
                  :in $ ?entry-id
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                v
@@ -413,7 +437,7 @@
                                        :bookkeeping.account/_counter-party
                                        (update-in [:bookkeeping.account/balance] (constantly stock-account-balance-updated))
                                        (update-in [:bookkeeping.account/amount] - stock-amount))
-            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)
+            updated-credit-account (update-in (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id '[:db/id :bookkeeping.account/balance])
                                               [:bookkeeping.account/balance] + debit-value)
 
             ;; T-ENTRY + JOURNAL ENTRIES
@@ -434,7 +458,16 @@
         (as-> entities ent
           (persistence.datomic/transact-entities! conn ent)
           (:db-after ent)
-          (d/q '[:find (pull ?e [*])
+          (d/q '[:find (pull ?e [:bookkeeping.tentry/id
+                                 {:bookkeeping.tentry/debits
+                                  [:bookkeeping.debit/amount
+                                   :bookkeeping.debit/price
+                                   {:bookkeeping.debit/tick [:game.stock.tick/id]}
+                                   {:bookkeeping.debit/account
+                                    [:bookkeeping.account/id
+                                     :bookkeeping.account/amount
+                                     :bookkeeping.account/name
+                                     {:bookkeeping.account/counter-party [:game.stock/id]}]}]}])
                  :in $ ?entry-id
                  :where [?e :bookkeeping.tentry/id ?entry-id]]
                ent

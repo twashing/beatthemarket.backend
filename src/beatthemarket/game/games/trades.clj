@@ -12,7 +12,7 @@
 ;; BUY | SELL
 (defn- game-iscurrent-and-belongsto-user? [{:keys [conn gameId userId] :as inputs}]
   (if (util/exists?
-        (d/q '[:find (pull ?e [*])
+        (d/q '[:find (pull ?e [:db/id])
                :in $ ?game-id ?user-id
                :where
                [?e :game/id ?game-id]
@@ -30,7 +30,7 @@
 
   (let [{tick-price :game.stock.tick/close :as tick}
         (ffirst
-          (d/q '[:find (pull ?e [*])
+          (d/q '[:find (pull ?e [:game.stock.tick/close])
                  :in $ ?tick-id
                  :where
                  [?e :game.stock.tick/id ?tick-id]]
@@ -43,15 +43,20 @@
         (rop/fail (ex-info message tick))))))
 
 (defn stock->tick-history [conn stockId]
-  (->> stockId
-       (d/q '[:find (pull ?e [*])
-              :in $ ?stock-id
-              :where
-              [?e :game.stock/id ?stock-id]]
-            (d/db conn))
-       ffirst
-       :game.stock/price-history
-       (sort-by :game.stock.tick/trade-time >)))
+
+  (let [latest-tick-threshold (get (:game/game integrant.repl.state/config) :latest-tick-threshold 2)]
+
+    ;; TODO Howto interpret ?limit-threshold as a Number
+    ;; (ppi [latest-tick-threshold (type latest-tick-threshold)])
+
+    (->> (d/q '[:find (pull ?e [(:game.stock/price-history :limit 5)])
+                :in $ ?stock-id ?limit-threshold
+                :where
+                [?e :game.stock/id ?stock-id]]
+              (d/db conn) stockId latest-tick-threshold)
+         ffirst
+         :game.stock/price-history
+         (sort-by :game.stock.tick/trade-time >))))
 
 (defn- latest-tick? [{:keys [conn tickId stockId] :as inputs}]
 
@@ -87,7 +92,7 @@
                                 latest-tick?)]
 
             [true (result :guard #(= clojure.lang.ExceptionInfo (type %)))] (throw result)
-            [_ _] (let [game-db-id  (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId '[:db/id]))
+            [_ _] (let [game-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game/id gameId '[:db/id]))
                         stock-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock/id stockId '[:db/id]))
                         tick-db-id (util/extract-id (persistence.core/entity-by-domain-id conn :game.stock.tick/id tickId '[:db/id]))]
 
