@@ -26,7 +26,13 @@
        (d/db conn)
        external-uid))
 
-(defn user-by-id [conn id] (persistence.core/pull-entity conn id))
+(defn user-by-id
+
+  ([conn id]
+   (persistence.core/pull-entity conn id '[*]))
+
+  ([conn id pull-expr]
+   (persistence.core/pull-entity conn id pull-expr)))
 
 (defn game-user-by-user
 

@@ -233,21 +233,21 @@
       (create-stock-account! conn game-entity user-entity stock-entity))))
 
 (defn- game-exists? [{:keys [conn game-id] :as inputs}]
-  (let [game-pulled (try (persistence.core/pull-entity conn game-id)
+  (let [game-pulled (try (persistence.core/pull-entity conn game-id '[:db/id :game/id])
                          (catch Throwable e nil))]
     (if (exists? game-pulled)
       (rop/succeed (assoc inputs :game-pulled game-pulled))
       (rop/fail (ex-info "No game bound to id" inputs)))))
 
 (defn- user-exists? [{:keys [conn user-id] :as inputs}]
-  (let [user-pulled (try (iam.persistence/user-by-id conn user-id)
+  (let [user-pulled (try (iam.persistence/user-by-id conn user-id '[:db/id])
                          (catch Throwable e nil))]
     (if (exists? user-pulled)
       (rop/succeed (assoc inputs :user-pulled user-pulled))
       (rop/fail (ex-info "No user bound to id" inputs)))))
 
 (defn- stock-exists? [{:keys [conn stock-id] :as inputs}]
-  (let [stock-pulled (try (persistence.core/pull-entity conn stock-id)
+  (let [stock-pulled (try (persistence.core/pull-entity conn stock-id '[:db/id])
                           (catch Throwable e nil))]
     (if (exists? stock-pulled)
       (rop/succeed (assoc inputs :stock-pulled stock-pulled))
