@@ -237,6 +237,6 @@
 
 (defn stream-level-update! [game-event-stream data]
 
-  (log/debug :game.games.processing (format ">> STREAM level-update! / " (pr-str data)))
+  (log/info :game.games.processing (format ">> STREAM level-update! / " (pr-str data)))
   ;; (log/debug :game.games.processing (format ">> stream-level-update! /" data))
   data)

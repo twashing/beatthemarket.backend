@@ -69,6 +69,7 @@
   ([conn sink-fn data-sequence-fn {:keys [client-id game-id
 
                                           stocks-in-game
+                                          stagger-wavelength?
                                           level-timer-sec tick-sleep-ms
                                           input-sequence profit-loss
 
@@ -87,7 +88,8 @@
                                           accounts
                                           game-level]
                                    :or {game-id        (UUID/randomUUID)
-                                        stocks-in-game 4}
+                                        stocks-in-game 4
+                                        stagger-wavelength? (-> integrant.repl.state/config :game/game :stagger-wavelength?)}
                                    :as opts}]
 
    (let [data-generators      (-> integrant.repl.state/config :game/game :data-generators)
@@ -107,10 +109,12 @@
          vary-wavelength-windows (iterate (partial + vary-wavelength-window) vary-wavelength-window)
 
          stocks-with-tick-data-with-staggered-wavelength
-         (map (fn [stocks window]
-                (update-in stocks [:data-sequence] (fn [ds] (drop window ds))))
-              stocks-with-tick-data
-              vary-wavelength-windows)
+         (if-not stagger-wavelength?
+           stocks-with-tick-data
+           (map (fn [stocks window]
+                  (update-in stocks [:data-sequence] (fn [ds] (drop window ds))))
+                stocks-with-tick-data
+                vary-wavelength-windows))
 
          input-sequence-local    (games.control/stocks->stock-sequences stocks-with-tick-data-with-staggered-wavelength)
          {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
@@ -296,7 +300,6 @@
      :as game-control}
     start-position]
 
-
    ;; A
    (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
    (integration.payments.core/apply-previous-games-unused-payments-for-user conn user-entity game-entity)
@@ -313,7 +316,7 @@
    (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
 
-       [historical-data (games.control/run-iteration inputs-at-position)])))
+     [historical-data (games.control/run-iteration inputs-at-position)])))
 
 (defn start-market!
 

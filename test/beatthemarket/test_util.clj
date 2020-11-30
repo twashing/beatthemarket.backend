@@ -408,7 +408,7 @@
   (core.async/go-loop []
 
     (let [[message ch] (core.async/alts! [(core.async/timeout 1000) channel])]
-      (when message
+      (when (ppi message)
         (swap! container #(conj % message))
         (recur)))))
 
