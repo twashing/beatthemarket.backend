@@ -1127,12 +1127,6 @@
     (is (= (core.async/<!! game-event-stream)
            {:event :lose :game-id game-id :profit-loss 509.37 :level :game-level/ten :type :LevelStatus}))))
 
-
-;; TODO
-
-;; PortfolioUpdates & Streaming
-;; stream-portfolio-update!-on-transact-test
-
 (deftest start-game!-test
 
   (let [;; A
@@ -1296,24 +1290,26 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
-        opts       {:level-timer-sec                   5
-                    :accounts                          (game.core/->game-user-accounts)
-                    :stream-stock-tick       (fn [a]
-                                               (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
-                                                 (swap! test-stock-ticks
-                                                        (fn [b]
-                                                          (conj b stock-ticks)))
-                                                 stock-ticks))
+        opts       {:level-timer-sec          5
+                    :user                     {:db/id user-db-id}
+                    :accounts                 (game.core/->game-user-accounts)
+                    :game-level               :game-level/one
+                    :stream-stock-tick        (fn [a]
+                                                (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
+                                                  (swap! test-stock-ticks
+                                                         (fn [b]
+                                                           (conj b stock-ticks)))
+                                                  stock-ticks))
                     :stream-portfolio-update! (fn [a]
                                                 (swap! test-portfolio-updates (fn [b] (conj b a)))
                                                 a)}
-        game-level :game-level/one
         {{game-id     :game/id
           game-db-id :db/id :as game} :game
          control-channel              :control-channel
          game-event-stream            :game-event-stream
          :as                          game-control}
-        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
+        (game.games/create-game! conn sink-fn data-sequence-fn opts)
+
 
         start-position               3
         [historical-data iterations] (game.games/start-game!-workbench conn user-db-id game-control start-position)]
