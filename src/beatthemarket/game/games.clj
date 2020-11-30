@@ -102,7 +102,17 @@
          (game.core/initialize-game! conn initialize-game-opts)
 
          stocks-with-tick-data   (games.control/stocks->stocks-with-tick-data stocks data-sequence-fn data-generators)
-         input-sequence-local    (games.control/stocks->stock-sequences stocks-with-tick-data)
+
+         vary-wavelength-window 10
+         vary-wavelength-windows (iterate (partial + vary-wavelength-window) vary-wavelength-window)
+
+         stocks-with-tick-data-with-staggered-wavelength
+         (map (fn [stocks window]
+                (update-in stocks [:data-sequence] (fn [ds] (drop window ds))))
+              stocks-with-tick-data
+              vary-wavelength-windows)
+
+         input-sequence-local    (games.control/stocks->stock-sequences stocks-with-tick-data-with-staggered-wavelength)
          {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
                                                        (get saved-game-level))
 
@@ -116,7 +126,7 @@
                                                                    (assoc opts :current-level current-level))
                                   {:game                  game                  ;; TODO load
                                    :profit-loss           (or profit-loss {})   ;; TODO replay
-                                   :stocks-with-tick-data stocks-with-tick-data ;; TODO load + seek to index
+                                   :stocks-with-tick-data stocks-with-tick-data-with-staggered-wavelength ;; TODO load + seek to index
                                    :input-sequence        (or input-sequence input-sequence-local)
 
                                    :short-circuit-game? (atom false)
@@ -193,8 +203,6 @@
      :game-status/paused))
 
 (defn update-start-position! [conn game-id start-position]
-
-  ;; (ppi [game-id start-position])
 
   (let [{game-db-id :db/id
          old-start-position :game/start-position} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
