@@ -65,8 +65,8 @@
                                                      :tick-sleep-ms 500
                                                      :order 11}}}
 
- :logging {:config {;; :level     :info
-                    :level     :debug
+ :logging {:config {:level     :info
+                    ;; :level     :debug
                     :console   true
                     :appenders [{:appender          :rolling-file
                                  :rolling-policy    {:type      :fixed-window
@@ -84,9 +84,6 @@
                                 "o.e.j.server.handler.ContextHandler" :error
                                 "o.e.jetty.server.AbstractConnector" :error
                                 "org.eclipse.jetty" :error
-                                ;; org.apache.http.conn.ssl.SSLConnectionSocketFactory
-                                ;; org.apache.http.impl
-                                ;; org.apache.http.headers
                                 "io.pedestal.http" :warn
                                 "io.pedestal.http.cors" :warn
                                 "beatthemarket.handler.authentication" :error}}}

@@ -245,6 +245,9 @@
          [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
                                                    (games.control/seek-to-position start-position))]
 
+     ;; TODO
+     ;; games.control/step-game
+     ;; games.control/run-game!
      (as-> inputs-at-position v
        (games.control/run-iteration v)
        (assoc game-control :iterations v)

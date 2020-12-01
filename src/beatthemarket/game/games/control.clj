@@ -456,6 +456,57 @@
 
     (handle-control-event conn game-event-stream (assoc control :event :continue) now end')))
 
+(defn step-iteration [iterations]
+  (ffirst iterations))
+
+(defn step-control [conn
+                    {{game-id :game/id} :game
+                     level-timer        :level-timer
+                     control-channel    :control-channel
+                     game-event-stream  :game-event-stream}
+                    now end]
+
+  (let [remaining       (games.state/calculate-remaining-time now end)
+        tick-sleep-atom (:tick-sleep-atom (game.games.state/inmemory-game-by-id game-id))
+
+        [{event :event
+          :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])]
+
+
+    ;; TODO i. If this is a market, and ii. there are no players, :pause
+    (log/info :game.games (format "game-loop %s:%s / %s"
+                                  (:remaining-in-minutes remaining)
+                                  (:remaining-in-seconds remaining)
+                                  (if controlv controlv :running)))
+
+    (let [expired? (time-expired? remaining)]
+
+      (match [event expired?]
+
+             [:pause _] (handle-control-event conn game-event-stream
+                                              (assoc controlv :message "< Paused >")
+                                              (t/now) end)
+
+             [(_ :guard #{:exit :win :lose :additional_5_minutes}) _] (handle-control-event conn game-event-stream controlv now end)
+
+             [_ false] (let [current-level (-> repl.state/system :game/games deref
+                                               (get game-id)
+                                               :current-level deref)
+                             controlv      {:event   :continue
+                                            :game-id game-id
+                                            :level   (:level current-level)
+                                            :type    :LevelTimer}]
+
+                         (handle-control-event conn game-event-stream controlv now end))
+
+             [_ true] (handle-control-event conn game-event-stream (assoc controlv
+                                                                          :event :timeout
+                                                                          :game-id game-id) now end)))))
+
+(defn step-game [conn game-control now end iters]
+
+  (step-iteration iters)
+  (step-control conn game-control now end))
 
 (defn run-game! [conn
                  {{game-id :game/id} :game
@@ -480,7 +531,26 @@
                        end (t/plus now (t/seconds @level-timer))
                        iters iterations]
 
-    (let [remaining             (games.state/calculate-remaining-time now end)
+    ;; TODO
+    ;; remove now end as a control
+    ;; return :event keyword, derive updated now end
+    (step-game iters)
+    (step-control conn game-control now end)
+
+
+    #{:pause :exit :lose} []
+    #{:timeout} #{:lose}
+
+    #{:win} [now end]
+    #{:continue} [(t/now) end]
+    #{:additional_5_minutes} #{:continue}
+
+
+    (let [short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)]
+      (when (and true (not short-circuit-game?))
+        (recur now end (next iters))))))
+
+#_(let [remaining             (games.state/calculate-remaining-time now end)
           tick-sleep-atom (:tick-sleep-atom (game.games.state/inmemory-game-by-id game-id))
 
           [{event :event
@@ -521,7 +591,7 @@
                                                                                             :game-id game-id) now end))]
 
         (when (and nowA endA (not short-circuit-game?))
-          (recur nowA endA (next iters)))))))
+          (recur nowA endA (next iters)))))
 
 (defn extract-tick-and-trade [conn {price-history :game.stock/price-history :as stock}]
 
