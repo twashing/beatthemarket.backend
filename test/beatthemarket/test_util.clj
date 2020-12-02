@@ -408,7 +408,7 @@
   (core.async/go-loop []
 
     (let [[message ch] (core.async/alts! [(core.async/timeout 1000) channel])]
-      (when (ppi message)
+      (when message
         (swap! container #(conj % message))
         (recur)))))
 
@@ -438,4 +438,3 @@
             (take ops-count ops))
        (map #(local-transact-stock! opts %))
        doall))
-

@@ -123,20 +123,28 @@
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
+         level-timer :level-timer
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+        [historical-data iterations] (game.games/start-game! conn game-control 0)
 
         container (atom [])
         tick-amount 2
+        iterate-tick-amount (inc tick-amount)
 
         expected-tick-prices '((100.0 100.0 100.0 100.0) (110.0 110.0 110.0 110.0))]
 
-    (->> iterations
-         (take tick-amount)
-         doall)
+    (let [now (t/now)
+          end (t/plus now (t/seconds @level-timer))]
+
+      (->> iterations
+           (iterate (fn [iters]
+                      (ppi :A)
+                      (games.control/step-game conn game-control now end iters)
+                      (rest iters)))
+           (take iterate-tick-amount)
+           count))
 
     (test-util/consume-messages stock-tick-stream container)
-    (Thread/sleep 1000)
 
     (->> (take-last tick-amount @container)
          (map (fn [a] (map (comp double :game.stock.tick/close) a)))

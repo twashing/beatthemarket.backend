@@ -232,28 +232,17 @@
    (integration.payments.core/apply-previous-games-unused-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
 
-
    ;; B
    (let [{cash-position-at-game-start :bookkeeping.account/balance}
          (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)]
-
      (games.state/update-inmemory-cash-position-at-game-start! game-id cash-position-at-game-start))
 
-
    ;; C
-   (let [{:keys [control-channel tick-sleep-atom]} game-control
-         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
-                                                   (games.control/seek-to-position start-position))]
+   (let [[historical-data inputs-at-position]
+         (->> (games.pipeline/stock-tick-pipeline game-control)
+              (games.control/seek-to-position start-position))]
 
-     ;; TODO
-     ;; games.control/step-game
-     ;; games.control/run-game!
-     (as-> inputs-at-position v
-       (games.control/run-iteration v)
-       (assoc game-control :iterations v)
-       (games.control/run-game! conn v tick-sleep-atom))
-
-     historical-data)))
+     [historical-data (games.control/run-iteration inputs-at-position)])))
 
 (defn game-workbench-loop [conn
                            {{game-id :game/id} :game
