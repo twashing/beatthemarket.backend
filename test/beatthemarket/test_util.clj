@@ -21,6 +21,7 @@
             [beatthemarket.iam.user :as iam.user]
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.games.pipeline :as games.pipeline]
+            [beatthemarket.game.games.control :as games.control]
             [beatthemarket.migration.core :as migration.core]
             [beatthemarket.migration.schema-init :as schema-init]
             [beatthemarket.persistence.core :as persistence.core]
@@ -403,14 +404,19 @@
          message
          (recur (<message!! timeout) (inc count)))))))
 
-(defn consume-messages [channel container]
+(defn consume-messages
 
-  (core.async/go-loop []
+  ([channel container]
+   (consume-messages channel container 1000))
 
-    (let [[message ch] (core.async/alts! [(core.async/timeout 1000) channel])]
-      (when message
-        (swap! container #(conj % message))
-        (recur)))))
+  ([channel container default-timeout]
+
+   (core.async/go-loop []
+
+     (let [[message ch] (core.async/alts! [(core.async/timeout default-timeout) channel])]
+       (when message
+         (swap! container #(conj % message))
+         (recur))))))
 
 (defn local-transact-stock! [{conn :conn
                                userId :userId
@@ -438,3 +444,10 @@
             (take ops-count ops))
        (map #(local-transact-stock! opts %))
        doall))
+
+(defn step-game-iterations [conn game-control now end iterations]
+
+  (rest (iterate (fn [iters]
+                   (games.control/step-game conn game-control now end iters)
+                   (rest iters))
+                 iterations)))
