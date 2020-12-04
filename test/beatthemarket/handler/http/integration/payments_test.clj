@@ -430,7 +430,7 @@
 
         product-id "margin_trading_1month"
         provider "google"
-        android-token (ppi (-> "android.margintrading.token.json" resource slurp))]
+        android-token (-> "android.margintrading.token.json" resource slurp)]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
@@ -462,9 +462,7 @@
            :productId "additional_100k",
            :provider "google"}]}}}
 
-    (Thread/sleep 2000)
-
-    ))
+    (Thread/sleep 2000)))
 
 (deftest create-stripe-customer-test
 
@@ -572,12 +570,12 @@
                                       :type :start
                                       :payload
                                       {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                             verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                               paymentId
-                                               productId
-                                               provider
-                                             }
-                                           }"
+                                                 verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                                   paymentId
+                                                   productId
+                                                   provider
+                                                 }
+                                               }"
                                        :variables {:productId product-id
                                                    :provider provider
                                                    :token token-json}}})
@@ -934,7 +932,6 @@
         (testing "DELETEING test customer"
           (integration.util/delete-test-customer! result-id))))))
 
-
 (defn run-trades! [conn
                    {user-db-id :db/id
                     userId :user/external-uid} ops data-sequence]
@@ -951,6 +948,7 @@
 
 
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/one}
@@ -962,7 +960,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -1020,7 +1018,7 @@
            userId     :user/external-uid
            :as        user} (ffirst (iam.persistence/user-by-email conn user-email '[:db/id :user/external-uid]))
 
-          data-sequence [120.0 110.0 100.0]
+          data-sequence [120.0 115.0 100.0]
           ops           [{:op :buy :stockAmount 200}
                          {:op :sell :stockAmount 100}
                          {:op :sell :stockAmount 100}]]
@@ -1030,7 +1028,7 @@
         (let [{{game-id :game/id} :game} (run-trades! conn user ops data-sequence)
 
               expected-profitloss1 '({:profit-loss-type :realized-profit-loss
-                                      :profit-loss -3000.0})]
+                                      :profit-loss -2000.0})]
 
           (games.control/exit-game! conn game-id)
           (->> (game.calculation/collect-realized-profit-loss-pergame conn user-db-id game-id true)
@@ -1043,9 +1041,9 @@
         (let [{{game-id :game/id} :game} (run-trades! conn user ops data-sequence)
 
               expected-profitloss2 '({:profit-loss-type :realized-profit-loss
-                                      :profit-loss -3000.0}
+                                      :profit-loss -2000.0}
                                      {:profit-loss-type :realized-profit-loss
-                                      :profit-loss -3000.0})]
+                                      :profit-loss -2000.0})]
 
           (games.control/exit-game! conn game-id)
           (->> (game.calculation/collect-realized-profit-loss-allgames conn user-db-id true)
@@ -1062,6 +1060,7 @@
               ;; C
               sink-fn    identity
               opts       {:level-timer-sec 5
+                          :stagger-wavelength? false
                           :user            {:db/id user-db-id}
                           :accounts        (game.core/->game-user-accounts)
                           :game-level      :game-level/one}
@@ -1072,11 +1071,11 @@
                 stocks     :game/stocks
                 :as        game} :game
                :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-              [_ iterations] (game.games/start-game!-workbench conn game-control)]
+              [_ iterations] (game.games/start-game! conn game-control)]
 
           (games.control/update-short-circuit-game! game-id true)
 
-          (let [expected-applied-balance 194000.0
+          (let [expected-applied-balance 196000.0
 
                 {applied-balance :bookkeeping.account/balance}
                 (ffirst (game.persistence/cash-account-for-user-game conn user-email game-id))]
@@ -1270,7 +1269,7 @@
                               {:gameId game-id
                                :level 1
                                :minutesRemaining 9
-                               :secondsRemaining 56}}}}]
+                               :secondsRemaining 58}}}}]
 
               (is (= expected-timer-response payment-response)))))
 
@@ -1300,8 +1299,8 @@
                           :variables {:gameId game-id}}})
 
    (let [latest-tick (->> (test-util/consume-subscriptions)
-                          ppi (filter #(= subscribe-stock-tick-id (:id %)))
-                          ppi last)
+                          (filter #(= subscribe-stock-tick-id (:id %)))
+                          last)
          [{stockTickId :stockTickId
            stockTickTime :stockTickTime
            stockTickClose :stockTickClose

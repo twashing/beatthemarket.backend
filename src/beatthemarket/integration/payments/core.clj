@@ -224,7 +224,6 @@
   ;; products
   ;;   [ok] increase Cash balance
   ;;   - notify Client through portfolioUpdate
-
   (when game-entity
 
     (let [feature (product-and-subscription-reverse-lookup

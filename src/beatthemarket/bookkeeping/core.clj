@@ -386,7 +386,8 @@
         (as-> entities v
           (persistence.datomic/transact-entities! conn v)
           (:db-after v)
-          (d/q '[:find (pull ?e [:bookkeeping.tentry/id
+          (d/q '[:find (pull ?e [:db/id
+                                 :bookkeeping.tentry/id
                                  {:bookkeeping.tentry/credits
                                   [:bookkeeping.credit/amount
                                    :bookkeeping.credit/price
@@ -458,7 +459,8 @@
         (as-> entities ent
           (persistence.datomic/transact-entities! conn ent)
           (:db-after ent)
-          (d/q '[:find (pull ?e [:bookkeeping.tentry/id
+          (d/q '[:find (pull ?e [:db/id
+                                 :bookkeeping.tentry/id
                                  {:bookkeeping.tentry/debits
                                   [:bookkeeping.debit/amount
                                    :bookkeeping.debit/price

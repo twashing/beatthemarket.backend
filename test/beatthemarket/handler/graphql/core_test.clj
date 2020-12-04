@@ -35,14 +35,15 @@
                 user-entity   (:db/id (ffirst (iam.persistence/user-by-email conn email-initial)))
 
                 expected-email         email-initial
-                expected-name          "Timothy Washington"
+                ;; expected-name          "Timothy Washington"
                 expected-account-names ["Cash" "Equity"]
 
                 {:user/keys [email name]} (d/pull (d/db conn) '[*] user-entity)]
 
             (are [x y] (= x y)
               expected-email         email
-              expected-name          name)))
+              ;; expected-name          name
+              )))
 
         (testing "Subsequent logins find an existing user"
 
@@ -50,7 +51,7 @@
                 expected-body-message "userexists"
                 expected-headers {"Content-Type" "application/json"}
 
-                expected-user-keys #{:userEmail :userName :userExternalUid :userAccounts}
+                expected-user-keys #{:id :userEmail #_:userName :userExternalUid :userAccounts}
                 expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount}
 
                 {status :status
@@ -64,7 +65,6 @@
                 {{{user :user
                    message :message} :login} :data :as body-parsed} (json/read-str body :key-fn keyword)
                 user-parsed (json/read-str user :key-fn keyword)]
-
 
             (->> (keys user-parsed)
                  (into #{})

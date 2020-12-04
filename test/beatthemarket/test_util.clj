@@ -13,6 +13,7 @@
             [clojure.core.async :as core.async :refer [timeout alt!! chan put!]]
             [clojure.data.json :as json]
             [clj-http.client :as http]
+            [clj-time.core :as tt]
             [gniazdo.core :as g]
             [expound.alpha :as expound]
             [datomic.client.api :as d]
@@ -96,7 +97,7 @@
         expected-body-message "useradded"
         expected-headers {"Content-Type" "application/json"}
 
-        expected-user-keys #{:id :userEmail :userName :userExternalUid :userAccounts}
+        expected-user-keys #{:id :userEmail :userExternalUid :userAccounts}
         expected-user-account-keys #{:accountId :accountName :accountBalance :accountAmount}
 
         {status :status
@@ -413,25 +414,30 @@
 
    (core.async/go-loop []
 
-     (let [[message ch] (core.async/alts! [(core.async/timeout default-timeout) channel])]
+     (let [[message _] (core.async/alts! [(core.async/timeout default-timeout) channel])]
        (when message
          (swap! container #(conj % message))
          (recur))))))
 
 (defn local-transact-stock! [{conn :conn
-                               userId :userId
-                               game-id :gameId
-                               stockId :stockId
-                               game-control :game-control}
-                              {{tickId      :game.stock.tick/id
-                                tickPrice   :game.stock.tick/close
-                                op          :op
-                                stockAmount :stockAmount} :local-transact-input :as v}]
+                              userId :userId
+                              game-id :gameId
+                              stockId :stockId
+                              {level-timer :level-timer
+                               :as game-control} :game-control}
+                             {{tickId      :game.stock.tick/id
+                               tickPrice   :game.stock.tick/close
+                               op          :op
+                               stockAmount :stockAmount} :local-transact-input :as v}]
 
   (case op
     :buy (games.pipeline/buy-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
     :sell (games.pipeline/sell-stock-pipeline game-control conn userId game-id stockId stockAmount tickId (Float. tickPrice) false)
-    :noop)
+    :noop (games.pipeline/stock-tick-pipeline game-control))
+
+  (let [now (tt/now)
+        end (tt/plus now (tt/seconds @level-timer))]
+    (games.control/step-control conn game-control now end))
   v)
 
 (defn run-trades! [iterations stock-id opts ops ops-count]
@@ -451,3 +457,6 @@
                    (games.control/step-game conn game-control now end iters)
                    (rest iters))
                  iterations)))
+
+
+

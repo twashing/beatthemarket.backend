@@ -108,11 +108,11 @@
                                            message
                                          }
                                      }"
-                             :variables (ppi {:input {:gameId      id
-                                                                       :stockId     stockId
-                                                                       :stockAmount 100
-                                                                       :tickId      stockTickId
-                                                                       :tickPrice   stockTickClose}})}})
+                             :variables {:input {:gameId      id
+                                                 :stockId     stockId
+                                                 :stockAmount 100
+                                                 :tickId      stockTickId
+                                                 :tickPrice   stockTickClose}}}})
 
       (test-util/<message!! 1000)
       (test-util/<message!! 1000)
@@ -127,7 +127,7 @@
                                    (filter #(= 990 (:id %)))
                                    (map collect-events))
 
-            expected-portfolio-update-count 1]
+            expected-portfolio-update-count 2]
 
         (is (= expected-portfolio-update-count (count portfolio-updates)))
 

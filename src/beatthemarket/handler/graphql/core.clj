@@ -913,13 +913,18 @@
                                                                 :noop #_(core.async/close! game-event-stream)))]
 
     (core.async/go-loop []
+
       (when-let [game-event (core.async/<! game-event-stream)]
 
+        ;; A
+        (when (= :lose (:event game-event))
+          (games.control/flush-channel! game-event-stream 1000 5))
+
+        ;; B
         (let [a (graphql.encoder/game-event->graphql game-event)]
 
           (when (:type a)
-
-            (println [:game-event a])
+            ;; (println [:game-event a])
             (source-stream a)))
 
         (recur)))

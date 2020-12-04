@@ -146,7 +146,6 @@
           id-token (test-util/->id-token)
           client-id (UUID/randomUUID)
 
-          ;; email "sun.ra@foo.com"
           email "twashing@gmail.com"
           query-user-id 987]
 
@@ -160,21 +159,20 @@
                               :type :start
                               :payload
                               {:query "query User($email: String!) {
-                                     user(email: $email) {
-                                       userEmail
-                                       userName
-                                       userExternalUid
-                                       games {
-                                         gameId status
-                                         profitLoss {
-                                           profitLoss
-                                           stockId
-                                           gameId
-                                           profitLossType
+                                         user(email: $email) {
+                                           userEmail
+                                           userExternalUid
+                                           games {
+                                             gameId status
+                                             profitLoss {
+                                               profitLoss
+                                               stockId
+                                               gameId
+                                               profitLossType
+                                             }
+                                           }
                                          }
-                                       }
-                                     }
-                                   }"
+                                       }"
                                :variables {:email email}}})
 
         (let [expected-user-query-result
@@ -184,27 +182,31 @@
                {:data
                 {:user
                  {:userEmail "twashing@gmail.com"
-                  :userName "Timothy Washington"
+                  ;; :userName "Timothy Washington"
                   :userExternalUid "VEDgLEOk1eXZ5jYUcc4NklAU3Kv2"
                   :games
-                  [{:gameId game-id1
-                    :status "exited"
-                    :profitLoss []}
-                   {:gameId game-id2
-                    :status "exited"
-                    :profitLoss []}]}}}}]
+                  #{{:gameId game-id1
+                     :status "exited"
+                     :profitLoss []}
+                    {:gameId game-id2
+                     :status "exited"
+                     :profitLoss []}}}}}}]
 
           (is (= expected-user-query-result
-                 (ppi (test-util/consume-until query-user-id)))))))))
+                 (update-in (test-util/consume-until query-user-id)
+                            [:payload :data :user :games]
+                            set))))))))
 
 (deftest query-users-test
 
   (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
         id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)
         email "twashing@gmail.com"]
 
-
+    (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
+
 
     (create-exit-game! 1000)
     (create-exit-game! 1001)
@@ -232,20 +234,20 @@
                                      }
                                    }"}})
 
-      (ppi (test-util/consume-until users-message-id)))
+      (let [expected-user-emails #{"charles.mingus@foo.com"
+                                   "john.coltrane@foo.com"
+                                   "herbie.hancock@foo.com"
+                                   "miles.davis@foo.com"
+                                   "sun.ra@foo.com"
+                                   "thelonious.monk@foo.com"
+                                   "twashing@gmail.com"}]
 
-
-    #_(let [result-users (-> (test-util/<message!! 1000) :payload :data :users)]
-
-      (->> (map keys result-users)
-           (map #(into #{} %))
-           (map #(= expected-user-keys %))
-           is)
-
-      (->> (first result-users)
-           (transform [identity] #(dissoc % :userExternalUid))
-           (= expected-user)
-           is))))
+        (->> (test-util/consume-until users-message-id)
+             :payload :data :users
+             (map :userEmail)
+             set
+             (= expected-user-emails)
+             is)))))
 
 (deftest query-account-balances-test
 
@@ -288,7 +290,7 @@
                              :variables {:gameId gameId
                                          :email  email}}})
 
-      (ppi (test-util/<message!! 1000))
+      (test-util/<message!! 1000)
 
       (let [expected-user-account-balances #{{:name "Cash"
                                               :balance 100000.0
@@ -299,7 +301,7 @@
                                               :counterParty nil
                                               :amount 0}}
 
-            result-accounts (->> (test-util/<message!! 1000) ppi :payload :data :accountBalances
+            result-accounts (->> (test-util/<message!! 1000) :payload :data :accountBalances
                                  (map #(dissoc % :id))
                                  (into #{}))]
 
