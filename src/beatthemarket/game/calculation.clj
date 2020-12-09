@@ -201,7 +201,7 @@
      (if (not group-by-stock?)
 
        (->> (map #(apply hash-map %) game-grouping)
-            (apply concat))
+            (apply merge))
 
        (->> (map group-by-stock game-grouping)
             (apply concat))))))
@@ -335,8 +335,8 @@
        (update-trade-state-for-user-stock! user-id game-id stock-id profit-loss))
 
   ;; [profit-loss-calculation]
-
-  [(collect-running-profit-loss game-id)])
+  ;; [(collect-running-profit-loss game-id)]
+  (collect-running-profit-loss game-id))
 
 
 ;; trade batch increase
@@ -461,7 +461,8 @@
 
     (replace-trade-state-for-stock! user-id game-id stock-id updated-profit-loss)
 
-    [running-profit-loss]))
+    ;; [running-profit-loss]
+    running-profit-loss))
 
 (defn update-trade-history-on-realized-pl! [op user-id tick-id game-id stock-id profit-loss profit-loss-calculation]
 
@@ -480,7 +481,7 @@
 
     (replace-trade-state-for-stock! user-id game-id stock-id updated-profit-loss)
 
-    [running-profit-loss realized-profit-loss]))
+    (conj running-profit-loss realized-profit-loss)))
 
 (defn reset-trade-history-on-resolved-pl! [op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation]
 
@@ -510,13 +511,13 @@
         realized-profit-loss (calculate-realized-PL op user-id tick-id game-id game-stock-id profit-loss profit-loss-calculation)
         running-profit-loss (collect-running-profit-loss game-id)]
 
-    #_(ppi "WTF / Crossover !!")
-    #_(ppi profit-loss)
-    #_(ppi profit-loss-calculation)
+    ;; (ppi ["WTF / Crossover !!" user-id game-id game-stock-id running-profit-loss-calculations])
+    ;; (ppi profit-loss)
+    ;; (ppi profit-loss-calculation)
 
     (replace-trade-state-for-stock! user-id game-id game-stock-id running-profit-loss-calculations)
 
-    [running-profit-loss realized-profit-loss]))
+    (conj running-profit-loss realized-profit-loss)))
 
 
 ;; dispatch predicates
@@ -588,7 +589,7 @@
         crossing-counter-balance-threshold? (crossing-counter-balance-threshold?-fn profit-loss profit-loss-calculation)]
 
 
-    ;; (ppi [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
+    ;; (ppi [:match profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?])
 
     (match [profit-loss-empty? realizing-profit-loss? matching-counter-balance-threshold? crossing-counter-balance-threshold?]
 
@@ -622,7 +623,6 @@
 (defmulti calculate-profit-loss! (fn [op _ _] op))
 
 (defmethod calculate-profit-loss! :buy [op user-id data]
-
 
   (let [{[{{{game-stock-id :game.stock/id} :bookkeeping.account/counter-party
             stock-account-id               :bookkeeping.account/id

@@ -16,6 +16,7 @@
             [beatthemarket.game.core :as game.core]
             [beatthemarket.game.calculation :as game.calculation]
             [beatthemarket.game.persistence :as game.persistence]
+            ;; [beatthemarket.game.games :as game.games]
             [beatthemarket.game.games.state :as games.state]
             [beatthemarket.game.games.core :as game.games.core]
             [beatthemarket.game.games.state :as game.games.state]
@@ -349,7 +350,8 @@
 
   (let [remaining (games.state/calculate-remaining-time now end)]
     (log/info :game.games (format "< Paused > %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream (assoc control :type :ControlEvent)))
+    (core.async/go
+      (core.async/>! game-event-stream (assoc control :type :ControlEvent))))
 
   [])
 
@@ -359,24 +361,26 @@
 
     (exit-game! conn game-id)
 
-    (log/info :game.games (format "%sExiting / Time Remaining / %s" (if message message "") (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream (assoc control :type :ControlEvent))
+    (log/info :game.games (format "%sExiting / Time Remaining / %s"
+                                  (if message message "")
+                                  (format-remaining-time remaining)))
+    (core.async/go
+      (core.async/>! game-event-stream (assoc control :type :ControlEvent)))
 
     (flush-channel! game-event-stream 1000 5)
+
     []))
 
 (defmethod handle-control-event :win [conn game-event-stream {:keys [game-id level] :as control} now end]
 
-  (let [level-timer (-> repl.state/config :game/game :level-timer-sec)
-        now (t/now)
-        end (t/plus now (t/seconds level-timer))
-        remaining (games.state/calculate-remaining-time now end)]
+  (let [remaining (games.state/calculate-remaining-time now end)]
 
     (transition-level! conn game-id level)
     (conditionally-win-game! conn game-id)
 
     (log/info :game.games (format "Win %s" (format-remaining-time remaining)))
-    (core.async/>!! game-event-stream (assoc control :type :LevelStatus))
+    (core.async/go
+      (core.async/>! game-event-stream (assoc control :type :LevelStatus)))
 
     [now end]))
 
@@ -389,7 +393,7 @@
     (log/info :game.games (format "Lose %s" (format-remaining-time remaining)))
     (core.async/go (core.async/>! game-event-stream (assoc control :type :LevelStatus)))
 
-    (flush-channel! game-event-stream 1000 5)
+    ;; (flush-channel! game-event-stream 1000 5)
     []))
 
 (defmethod handle-control-event :timeout [conn game-event-stream {game-id :game-id :as control} now end]
@@ -424,7 +428,6 @@
          (fn [gs]
            (update-in gs [game-id :short-circuit-game?] (constantly short-circuit-game?)))))
 
-
 (defmethod handle-control-event :continue [_ game-event-stream {game-id :game-id :as control} now end]
 
   (let [remaining-time (games.state/calculate-remaining-time now end)]
@@ -438,10 +441,11 @@
     (game.games.state/update-inmemory-game-timer! game-id (-> remaining-time :interval t/in-seconds))
 
     ;; B
-    (core.async/>!! game-event-stream
-                    (-> remaining-time
-                        (select-keys [:remaining-in-minutes :remaining-in-seconds])
-                        (merge control))))
+    (core.async/go
+      (core.async/>! game-event-stream
+                     (-> remaining-time
+                         (select-keys [:remaining-in-minutes :remaining-in-seconds])
+                         (merge control)))))
 
   [(t/now) end])
 
@@ -456,15 +460,65 @@
 
     (handle-control-event conn game-event-stream (assoc control :event :continue) now end')))
 
+(defn step-iteration [iterations]
+  (ffirst iterations))
+
+(defn step-control [conn
+                    {{game-id :game/id} :game
+                     level-timer        :level-timer
+                     control-channel    :control-channel
+                     game-event-stream  :game-event-stream}
+                    now end]
+
+  (let [remaining       (games.state/calculate-remaining-time now end)
+        tick-sleep-atom (:tick-sleep-atom (game.games.state/inmemory-game-by-id game-id))
+
+        [{event :event
+          :as   controlv} ch] (core.async/alts!! [(core.async/timeout @tick-sleep-atom) control-channel])]
+
+
+    ;; TODO i. If this is a market, and ii. there are no players, :pause
+    (log/info :game.games (format "game-loop %s:%s / %s"
+                                  (:remaining-in-minutes remaining)
+                                  (:remaining-in-seconds remaining)
+                                  (if controlv controlv :running)))
+
+    (let [expired? (time-expired? remaining)]
+
+      (match [event expired?]
+
+             [:pause _] (handle-control-event conn game-event-stream
+                                              (assoc controlv :message "< Paused >")
+                                              (t/now) end)
+
+             [(_ :guard #{:exit :win :lose :additional_5_minutes}) _]
+             (handle-control-event conn game-event-stream controlv now end)
+
+             [_ false] (let [current-level (-> repl.state/system :game/games deref
+                                               (get game-id)
+                                               :current-level deref)
+                             controlv      {:event   :continue
+                                            :game-id game-id
+                                            :level   (:level current-level)
+                                            :type    :LevelTimer}]
+
+                         (handle-control-event conn game-event-stream controlv now end))
+
+             [_ true] (handle-control-event conn game-event-stream (assoc controlv
+                                                                          :event :timeout
+                                                                          :game-id game-id) now end)))))
+
+(defn step-game [conn game-control now end iters]
+
+  (step-iteration iters)
+  (step-control conn game-control now end))
 
 (defn run-game! [conn
                  {{game-id :game/id} :game
-                  ;; current-level :current-level
                   level-timer :level-timer
                   iterations :iterations
                   control-channel :control-channel
-                  game-event-stream :game-event-stream :as game-control}
-                 _tick-sleep-atom]
+                  game-event-stream :game-event-stream :as game-control}]
 
   ;; A
   (let [{game-db-id :db/id
@@ -474,54 +528,17 @@
 
     (persistence.datomic/transact-entities! conn data))
 
-
   ;; B
   (core.async/go-loop [now (t/now)
                        end (t/plus now (t/seconds @level-timer))
                        iters iterations]
 
-    (let [remaining             (games.state/calculate-remaining-time now end)
-          tick-sleep-atom (:tick-sleep-atom (game.games.state/inmemory-game-by-id game-id))
+    (let [[now end]           (step-game conn game-control now end iters)
+          short-circuit-game? (-> repl.state/system :game/games deref (get game-id)
+                                  :short-circuit-game? deref)]
 
-          [{event :event
-            :as   controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
-
-          short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)]
-
-
-      ;; TODO i. If this is a market, and ii. there are no players, :pause
-      (log/info :game.games (format "game-loop %s:%s / %s"
-                                    (:remaining-in-minutes remaining)
-                                    (:remaining-in-seconds remaining)
-                                    (if controlv controlv :running)))
-
-      (let [_        (ffirst iters)
-            expired? (time-expired? remaining)
-
-            [nowA endA] (match [event expired?]
-
-                               [:pause _] (handle-control-event conn game-event-stream
-                                                                (assoc controlv :message "< Paused >")
-                                                                (t/now) end)
-
-                               [(_ :guard #{:exit :win :lose :additional_5_minutes}) _] (handle-control-event conn game-event-stream controlv now end)
-
-                               [_ false] (let [current-level (-> repl.state/system :game/games deref
-                                                                 (get game-id)
-                                                                 :current-level deref)
-                                               controlv {:event   :continue
-                                                         :game-id game-id
-                                                         :level   (:level current-level)
-                                                         :type    :LevelTimer}]
-
-                                           (handle-control-event conn game-event-stream controlv now end))
-
-                               [_ true] (handle-control-event conn game-event-stream (assoc controlv
-                                                                                            :event :timeout
-                                                                                            :game-id game-id) now end))]
-
-        (when (and nowA endA (not short-circuit-game?))
-          (recur nowA endA (next iters)))))))
+      (when (and now end (not short-circuit-game?))
+        (recur now end (next iters))))))
 
 (defn extract-tick-and-trade [conn {price-history :game.stock/price-history :as stock}]
 
@@ -540,12 +557,14 @@
   (-> repl.state/system :game/games deref (get game-id) :profit-loss))
 
 (defn update-level!-then->game-control-replay
-  [conn game {:keys [control-channel
-                     current-level
-                     stock-tick-stream
-                     portfolio-update-stream
-                     game-event-stream
-                     sink-fn] :as game-control} data-sequence-fn]
+  [conn game {{user-db-id :db/id} :user
+              control-channel :control-channel
+              current-level :current-level
+              stock-tick-stream :stock-tick-stream
+              portfolio-update-stream :portfolio-update-stream
+              game-event-stream :game-event-stream
+              sink-fn :sink-fn
+              :as game-control} data-sequence-fn]
 
   (let [{game-db-id             :db/id
          game-id                :game/id
@@ -566,11 +585,7 @@
     (merge-with #(if %2 %2 %1)
                 game-control
                 (game.games.core/default-game-control conn game-id
-                                                      {:control-channel         control-channel
-                                                       :current-level           game-level
-                                                       :stock-tick-stream       stock-tick-stream
-                                                       :portfolio-update-stream portfolio-update-stream
-                                                       :game-event-stream       game-event-stream})
+                                                      (assoc game-control :current-level game-level))
                 {:game game
                  :profit-loss {}
 
@@ -586,8 +601,13 @@
                  :process-transact!        identity
                  :process-transact-profit-loss! identity
                  :process-transact-level-update! identity
-                 :stream-stock-tick        (fn [stock-tick-pairs]
-                                             (games.processing/group-stock-tick-pairs stock-tick-pairs))
+                 :stream-stock-tick        identity
+                 #_(fn [stock-tick-pairs]
+                     (games.processing/group-stock-tick-pairs stock-tick-pairs))
+                 :calculate-profit-loss
+                 (fn [{op :op :as a}]
+                   (games.processing/calculate-profit-loss (or op :tick) user-db-id game-id a))
+
                  :stream-portfolio-update! identity
                  :stream-level-update!     identity
 
@@ -612,7 +632,8 @@
                                         :game.stock/symbol
                                         {:game.stock/price-history [:db/id
                                                                     :game.stock.tick/id
-                                                                    {:bookkeeping.debit/_tick [:bookkeeping.tentry/_debits]}
+                                                                    {:bookkeeping.debit/_tick
+                                                                     [:bookkeeping.tentry/_debits]}
                                                                     :game.stock.tick/trade-time
                                                                     :game.stock.tick/close]}]}])
          :in $ ?game-id
@@ -633,7 +654,6 @@
     (iterate f (first+rest control-chain))))
 
 
-
 (defn resume-common!
 
   ([conn game-id user-db-id game-control]
@@ -643,7 +663,6 @@
   ([conn game-id user-db-id {:keys [control-channel
                                     stock-tick-stream
                                     portfolio-update-stream
-                                    calculate-profit-loss
                                     sink-fn] :as game-control} data-sequence-fn]
 
    ;; TODO
@@ -654,17 +673,28 @@
           game-level          :game/level
           game-timer          :game/level-timer
           game-start-position :game/start-position
-          game-stocks         :game/stocks :as game-entity} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
-
+          game-stocks         :game/stocks :as game-entity}
+         (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
          ;; Game Control
          user-entity {:db/id user-db-id}
-         game-control-replay (-> (update-level!-then->game-control-replay conn game-entity game-control data-sequence-fn)
-                                 (assoc :user user-entity
-                                        :calculate-profit-loss (partial calculate-profit-loss nil nil game-id)))
-
+         game-control-replay (update-level!-then->game-control-replay conn game-entity
+                                                                      (assoc game-control :user user-entity)
+                                                                      data-sequence-fn)
 
          ;; Re-play game
+
+         ;; TODO get game start time
+         ;; _ (ppi [:start-time (game.games/game-start-time conn game-id)])
+         ;; _ (ppi [:as-of
+         ;;         (d/as-of
+         ;;           (d/db conn)
+         ;;           (game.games/game-start-time conn game-id))])
+
+         #_[db-as-of (d/as-of
+                       (d/db conn)
+                       (game.games/game-start-time conn game-id))]
+
          game-with-decorated-price-history (->game-with-decorated-price-history conn game-id)
          tick-index                        (-> game-with-decorated-price-history ffirst
                                                :game/stocks first
@@ -673,28 +703,36 @@
                                                 (map (partial extract-tick-and-trade conn)))]
 
 
+     ;; (ppi [:game-with-decorated-price-history game-with-decorated-price-history])
+
      ;; A. Apply payments
      (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
 
 
-     #_(ppi [:A :stock-accounts-with-inventory-by-game-user
-           (bookkeeping.persistence/stock-accounts-with-inventory-by-game-user conn user-db-id game-id)])
-     #_(ppi [:A.i :inmemory-profit-loss :BEFORE (:profit-loss (game.games.state/inmemory-game-by-id game-id))])
-
-     ;; B. Replay ticks & trades
-     (run! (fn [ticks-and-trade]
-             (map #(list %1 %2)
-                  (games.pipeline/stock-tick-pipeline game-control-replay)
-                  (games.pipeline/replay-stock-trades-pipeline user-db-id game-control-replay (map second ticks-and-trade))))
-           ticks-and-trade-all)
-
-
-     ;; TODO - Fix this kludge... why isn't PL state getting purged, when called from resolve-restart-game
-     (when (:calculate-profit-loss game-control)
+     #_(when (:calculate-profit-loss game-control)
        (game.persistence/update-profit-loss-state! game-id {}))
 
 
-     #_(ppi [:A.ii :inmemory-profit-loss :AFTER (:profit-loss  (game.games.state/inmemory-game-by-id game-id))])
+     ;; (ppi [:ticks-and-trade-all ticks-and-trade-all])
+     ;; (ppi [:A.i :inmemory-profit-loss :BEFORE (:profit-loss (game.games.state/inmemory-game-by-id game-id))])
+
+
+     ;; TODO - Isn't actually rerunning
+     ;; B. Replay ticks & trades
+     #_(run! (fn [ticks-and-trade]
+
+             ;; (ppi [:WTF (map second ticks-and-trade)])
+             ;; (doall (games.pipeline/replay-stock-trades-pipeline game-control-replay (map second ticks-and-trade)))
+             ;; (ppi [:replay :input-sequence (:input-sequence game-control-replay)])
+             ;; (ppi [:replay :maybe-tentries (map second ticks-and-trade)])
+
+             (doall
+               (map #(list %1 %2)
+                    (games.pipeline/stock-tick-pipeline game-control-replay)
+                    (games.pipeline/replay-stock-trades-pipeline game-control-replay (map second ticks-and-trade)))))
+           ticks-and-trade-all)
+
+     ;; (ppi [:A.ii :inmemory-profit-loss :AFTER (:profit-loss  (game.games.state/inmemory-game-by-id game-id))])
 
 
      ;; Re-start game
@@ -760,7 +798,7 @@
    (let [{:keys [tick-sleep-atom] :as game-control-live}
          (resume-common! conn game-id user-db-id game-control data-sequence-fn)]
 
-     (run-game! conn game-control-live tick-sleep-atom))))
+     (run-game! conn game-control-live))))
 
 (defn resume-workbench!
 
@@ -799,7 +837,6 @@
                [:db/add      game-db-id :game/status :game-status/running]]]
 
      (persistence.datomic/transact-entities! conn data))))
-
 
 
 (defn disconnect-from-game! [])

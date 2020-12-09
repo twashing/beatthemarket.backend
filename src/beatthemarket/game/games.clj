@@ -69,6 +69,7 @@
   ([conn sink-fn data-sequence-fn {:keys [client-id game-id
 
                                           stocks-in-game
+                                          stagger-wavelength?
                                           level-timer-sec tick-sleep-ms
                                           input-sequence profit-loss
 
@@ -87,7 +88,8 @@
                                           accounts
                                           game-level]
                                    :or {game-id        (UUID/randomUUID)
-                                        stocks-in-game 4}
+                                        stocks-in-game 4
+                                        stagger-wavelength? (-> integrant.repl.state/config :game/game :stagger-wavelength?)}
                                    :as opts}]
 
    (let [data-generators      (-> integrant.repl.state/config :game/game :data-generators)
@@ -107,10 +109,12 @@
          vary-wavelength-windows (iterate (partial + vary-wavelength-window) vary-wavelength-window)
 
          stocks-with-tick-data-with-staggered-wavelength
-         (map (fn [stocks window]
-                (update-in stocks [:data-sequence] (fn [ds] (drop window ds))))
-              stocks-with-tick-data
-              vary-wavelength-windows)
+         (if-not stagger-wavelength?
+           stocks-with-tick-data
+           (map (fn [stocks window]
+                  (update-in stocks [:data-sequence] (fn [ds] (drop window ds))))
+                stocks-with-tick-data
+                vary-wavelength-windows))
 
          input-sequence-local    (games.control/stocks->stock-sequences stocks-with-tick-data-with-staggered-wavelength)
          {:keys [profit-threshold lose-threshold]} (-> integrant.repl.state/config :game/game :levels
@@ -198,6 +202,16 @@
          (d/db conn)
          game-id)))
 
+#_(defn game-start-time [conn game-id]
+  (ffirst
+    (d/q '[:find ?start-time
+           :in $ ?game-id
+           :where
+           [?e :game/id ?game-id]
+           [?e :game/start-time ?start-time]]
+         (d/db conn)
+         game-id)))
+
 (defn game-paused? [game-id]
   (= (game-status game-id)
      :game-status/paused))
@@ -228,92 +242,17 @@
    (integration.payments.core/apply-previous-games-unused-payments-for-user conn user-entity game-entity)
    (update-start-position! conn game-id start-position)
 
-
    ;; B
    (let [{cash-position-at-game-start :bookkeeping.account/balance}
          (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)]
-
-     (games.state/update-inmemory-cash-position-at-game-start! game-id cash-position-at-game-start))
-
-
-   ;; C
-   (let [{:keys [control-channel tick-sleep-atom]} game-control
-         [historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
-                                                   (games.control/seek-to-position start-position))]
-
-     (as-> inputs-at-position v
-       (games.control/run-iteration v)
-       (assoc game-control :iterations v)
-       (games.control/run-game! conn v tick-sleep-atom))
-
-     historical-data)))
-
-(defn game-workbench-loop [conn
-                           {{game-id :game/id} :game
-                            control-channel :control-channel
-                            game-event-stream :game-event-stream
-                            level-timer :level-timer}
-                           tick-sleep-atom]
-
-  (core.async/go-loop [now (t/now)
-                       end (t/plus now (t/seconds @level-timer))]
-
-    (let [remaining (games.state/calculate-remaining-time now end)]
-
-      (log/info :game.games (format "game-workbench-loop %s:%s"
-                                    (:remaining-in-minutes remaining)
-                                    (:remaining-in-seconds remaining)))
-
-      (let [remaining (games.state/calculate-remaining-time now end)
-            expired? (games.control/time-expired? remaining)
-
-            [{message :event :as controlv} ch] (core.async/alts! [(core.async/timeout @tick-sleep-atom) control-channel])
-            {message :event :as controlv} (if (nil? controlv) {:event :continue} controlv)
-
-            short-circuit-game? (-> repl.state/system :game/games deref (get game-id) :short-circuit-game? deref)
-            [nowA endA] (match [message expired?]
-                               [_ false] (games.control/handle-control-event conn game-event-stream controlv now end)
-                               [_ true] (games.control/handle-control-event conn game-event-stream {:game-id game-id
-                                                                                                    :event :timeout} now end))]
-
-        (when (and nowA
-                   endA
-                   (not short-circuit-game?))
-          (recur nowA endA))))))
-
-(defn start-game!-workbench
-
-  ([conn game-control]
-   (start-game!-workbench conn game-control 0))
-
-  ([conn
-    {{user-db-id :db/id :as user-entity} :user
-     {game-id :game/id :as game-entity} :game
-     level-timer :level-timer
-     tick-sleep-atom :tick-sleep-atom
-     game-event-stream :game-event-stream
-     control-channel :control-channel
-     :as game-control}
-    start-position]
-
-
-   ;; A
-   (integration.payments.core/apply-unapplied-payments-for-user conn user-entity game-entity)
-   (integration.payments.core/apply-previous-games-unused-payments-for-user conn user-entity game-entity)
-   (update-start-position! conn game-id start-position)
-   (game-workbench-loop conn game-control tick-sleep-atom)
-
-   ;; B
-   (let [{cash-position-at-game-start :bookkeeping.account/balance}
-         (bookkeeping.persistence/cash-account-by-game-user conn user-db-id game-id)]
-
      (games.state/update-inmemory-cash-position-at-game-start! game-id cash-position-at-game-start))
 
    ;; C
-   (let [[historical-data inputs-at-position] (->> (games.pipeline/stock-tick-pipeline game-control)
-                                                   (games.control/seek-to-position start-position))]
+   (let [[historical-data inputs-at-position]
+         (->> (games.pipeline/stock-tick-pipeline game-control)
+              (games.control/seek-to-position start-position))]
 
-       [historical-data (games.control/run-iteration inputs-at-position)])))
+     [historical-data (games.control/run-iteration inputs-at-position)])))
 
 (defn start-market!
 

@@ -89,10 +89,8 @@
            (= expected-game-control-keys )
            is))))
 
-
 ;; StockTick Streaming
 (deftest transact-stock-tick-and-stream-pipeline-test
-
 
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
@@ -111,32 +109,39 @@
 
 
         stock-tick-stream (core.async/chan)
-        opts {:level-timer-sec 5
-              :user            {:db/id user-db-id}
-              :accounts        (game.core/->game-user-accounts)
-              :game-level      :game-level/one
-              :stock-tick-stream stock-tick-stream}
+        opts {:level-timer-sec     5
+              :stagger-wavelength? false
+              :user                {:db/id user-db-id}
+              :accounts            (game.core/->game-user-accounts)
+              :game-level          :game-level/one
+              :stock-tick-stream   stock-tick-stream}
 
 
         ;; D Launch Game
-        {{game-id     :game/id
+        {{game-id    :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
+         level-timer :level-timer
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+        [historical-data iterations] (game.games/start-game! conn game-control)
 
         container (atom [])
         tick-amount 2
+        iterate-tick-amount (inc tick-amount)
 
         expected-tick-prices '((100.0 100.0 100.0 100.0) (110.0 110.0 110.0 110.0))]
 
-    (->> (games.pipeline/stock-tick-pipeline game-control)
-         (take tick-amount)
-         doall)
+    (let [now (t/now)
+          end (t/plus now (t/seconds @level-timer))]
 
-    (test-util/consume-messages stock-tick-stream container)
-    (Thread/sleep 1000)
+      (->> iterations
+           (test-util/step-game-iterations conn game-control now end)
+           (take tick-amount)
+           count))
+
+    (test-util/consume-messages stock-tick-stream container 2000)
+    (Thread/sleep 2000)
 
     (->> (take-last tick-amount @container)
          (map (fn [a] (map (comp double :game.stock.tick/close) a)))
@@ -161,6 +166,7 @@
         test-portfolio-updates (atom [])
 
         opts {:level-timer-sec 5
+              :stagger-wavelength? false
               :user            {:db/id user-db-id}
               :accounts        (game.core/->game-user-accounts)
               :game-level      :game-level/one}
@@ -172,7 +178,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+        [_ iterations]                   (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -209,7 +215,6 @@
                                       (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x))))]
 
           (is (= expected-before-running-profit-loss running-profit-loss)))))
-
 
     (testing "Running :profit-loss after a single buy, then a tick"
 
@@ -255,6 +260,7 @@
         test-portfolio-updates (atom [])
 
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/one}
@@ -266,7 +272,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -337,6 +343,7 @@
 
 
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/one}
@@ -348,7 +355,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -437,6 +444,7 @@
 
 
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/one}
@@ -448,7 +456,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -512,6 +520,7 @@
         test-portfolio-updates (atom [])
 
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/one}
@@ -523,7 +532,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -631,7 +640,7 @@
               (= expected-realized-profit-loss)
               is))))))
 
-(deftest collect-realized-profit-loss-all-users-allgames-test
+#_(deftest collect-realized-profit-loss-all-users-allgames-test
 
   (let [;; A
         conn (-> repl.state/system :persistence/datomic :opts :conn)
@@ -651,6 +660,7 @@
         test-portfolio-updates (atom [])
 
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/one}
@@ -662,7 +672,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -723,6 +733,7 @@
         test-portfolio-updates (atom [])
 
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/one}
@@ -734,7 +745,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -863,6 +874,7 @@
 
         game-event-stream (core.async/chan)
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/one
@@ -875,7 +887,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -913,10 +925,17 @@
                                  :event :win
                                  :type :LevelStatus}
 
+            actual-game-event (let [container (atom [])]
+                                (test-util/consume-messages game-event-stream container 1000)
+                                (Thread/sleep 1000)
+                                (->> @container
+                                     (filter (fn [{event :event}] (= :win event)))
+                                     first))
+
             expected-game-level :game-level/two]
 
         (are [x y] (= x y)
-          expected-game-event (core.async/<!! game-event-stream)
+          expected-game-event actual-game-event
           expected-game-level level)))
 
     (testing "Tick sleep is 950 me after leveling up"
@@ -944,12 +963,12 @@
         test-portfolio-updates (atom [])
 
         game-event-stream (core.async/chan)
-        opts              {:level-timer-sec   5
+        opts              {:level-timer-sec     5
+                           :stagger-wavelength? false
                            :user              {:db/id user-db-id}
                            :accounts          (game.core/->game-user-accounts)
                            :game-level        :game-level/one
                            :game-event-stream game-event-stream}
-
 
         ;; D Launch Game
         {{game-id    :game/id
@@ -957,7 +976,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+        [_ iterations]                   (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -971,17 +990,18 @@
               :game-control game-control}
 
         ;; i.
-        ops-before       [{:op :buy :stockAmount 100}]
+        ops-before       [{:op :buy :stockAmount 100}
+                          {:op :noop}]
         ops-before-count (count ops-before)]
 
     (testing "Testing the correct level lose message is shown"
 
       (test-util/run-trades! iterations stock-id opts ops-before ops-before-count)
-      (pull-from-stock-tick-pipeline! (games.pipeline/stock-tick-pipeline game-control) ops-before-count)
-
+      ;; (pull-from-stock-tick-pipeline! (games.pipeline/stock-tick-pipeline game-control) ops-before-count)
 
       (Thread/sleep 1000) ;; NOTE kludge to get around timing transact of new level
-      (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+      (let [{{level :db/ident} :game/level}
+            (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
 
             expected-game-event {:game-id     game-id
                                  :level       :game-level/one
@@ -989,10 +1009,17 @@
                                  :event       :lose
                                  :type        :LevelStatus}
 
+            actual-game-event (let [container (atom [])]
+                                (test-util/consume-messages game-event-stream container 5000)
+                                (Thread/sleep 1000)
+                                (->> @container
+                                     (filter (fn [{event :event}] (= :lose event)))
+                                     first))
+
             expected-game-level :game-level/one]
 
         (are [x y] (= x y)
-          expected-game-event (core.async/<!! game-event-stream)
+          expected-game-event actual-game-event
           expected-game-level level)))))
 
 (deftest win-game-test
@@ -1016,6 +1043,7 @@
 
         game-event-stream (core.async/chan)
         opts       {:level-timer-sec 5
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/ten
@@ -1028,7 +1056,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations] (game.games/start-game!-workbench conn game-control)
+        [_ iterations] (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -1055,18 +1083,24 @@
 
         (Thread/sleep 2000)
 
-        (let [{{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
-
-              expected-game-event {:game-id game-id
+        (let [expected-game-event {:game-id game-id
                                    :level :game-level/ten
                                    :profit-loss 1.5E9
                                    :event :win
                                    :type :LevelStatus}
 
-              expected-game-level :game-level/bluesky]
+              expected-game-level :game-level/bluesky
+
+              {{level :db/ident} :game/level} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+              actual-game-event (let [container (atom [])]
+                                  (test-util/consume-messages game-event-stream container 5000)
+                                  (Thread/sleep 1000)
+                                  (->> @container
+                                       (filter (fn [{event :event}] (= :win event)))
+                                       first))]
 
           (are [x y] (= x y)
-            expected-game-event (core.async/<!! game-event-stream)
+            expected-game-event actual-game-event
             expected-game-level level))))))
 
 (deftest timeout-game-test
@@ -1090,6 +1124,7 @@
 
         game-event-stream (core.async/chan)
         opts       {:level-timer-sec 2
+                    :stagger-wavelength? false
                     :user            {:db/id user-db-id}
                     :accounts        (game.core/->game-user-accounts)
                     :game-level      :game-level/ten
@@ -1147,6 +1182,7 @@
 
         game-event-stream (core.async/chan)
         opts              {:level-timer-sec   5
+                           :stagger-wavelength? false
                            :user              {:db/id user-db-id}
                            :accounts          (game.core/->game-user-accounts)
                            :game-level        :game-level/one
@@ -1169,7 +1205,7 @@
 
         (testing ":cash-position-at-game-start has been updated to the DB value"
 
-          (let [[_ iterations] (game.games/start-game!-workbench conn game-control)
+          (let [[_ iterations] (game.games/start-game! conn game-control)
                 expected-cash-position-at-game-start 100000.0
                 inmemory-game (games.state/inmemory-game-by-id game-id)]
 
@@ -1219,7 +1255,7 @@
 
                   (is (= expected-before-running-profit-loss running-profit-loss)))))))))))
 
-#_(deftest end-game!-test
+(deftest end-game!-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -1236,8 +1272,11 @@
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
-        opts       {:level-timer-sec                   5
-                    :accounts                          (game.core/->game-user-accounts)
+        opts       {:level-timer-sec         5
+                    :stagger-wavelength?     false
+                    :user                {:db/id user-db-id}
+                    :accounts                (game.core/->game-user-accounts)
+                    :game-level          :game-level/one
                     :stream-stock-tick       (fn [a]
                                                (let [stock-ticks (games.processing/group-stock-tick-pairs a)]
                                                  (swap! test-stock-ticks
@@ -1250,9 +1289,8 @@
         game-level :game-level/one
         {{game-id     :game/id :as game} :game
          :as                          game-control}
-        (game.games/create-game! conn user-db-id sink-fn game-level data-sequence-fn opts)
-
-        [_ iterations] (game.games/start-game!-workbench conn user-db-id game-control)]
+        (game.games/create-game! conn sink-fn data-sequence-fn opts)
+        [_ iterations] (game.games/start-game! conn game-control)]
 
     (testing "Running game has correct settings"
 
@@ -1273,7 +1311,7 @@
         (is (t/after? (c/to-date-time end-time) (c/to-date-time start-time)))
         (is (= :game-status/exited status))))))
 
-#_(deftest start-game!-with-start-position-test
+(deftest start-game!-with-start-position-test
 
   (let [;; A
         conn                                (-> repl.state/system :persistence/datomic :opts :conn)
@@ -1291,6 +1329,7 @@
         test-portfolio-updates (atom [])
 
         opts       {:level-timer-sec          5
+                    :stagger-wavelength? false
                     :user                     {:db/id user-db-id}
                     :accounts                 (game.core/->game-user-accounts)
                     :game-level               :game-level/one
@@ -1312,7 +1351,7 @@
 
 
         start-position               3
-        [historical-data iterations] (game.games/start-game!-workbench conn user-db-id game-control start-position)]
+        [historical-data iterations] (game.games/start-game! conn game-control start-position)]
 
 
     (testing "Game's startPosition is seeking to the correct location"
@@ -1335,7 +1374,7 @@
              (map #(map keys %))
              (map #(map (fn [a] (into #{} a)) %))
              (map #(every? (fn [a]
-                             (= #{:stockTickId :stockTickTime :stockTickClose :stock-id :stockName}
+                             (= #{:stockTickId :stockTickTime :stockTickClose :stockName :stockId}
                                 a)) %))
              (every? true?)
              is)))))
@@ -1359,6 +1398,7 @@
         test-portfolio-updates (atom [])
 
         opts {:level-timer-sec 5
+              :stagger-wavelength? false
               :user            {:db/id user-db-id}
               :accounts        (game.core/->game-user-accounts)
               :game-level      :game-level/one}
@@ -1370,7 +1410,7 @@
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+        [_ iterations]                   (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
@@ -1388,7 +1428,6 @@
                            {:op :sell :stockAmount 200}]
         ops-before-pause-count (count ops-before-pause)]
 
-    (is true)
 
     ;; BEFORE :pause
     (test-util/run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
@@ -1419,10 +1458,10 @@
 (deftest resume-game-correctly-replays-ticks-AND-pipelines-from-the-correct-position-test
 
   (let [;; A
-        conn (-> repl.state/system :persistence/datomic :opts :conn)
-        user (test-util/generate-user! conn)
+        conn       (-> repl.state/system :persistence/datomic :opts :conn)
+        user       (test-util/generate-user! conn)
         user-db-id (:db/id user)
-        userId         (:user/external-uid user)
+        userId     (:user/external-uid user)
 
         ;; B
         data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 112.0 125.0 130.0])
@@ -1430,48 +1469,48 @@
 
         ;; C
         sink-fn                identity
-
         test-stock-ticks       (atom [])
         test-portfolio-updates (atom [])
 
 
-        opts {:level-timer-sec 5
-              :user            {:db/id user-db-id}
-              :accounts        (game.core/->game-user-accounts)
-              :game-level      :game-level/one}
+        opts {:level-timer-sec     5
+              :stagger-wavelength? false
+              :user                {:db/id user-db-id}
+              :accounts            (game.core/->game-user-accounts)
+              :game-level          :game-level/one}
 
 
         ;; D Launch Game
-        {{game-id     :game/id
+        {{game-id    :game/id
           game-db-id :db/id
           stocks     :game/stocks
           :as        game} :game
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+        [_ iterations]                   (game.games/start-game! conn game-control)
 
 
         ;; E Buy Stock
-        {stock-id   :game.stock/id
+        {stock-id  :game.stock/id
          stockName :game.stock/name} (first stocks)
 
-        opts {:conn    conn
-              :userId  userId
-              :gameId  game-id
-              :stockId stock-id
+        opts {:conn         conn
+              :userId       userId
+              :gameId       game-id
+              :stockId      stock-id
               :game-control game-control}
 
-        ops-before-pause  [{:op :buy :stockAmount 100}
-                           {:op :buy :stockAmount 200}
-                           {:op :sell :stockAmount 200}]
+        ops-before-pause       [{:op :buy :stockAmount 100}
+                                {:op :buy :stockAmount 200}
+                                {:op :sell :stockAmount 200}]
         ops-before-pause-count (count ops-before-pause)
 
-        ops-after-pause  [{:op :sell :stockAmount 100}]
-        ops-after-pause-count (count ops-after-pause)]
-
+        ;; ops-after-pause  [{:op :sell :stockAmount 100}]
+        ;; ops-after-pause-count (count ops-after-pause)
+        ]
 
     ;; BEFORE :pause
     (test-util/run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
-
+    ;; (ppi (games.control/get-inmemory-profit-loss game-id))
 
     ;; :pause
     (games.control/pause-game! conn game-id)
@@ -1494,7 +1533,10 @@
     (testing "On Resume, i. we are setting :game/status to :game-status/running.
                          ii. replay reconstructs running profit loss test."
 
-      (let [{iterations :iterations} (games.control/resume-workbench! conn game-id user-db-id game-control data-sequence-fn)
+      ;; TODO resume isn't actually pulling the game from DB
+      (let [{iterations :iterations}
+            (games.control/resume-workbench! conn game-id user-db-id game-control data-sequence-fn)
+
             game-status (-> (persistence.core/entity-by-domain-id conn :game/id game-id)
                             ffirst
                             :game/status
@@ -1504,45 +1546,44 @@
 
             expected-profit-loss {user-db-id
                                   {stock-id
-                                    #{{:amount 200
-                                       :counter-balance-direction :buy
-                                       :stock-account-amount 300
-                                       :stock-account-name (bookkeeping.core/->stock-account-name stockName)
-                                       :op :buy
-                                       :shrinkage 1/3
-                                       :latest-price->price [(.floatValue 120.0) (.floatValue 110.0)]
-                                       :counter-balance-amount 100
-                                       :pershare-gain-or-loss 10.0
-                                       :running-profit-loss 666.6666666666667
-                                       :price (.floatValue 110.0)
-                                       :pershare-purchase-ratio 2/9}
-                                      {:amount 100
-                                       :counter-balance-direction :buy
-                                       :stock-account-amount 100
-                                       :stock-account-name (bookkeeping.core/->stock-account-name stockName)
-                                       :op :buy
-                                       :shrinkage 1/3
-                                       :latest-price->price [(.floatValue 120.0) (.floatValue 100.0)]
-                                       :counter-balance-amount 100
-                                       :pershare-gain-or-loss 20.0
-                                       :running-profit-loss 222.22222222222223
-                                       :price (.floatValue 100.0)
-                                       :pershare-purchase-ratio 1/9}}}}
+                                   #{{:amount                    200
+                                      :counter-balance-direction :buy
+                                      :stock-account-amount      300
+                                      :stock-account-name        (bookkeeping.core/->stock-account-name stockName)
+                                      :op                        :buy
+                                      :shrinkage                 1/3
+                                      :latest-price->price       [(.floatValue 120.0) (.floatValue 110.0)]
+                                      :counter-balance-amount    100
+                                      :pershare-gain-or-loss     10.0
+                                      :running-profit-loss       666.6666666666667
+                                      :price                     (.floatValue 110.0)
+                                      :pershare-purchase-ratio   2/9}
+                                     {:amount                    100
+                                      :counter-balance-direction :buy
+                                      :stock-account-amount      100
+                                      :stock-account-name        (bookkeeping.core/->stock-account-name stockName)
+                                      :op                        :buy
+                                      :shrinkage                 1/3
+                                      :latest-price->price       [(.floatValue 120.0) (.floatValue 100.0)]
+                                      :counter-balance-amount    100
+                                      :pershare-gain-or-loss     20.0
+                                      :running-profit-loss       222.22222222222223
+                                      :price                     (.floatValue 100.0)
+                                      :pershare-purchase-ratio   1/9}}}}
 
             profit-loss (-> (games.control/get-inmemory-profit-loss game-id)
                             (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
                             (update-in [user-db-id stock-id] (fn [x] (into #{} x))))]
 
+
         (are [x y] (= x y)
           expected-game-status game-status
           expected-profit-loss profit-loss)
-
 
         ;; TODO Run the next :op, check P/L
         ;; (ppi iterations)
 
         ;; TODO check values are streamed to the correct client
-
         ))))
 
 (deftest join-game-test
@@ -1565,8 +1606,7 @@
 
 
         opts {:level-timer-sec 5
-              ;; :user            {:db/id user-db-id}
-              ;; :accounts        (game.core/->game-user-accounts)
+              :stagger-wavelength? false
               :game-level      :game-level/one}
 
 
@@ -1613,11 +1653,11 @@
     (testing "After joining, getting correct status and P/L"
 
       (let [local-stream-stock-tick (fn [stock-ticks]
-                                      (ppi [:stock-ticks stock-ticks])
+                                      [:stock-ticks stock-ticks]
                                       stock-ticks)
 
             local-stream-portfolio-update! (fn [{:keys [profit-loss] :as data}]
-                                             (ppi [:profit-loss profit-loss])
+                                             [:profit-loss profit-loss]
                                              data)
 
             {iterations-after-join :iterations} (games.control/join-game!
@@ -1736,6 +1776,7 @@
 
 
         opts {:level-timer-sec 5
+              :stagger-wavelength? false
               :user            {:db/id user-db-id}
               :accounts        (game.core/->game-user-accounts)
               :game-level      :game-level/one}
@@ -1820,136 +1861,6 @@
           expected-game-status game-status
           expected-profit-loss profit-loss)))))
 
-
-;; Game Timing
-#_(let [;; A
-        conn (-> repl.state/system :persistence/datomic :opts :conn)
-        user (test-util/generate-user! conn)
-        user-db-id (:db/id user)
-        userId         (:user/external-uid user)
-
-        ;; B
-        data-sequence-fn (constantly [100.0 110.0 105.0 , 120.0 112.0 125.0 130.0])
-        tick-length      (count (data-sequence-fn))
-
-        ;; C
-        sink-fn                identity
-
-        test-stock-ticks       (atom [])
-        test-portfolio-updates (atom [])
-
-
-        opts {:level-timer-sec 5
-              :user            {:db/id user-db-id}
-              :accounts        (game.core/->game-user-accounts)
-              :game-level      :game-level/one}
-
-
-        ;; D Launch Game
-        {{game-id     :game/id
-          game-db-id :db/id
-          stocks     :game/stocks
-          :as        game} :game
-         :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
-
-
-        ;; E Buy Stock
-        {stock-id   :game.stock/id
-         stockName :game.stock/name} (first stocks)
-
-        opts {:conn    conn
-              :userId  userId
-              :gameId  game-id
-              :stockId stock-id
-              :game-control game-control}
-
-        ops-before-pause  [{:op :buy :stockAmount 100}
-                           {:op :buy :stockAmount 200}
-                           {:op :sell :stockAmount 200}]
-        ops-before-pause-count (count ops-before-pause)
-
-        ops-after-pause  [{:op :sell :stockAmount 100}]
-      ops-after-pause-count (count ops-after-pause)
-      ]
-
-
-    ;; BEFORE :pause
-    (test-util/run-trades! iterations stock-id opts ops-before-pause ops-before-pause-count)
-
-
-    ;; :pause
-    (games.control/pause-game! conn game-id)
-
-    ;; AFTER :pause
-    (testing "On Pause, we are setting :game/status to :game-status/paused"
-
-      (let [game-status (-> (persistence.core/entity-by-domain-id conn :game/id game-id)
-                            ffirst
-                            :game/status
-                            :db/ident)
-
-            expected-game-status :game-status/paused]
-
-        (is (= expected-game-status game-status))))
-
-    ;; AFTER resume
-    (println "\n")
-    (println "RESUME Game!!")
-    (testing "On Resume, i. we are setting :game/status to :game-status/running.
-                         ii. replay reconstructs running profit loss test."
-
-      (let [{iterations :iterations} (games.control/resume-workbench! conn game-id user-db-id game-control data-sequence-fn)
-            game-status (-> (persistence.core/entity-by-domain-id conn :game/id game-id)
-                            ffirst
-                            :game/status
-                            :db/ident)
-
-            expected-game-status :game-status/running
-
-            expected-profit-loss {user-db-id
-                                  {stock-id
-                                    #{{:amount 200
-                                       :counter-balance-direction :buy
-                                       :stock-account-amount 300
-                                       :stock-account-name (bookkeeping.core/->stock-account-name stockName)
-                                       :op :buy
-                                       :shrinkage 1/3
-                                       :latest-price->price [(.floatValue 120.0) (.floatValue 110.0)]
-                                       :counter-balance-amount 100
-                                       :pershare-gain-or-loss 10.0
-                                       :running-profit-loss 666.6666666666667
-                                       :price (.floatValue 110.0)
-                                       :pershare-purchase-ratio 2/9}
-                                      {:amount 100
-                                       :counter-balance-direction :buy
-                                       :stock-account-amount 100
-                                       :stock-account-name (bookkeeping.core/->stock-account-name stockName)
-                                       :op :buy
-                                       :shrinkage 1/3
-                                       :latest-price->price [(.floatValue 120.0) (.floatValue 100.0)]
-                                       :counter-balance-amount 100
-                                       :pershare-gain-or-loss 20.0
-                                       :running-profit-loss 222.22222222222223
-                                       :price (.floatValue 100.0)
-                                       :pershare-purchase-ratio 1/9}}}}
-
-            profit-loss (-> (games.control/get-inmemory-profit-loss game-id)
-                            (update-in [user-db-id stock-id] (fn [x] (map #(dissoc % :stock-account-id) x)))
-                            (update-in [user-db-id stock-id] (fn [x] (into #{} x))))]
-
-        (are [x y] (= x y)
-          expected-game-status game-status
-          expected-profit-loss profit-loss)
-
-
-        ;; TODO Run the next :op, check P/L
-        ;; (ppi iterations)
-
-        ;; TODO check values are streamed to the correct client
-
-        )))
-
 (deftest apply-additional-5-minutes-test
 
   (let [;; A
@@ -1971,6 +1882,7 @@
 
         original-timer-seconds 5
         opts {:level-timer-sec original-timer-seconds
+              :stagger-wavelength? false
               :user            {:db/id user-db-id}
               :accounts        (game.core/->game-user-accounts)
               :game-level      :game-level/one}
@@ -1982,23 +1894,29 @@
           stocks     :game/stocks
           :as        game} :game
          control-channel :control-channel
+         level-timer :level-timer
          game-event-stream :game-event-stream
          :as               game-control} (game.games/create-game! conn sink-fn data-sequence-fn opts)
-        [_ iterations]                   (game.games/start-game!-workbench conn game-control)
+        [_ iterations]                   (game.games/start-game! conn game-control)
 
         payment-entity {:payment/product-id "additional_5_minutes"}
         game-entity (:game game-control)]
 
     (testing "Game event returns timer with an additional 5 minutes"
 
-      (integration.payments.core/apply-payment-conditionally-on-running-game conn nil payment-entity game-entity)
+      (do ;; Apply payment + Handle control message
 
-      (core.async/go
-        (let [[event ch] (core.async/alts! [(core.async/timeout 2000) game-event-stream])
+        (integration.payments.core/apply-payment-conditionally-on-running-game conn nil payment-entity game-entity)
 
-              expected-event {:remaining-in-minutes 5
-                              :remaining-in-seconds original-timer-seconds
-                              :event :continue
-                              :game-id game-id}]
+        (let [now (t/now)
+              end (t/plus now (t/seconds @level-timer))]
+          (games.control/step-control conn game-control now end)))
 
-          (is (= expected-event event)))))))
+      (let [[event ch] (core.async/alts!! [(core.async/timeout 2000) game-event-stream])
+
+            expected-event {:remaining-in-minutes 5
+                            :remaining-in-seconds original-timer-seconds
+                            :event :continue
+                            :game-id game-id}]
+
+        (is (= expected-event event))))))

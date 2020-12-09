@@ -64,7 +64,8 @@
    (buy-stock-pipeline game-control conn user-external-id game-id stockId stockAmount tickId tickPrice true))
 
   ([{portfolio-update-stream
-     :portfolio-update-stream :as game-control} conn user-external-id game-id stockId stockAmount tickId tickPrice validate?]
+     :portfolio-update-stream
+     :as game-control} conn user-external-id game-id stockId stockAmount tickId tickPrice validate?]
 
    (let [game-control-without-check-level (assoc game-control :check-level-complete identity)
          user-db-id (util/extract-id (iam.persistence/user-by-external-uid conn user-external-id '[:db/id]))
@@ -99,20 +100,17 @@
           doall))))
 
 ;; D
-(defn replay-stock-trades-pipeline [user-db-id {{game-id :game/id} :game
-                                         calculate-profit-loss :calculate-profit-loss
-                                         :as game-control} maybe-tentries]
+(defn replay-stock-trades-pipeline [{{game-id :game/id} :game
+                                     calculate-profit-loss :calculate-profit-loss
+                                     :as game-control}
+                                    maybe-tentries]
 
   (map (fn [{buy-or-sell :op :as maybe-tentry}]
-
-         ;; (println "replay-stock-trades-pipeline / A /")
-         ;; (ppi maybe-tentry)
 
          (if buy-or-sell
            (->> (list maybe-tentry)
                 (map calculate-profit-loss)
-                (execution-pipeline game-control)
-                doall)
+                (execution-pipeline game-control))
            maybe-tentry))
        maybe-tentries))
 

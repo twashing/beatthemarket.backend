@@ -84,8 +84,6 @@
 
   (log/debug :game.games.processing (format ">> STREAM stock-tick-pairs / %s" (pr-str stock-ticks)))
   ;; (log/debug :game.games.processing (format ">> STREAM stock-tick-pairs / " (pr-str stock-ticks)))
-  ;; (ppi stock-tick-stream)
-  ;; (ppi stock-ticks)
   (core.async/go (core.async/>! stock-tick-stream stock-ticks))
 
   stock-ticks)
@@ -97,8 +95,6 @@
 (defmethod calculate-profit-loss :tick [_ _ game-id stock-ticks]
 
   (log/debug :game.games.processing (format ">> calculate-profit-loss on TICK / " (pr-str stock-ticks)))
-
-
   #_(ppi [:C.i :inmemory-profit-loss (:profit-loss (game.games.state/inmemory-game-by-id game-id))])
 
   (let [updated-profit-loss-calculations
@@ -106,33 +102,35 @@
             :profit-loss
             ((partial recalculate-profitloss-perstock-fn stock-ticks)))]
 
-    #_(ppi [:C.ii :updated-profit-loss-calculations updated-profit-loss-calculations])
+    ;; (ppi [:C.ii :calculate-profit-loss :tick :updated-profit-loss-calculations updated-profit-loss-calculations])
     (game.persistence/update-profit-loss-state! game-id updated-profit-loss-calculations)
     (hash-map :stock-ticks stock-ticks
               :profit-loss (game.calculation/collect-running-profit-loss game-id updated-profit-loss-calculations))))
 
 (defmethod calculate-profit-loss :buy [op user-id game-id tentry]
 
-  (log/debug :game.games.processing (format ">> calculate-profit-loss on BUY / " (keys tentry)))
+  (log/debug :game.games.processing (format ">> calculate-profit-loss on BUY / %s" [user-id game-id (keys tentry)]))
   (let [profit-loss (game.calculation/calculate-profit-loss! op user-id tentry)]
+
+    ;; (ppi [:C.ii :calculate-profit-loss :buy :profit-loss profit-loss])
     {:tentry tentry :profit-loss profit-loss}))
 
 (defmethod calculate-profit-loss :sell [op user-id game-id tentry]
 
-  (log/debug :game.games.processing (format ">> calculate-profit-loss on SELL / " (keys tentry)))
+  (log/debug :game.games.processing (format ">> calculate-profit-loss on SELL / %s" [user-id game-id (keys tentry)]))
   (let [profit-loss (game.calculation/calculate-profit-loss! op user-id tentry)]
+
+    ;; (ppi [:C.ii :calculate-profit-loss :sell :profit-loss profit-loss])
     {:tentry tentry :profit-loss profit-loss}))
 
 ;; B.ii
 (defn process-transact-profit-loss! [conn {profit-loss :profit-loss :as data}]
 
   (log/debug :game.games.processing (format ">> TRANSACT :profit-loss / " (pr-str data)))
-  ;; (ppi data)
   (let [realized-profit-loss (->> (r/filter #(= :realized-profit-loss (:profit-loss-type %)) profit-loss)
                                   (r/map (partial profit-loss->entity conn))
                                   (into []))]
 
-    ;; (ppi [:realized-profit-loss realized-profit-loss])
     (when (not (empty? realized-profit-loss))
       (persistence.datomic/transact-entities! conn realized-profit-loss)))
   data)
@@ -146,8 +144,6 @@
                          flatten
                          (r/map #(dissoc % :user-id :tick-id))
                          (into []))]
-
-    ;; (ppi profit-loss)
 
     (when (not (empty? profit-loss))
 
@@ -185,7 +181,6 @@
 
   (log/debug :game.games.processing (format ">> CHECK level-complete / " (pr-str data)))
   ;; (log/debug :game.games.processing [:check-level-complete user-db-id game-id control-channel data])
-  ;; (ppi profit-loss)
 
   (let [current-level (:current-level (game.games.state/inmemory-game-by-id game-id))
 
@@ -215,12 +210,10 @@
                                                         :profit-loss running-pl))]
 
     #_(ppi [[:running running-pl (* -1 lose-threshold) lose-threshold-met?]
-            [:realized realized-pl (> realized-pl profit-threshold)]
-            [:current-level (deref current-level)]])
-
+          [:realized realized-pl (> realized-pl profit-threshold)]
+          [:current-level (deref current-level)]])
 
     (when (:event game-event-message)
-      ;;(ppi game-event-message)
       (when (= :win (:event game-event-message))
         (update-inmemory-game-level!* game-id level))
       (core.async/go (core.async/>! control-channel game-event-message))))
@@ -237,6 +230,6 @@
 
 (defn stream-level-update! [game-event-stream data]
 
-  (log/debug :game.games.processing (format ">> STREAM level-update! / " (pr-str data)))
-  ;; (log/debug :game.games.processing (format ">> stream-level-update! /" data))
+  (log/debug :game.games.processing (format ">> STREAM level-update! /" (pr-str data)))
+  ;; (log/debug :game.games.processing (format ">> STREAM level-update! / %s" (pr-str data)))
   data)

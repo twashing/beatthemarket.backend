@@ -124,6 +124,7 @@
 
                   :input-sequence
                   :stocks-with-tick-data
+                  :cash-position-at-game-start
                   :profit-loss
                   :current-level
                   :tick-sleep-atom
@@ -364,19 +365,10 @@
                                        }"
                                :variables {:id id}}})
 
-        #_(as-> (:game/games repl.state/system) gs
-          (deref gs)
-          (get gs (UUID/fromString id))
-          (:control-channel gs)
-          (core.async/>!! gs {:type :ControlEvent
-                              :event :exit
-                              :game-id id}))
-
-
-        (ppi (test-util/<message!! 1000))
+        (test-util/<message!! 1000)
 
         (let [expected-result []
-              result (-> (test-util/<message!! 1000) ppi :payload :data :startGame)]
+              result (-> (test-util/<message!! 1000) :payload :data :startGame)]
 
           (is (= expected-result result)))))))
 
@@ -581,217 +573,211 @@
 
 (deftest buy-stock-test
 
-  (let [{:keys [stocks id]} (integration.util/start-game-workflow)]
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)]
 
-    (as-> (:game/games repl.state/system) gs
-      (deref gs)
-      (get gs (UUID/fromString id))
-      (:control-channel gs)
-      (core.async/>!! gs {:type :ControlEvent
-                          :event :exit
-                          :game-id id}))
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
 
+    (let [{:keys [stocks id]} (integration.util/start-game-workflow)
+          stock-tick-id       989]
 
-    (let [latest-tick (->> (test-util/consume-subscriptions)
-                           (filter #(= 989 (:id %)))
-                           last)
-          [{stockTickId :stockTickId
-            stockTickTime :stockTickTime
-            stockTickClose :stockTickClose
-            stockId :stockId
-            stockName :stockName}]
-          (-> latest-tick :payload :data :stockTicks)]
+      (let [latest-tick (test-util/consume-until stock-tick-id)
 
-      (test-util/send-data {:id   990
-                            :type :start
-                            :payload
-                            {:query "mutation BuyStock($input: BuyStock!) {
+            [{stockTickId :stockTickId
+              stockTickTime :stockTickTime
+              stockTickClose :stockTickClose
+              stockId :stockId
+              stockName :stockName}]
+            (-> latest-tick :payload :data :stockTicks)
+
+            buy-stock-id 990]
+
+        (test-util/send-data {:id   buy-stock-id
+                              :type :start
+                              :payload
+                              {:query "mutation BuyStock($input: BuyStock!) {
                                            buyStock(input: $input) {
                                              message
                                            }
                                          }"
-                             :variables {:input {:gameId      id
-                                                 :stockId     stockId
-                                                 :stockAmount 100
-                                                 :tickId      stockTickId
-                                                 :tickPrice   stockTickClose}}}})
+                               :variables {:input {:gameId      id
+                                                   :stockId     stockId
+                                                   :stockAmount 100
+                                                   :tickId      stockTickId
+                                                   :tickPrice   stockTickClose}}}})
 
+        (let [ack (test-util/consume-until buy-stock-id)]
 
-      (let [ack (test-util/<message!! 1000)]
-
-        (is (= {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}
-               ack))))))
+          (is (= {:type "data" :id 990 :payload {:data {:buyStock {:message "Ack"}}}}
+                 ack)))))))
 
 (deftest buy-stock-insufficient-funds-test
 
-  (let [{:keys [stocks id]} (integration.util/start-game-workflow)]
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)]
 
-    (as-> (:game/games repl.state/system) gs
-      (deref gs)
-      (get gs (UUID/fromString id))
-      (:control-channel gs)
-      (core.async/>!! gs {:type :ControlEvent
-                          :event :exit
-                          :game-id id}))
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
 
+    (let [{:keys [stocks id]} (integration.util/start-game-workflow)
+          stock-tick-id      989]
 
-    (let [latest-tick (->> (test-util/consume-subscriptions)
-                           (filter #(= 989 (:id %)))
-                           last)
-          [{stockTickId :stockTickId
-            stockTickTime :stockTickTime
-            stockTickClose :stockTickClose
-            stockId :stockId
-            stockName :stockName}]
-          (-> latest-tick :payload :data :stockTicks)]
+      (let [latest-tick (test-util/consume-until stock-tick-id)
 
-      (test-util/send-data {:id   990
-                            :type :start
-                            :payload
-                            {:query "mutation BuyStock($input: BuyStock!) {
+            [{stockTickId :stockTickId
+              stockTickTime :stockTickTime
+              stockTickClose :stockTickClose
+              stockId :stockId
+              stockName :stockName}]
+            (-> latest-tick :payload :data :stockTicks)]
+
+        (test-util/send-data {:id   990
+                              :type :start
+                              :payload
+                              {:query "mutation BuyStock($input: BuyStock!) {
                                            buyStock(input: $input) {
                                              message
                                            }
                                          }"
-                             :variables {:input {:gameId      id
-                                                 :stockId     stockId
-                                                 :stockAmount 10000
-                                                 :tickId      stockTickId
-                                                 :tickPrice   stockTickClose}}}})
+                               :variables {:input {:gameId      id
+                                                   :stockId     stockId
+                                                   :stockAmount 10000
+                                                   :tickId      stockTickId
+                                                   :tickPrice   stockTickClose}}}})
 
-      (testing "We are recieving the correct InsufficientFunds error message"
+        (testing "We are recieving the correct InsufficientFunds error message"
 
-        (let [expected-error-message {:message "InsufficientFunds"
-                                      :locations [{:line 2 :column 44}]
-                                      :path ["buyStock"]
-                                      :extensions {:arguments {:input "$input"}}}]
+          (let [expected-error-message {:message "InsufficientFunds"
+                                        :locations [{:line 2 :column 44}]
+                                        :path ["buyStock"]
+                                        :extensions {:arguments {:input "$input"}}}]
 
-          (->> (test-util/<message!! 1000)
-               :payload
-               :errors
-               (filter #(= "InsufficientFunds" (:message %)))
-               first
-               (= expected-error-message)
-               is))))))
+            (->> (test-util/<message!! 1000)
+                 :payload
+                 :errors
+                 (filter #(= "InsufficientFunds" (:message %)))
+                 first
+                 (= expected-error-message)
+                 is)))))))
 
 (deftest sell-stock-test
 
-  (let [{:keys [stocks id]} (integration.util/start-game-workflow)]
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)]
 
-    (as-> (:game/games repl.state/system) gs
-      (deref gs)
-      (get gs (UUID/fromString id))
-      (:control-channel gs)
-      (core.async/>!! gs {:type :ControlEvent
-                          :event :exit
-                          :game-id id}))
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
 
+    (let [{:keys [stocks id]} (integration.util/start-game-workflow)
+          stock-tick-id       989]
 
-    (let [latest-tick (->> (test-util/consume-subscriptions)
-                           (filter #(= 989 (:id %)))
-                           last)
-          [{stockTickId :stockTickId
-            stockTickTime :stockTickTime
-            stockTickClose :stockTickClose
-            stockId :stockId
-            stockName :stockName}]
-          (-> latest-tick :payload :data :stockTicks)
+      (let [latest-tick (test-util/consume-until stock-tick-id)
 
-          buy-id 990]
+            [{stockTickId :stockTickId
+              stockTickTime :stockTickTime
+              stockTickClose :stockTickClose
+              stockId :stockId
+              stockName :stockName}]
+            (-> latest-tick :payload :data :stockTicks)
 
-      (test-util/send-data {:id   buy-id
-                            :type :start
-                            :payload
-                            {:query "mutation BuyStock($input: BuyStock!) {
+            buy-id 990]
+
+        (test-util/send-data {:id   buy-id
+                              :type :start
+                              :payload
+                              {:query "mutation BuyStock($input: BuyStock!) {
                                            buyStock(input: $input) {
                                              message
                                            }
                                          }"
-                             :variables {:input {:gameId      id
-                                                 :stockId     stockId
-                                                 :stockAmount 100
-                                                 :tickId      stockTickId
-                                                 :tickPrice   stockTickClose}}}})
+                               :variables {:input {:gameId      id
+                                                   :stockId     stockId
+                                                   :stockAmount 100
+                                                   :tickId      stockTickId
+                                                   :tickPrice   stockTickClose}}}})
 
-      ;; NOTE If the client doesn't consume the GQL buy response, the corresponding stock account isn't generated
-      ;; Ie, clients can get a corresponding error message: "Cannot find corresponding account for stockId [79164837200112]"
-      (test-util/consume-until buy-id)
+        ;; NOTE If the client doesn't consume the GQL buy response, the corresponding stock account isn't generated
+        ;; Ie, clients can get a corresponding error message: "Cannot find corresponding account for stockId [79164837200112]"
+        (test-util/consume-until buy-id)
 
-      (testing "Selling the stock"
+        (testing "Selling the stock"
 
-        (let [sell-id 991]
+          (let [sell-id 991]
 
-          (test-util/send-data {:id   sell-id
-                                :type :start
-                                :payload
-                                {:query "mutation SellStock($input: SellStock!) {
+            (test-util/send-data {:id   sell-id
+                                  :type :start
+                                  :payload
+                                  {:query "mutation SellStock($input: SellStock!) {
                                            sellStock(input: $input) {
                                              message
                                            }
                                          }"
-                                 :variables {:input {:gameId      id
-                                                     :stockId     stockId
-                                                     :stockAmount 100
-                                                     :tickId      stockTickId
-                                                     :tickPrice   stockTickClose}}}})
+                                   :variables {:input {:gameId      id
+                                                       :stockId     stockId
+                                                       :stockAmount 100
+                                                       :tickId      stockTickId
+                                                       :tickPrice   stockTickClose}}}})
 
-          (let [ack (test-util/consume-until sell-id)]
-            (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
-                   ack))))))))
+            (let [ack (test-util/consume-until sell-id)]
+              (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
+                     ack)))))))))
 
 (deftest sell-stock-before-owning-errors-test
 
-  (let [{:keys [stocks id]} (integration.util/start-game-workflow)]
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)]
 
-    (as-> (:game/games repl.state/system) gs
-      (deref gs)
-      (get gs (UUID/fromString id))
-      (:control-channel gs)
-      (core.async/>!! gs {:type :ControlEvent
-                          :event :exit
-                          :game-id id}))
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
 
-    (let [latest-tick (->> (test-util/consume-subscriptions)
-                           (filter #(= 989 (:id %)))
-                           last)
-          [{stock-tick-id :stockTickId
-            stock-tick-time :stockTickTime
-            stock-tick-close :stockTickClose
-            stock-id :stockId
-            stock-name :stockName}]
-          (-> latest-tick :payload :data :stockTicks)
+    (let [{:keys [stocks id]} (integration.util/start-game-workflow)
+          stock-tick-id       989]
 
-          stock-amount 100
-          buy-id 990]
+      (let [latest-tick (test-util/consume-until stock-tick-id)
 
-      (integration.util/buy-stock buy-id id stock-id stock-amount stock-tick-id stock-tick-close)
-      (test-util/consume-until buy-id)
+            [{stock-tick-id :stockTickId
+              stock-tick-time :stockTickTime
+              stock-tick-close :stockTickClose
+              stock-id :stockId
+              stock-name :stockName}]
+            (-> latest-tick :payload :data :stockTicks)
 
-      (testing "Selling the stock"
+            stock-amount 100
+            buy-id 990]
 
-        (let [sell-id 991
-              oversell-id 992]
+        (integration.util/buy-stock buy-id id stock-id stock-amount stock-tick-id stock-tick-close)
+        (test-util/consume-until buy-id)
 
-          (integration.util/sell-stock sell-id id stock-id stock-amount stock-tick-id stock-tick-close)
-          (let [ack (test-util/consume-until sell-id)]
-            (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
-                   ack)))
+        (testing "Selling the stock"
 
-          (integration.util/sell-stock oversell-id id stock-id stock-amount stock-tick-id stock-tick-close)
-          (let [expected-error-ack
-                {:type "data"
-                 :id oversell-id
-                 :payload
-                 {:data {:sellStock nil}
-                  :errors
-                  [{:message "Insufficient amount of stock [0] to sell"
-                    :locations [{:line 2 :column 44}]
-                    :path ["sellStock"]
-                    :extensions {:arguments {:input "$input"}}}]}}
+          (let [sell-id 991
+                oversell-id 992]
 
-                ack (test-util/consume-until oversell-id)]
+            (integration.util/sell-stock sell-id id stock-id stock-amount stock-tick-id stock-tick-close)
+            (let [ack (test-util/consume-until sell-id)]
+              (is (= {:type "data" :id 991 :payload {:data {:sellStock {:message "Ack"}}}}
+                     ack)))
 
-            (is (= expected-error-ack ack))))))))
+            (integration.util/sell-stock oversell-id id stock-id stock-amount stock-tick-id stock-tick-close)
+            (let [expected-error-ack
+                  {:type "data"
+                   :id oversell-id
+                   :payload
+                   {:data {:sellStock nil}
+                    :errors
+                    [{:message "Insufficient amount of stock [0] to sell"
+                      :locations [{:line 2 :column 44}]
+                      :path ["sellStock"]
+                      :extensions {:arguments {:input "$input"}}}]}}
+
+                  ack (test-util/consume-until oversell-id)]
+
+              (is (= expected-error-ack ack)))))))))
 
 (deftest stream-portfolio-updates-test
 
@@ -1031,34 +1017,41 @@
 
 (deftest start-exit-start-game-test
 
-  (let [{:keys [stocks id]} (ppi (integration.util/start-game-workflow))]
+  (let [service (-> repl.state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)
+        client-id (UUID/randomUUID)]
 
-    (let [exit-message-id 993
-          expected-exit-response {:type "data"
-                                  :id exit-message-id
-                                  :payload
-                                  {:data
-                                   {:exitGame
-                                    {:event "exit" :gameId id}}}}]
+    (test-util/send-init {:client-id (str client-id)})
+    (test-util/login-assertion service id-token)
 
-      (integration.util/exit-game id exit-message-id)
-      (is (= expected-exit-response
-             (test-util/consume-until exit-message-id)))
+    (let [{:keys [stocks id]} (integration.util/start-game-workflow)]
 
-      (Thread/sleep 2000))
+      (let [exit-message-id 993
+              expected-exit-response {:type "data"
+                                      :id exit-message-id
+                                      :payload
+                                      {:data
+                                       {:exitGame
+                                        {:event "exit" :gameId id}}}}]
 
-    (let [restart-message-id 994
-          expected-restart-response {:type "data"
-                                     :id restart-message-id
-                                     :payload
-                                     {:data
-                                      {:restartGame
-                                       {:event "restart" :gameId id}}}}]
+          (integration.util/exit-game id exit-message-id)
+          (is (= expected-exit-response
+                 (test-util/consume-until exit-message-id)))
 
-      (integration.util/restart-game id restart-message-id)
-      (is (= expected-restart-response
-             (test-util/consume-until restart-message-id)))
+          (Thread/sleep 2000))
 
-      (Thread/sleep 2000))
+      (let [restart-message-id 994
+              expected-restart-response {:type "data"
+                                         :id restart-message-id
+                                         :payload
+                                         {:data
+                                          {:restartGame
+                                           {:event "restart" :gameId id}}}}]
 
-    (games.control/update-short-circuit-game! (UUID/fromString id) true)))
+          (integration.util/restart-game id restart-message-id)
+          (is (= expected-restart-response
+                 (test-util/consume-until restart-message-id)))
+
+          (Thread/sleep 2000))
+
+      (games.control/update-short-circuit-game! (UUID/fromString id) true))))

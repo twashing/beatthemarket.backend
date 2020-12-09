@@ -298,9 +298,19 @@
 
       (let [user-db-id (:db/id (ffirst (beatthemarket.iam.persistence/user-by-email conn email '[:db/id])))
             gameId (UUID/fromString game-id)
-            game-control (->> repl.state/system :game/games deref (#(get % gameId)))]
+            game-control (->> repl.state/system :game/games deref (#(get % gameId)))
 
-        (->> (game.games/start-game! conn game-control (get args :startPosition 0))
+            ;; A Start game
+            [historical-data iterations]
+            (game.games/start-game! conn game-control (get args :startPosition 0))]
+
+
+        ;; B Kickoff game loop
+        (games.control/run-game! conn (assoc game-control :iterations iterations))
+
+
+        ;; C Return historical data
+        (->> historical-data
              (r/map :stock-ticks)
              (r/map #(map graphql.encoder/stock-tick->graphql %))
              (into []))))
@@ -903,13 +913,18 @@
                                                                 :noop #_(core.async/close! game-event-stream)))]
 
     (core.async/go-loop []
+
       (when-let [game-event (core.async/<! game-event-stream)]
 
+        ;; A
+        (when (= :lose (:event game-event))
+          (games.control/flush-channel! game-event-stream 1000 5))
+
+        ;; B
         (let [a (graphql.encoder/game-event->graphql game-event)]
 
           (when (:type a)
-
-            (println [:game-event a])
+            ;; (println [:game-event a])
             (source-stream a)))
 
         (recur)))
