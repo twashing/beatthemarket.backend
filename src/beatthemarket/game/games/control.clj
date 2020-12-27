@@ -312,7 +312,7 @@
       (if-not db-after
         (throw (Exception. (format "Couldn't level up from to [%s %s]" source dest)))))))
 
-#_(defn conditionally-reset-level-time! [conn game-id [[source-level-name _               :as source]
+(defn conditionally-reset-level-time! [conn game-id [[source-level-name _               :as source]
                                                      [dest-level-name dest-level-config :as dest]]]
 
   (when dest
@@ -328,7 +328,7 @@
   (let [source-and-destination (game.games.state/level->source-and-destination level)]
 
     (conditionally-level-up! conn game-id source-and-destination)
-    #_(conditionally-reset-level-time! conn game-id source-and-destination)))
+    (conditionally-reset-level-time! conn game-id source-and-destination)))
 
 (defn flush-channel! [ch timeout threshold]
 
@@ -373,7 +373,10 @@
 
 (defmethod handle-control-event :win [conn game-event-stream {:keys [game-id level] :as control} now end]
 
-  (let [remaining (games.state/calculate-remaining-time now end)]
+  (let [level-timer (-> repl.state/config :game/game :level-timer-sec)
+        now (t/now)
+        end (t/plus now (t/seconds level-timer))
+        remaining (games.state/calculate-remaining-time now end)]
 
     (transition-level! conn game-id level)
     (conditionally-win-game! conn game-id)

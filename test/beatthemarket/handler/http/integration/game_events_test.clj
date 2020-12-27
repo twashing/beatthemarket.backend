@@ -38,7 +38,6 @@
                                    }"
                            :variables {:gameLevel gameLevel}}})
 
-
     (test-util/<message!! 1000)
 
     (let [{gameId :id} (-> (test-util/<message!! 1000) :payload :data :createGame)]
@@ -133,7 +132,7 @@
       ;; >> ================ >>
 
             ;; B.i
-      (testing "We receive the correct resume event Ackknowledgement"
+      (testing "We receive the correct resume event Acknowledgement"
 
         (test-util/send-data {:id   990
                               :type :start

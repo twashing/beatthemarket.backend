@@ -906,7 +906,7 @@
                      {:op :noop}]
         ops-before-count (count ops-before)]
 
-    (testing "Tick sleep is 1000 me before leveling up"
+    (testing "Tick sleep is 1000 ms before leveling up"
 
       (let [tick-sleep-atom (:tick-sleep-atom (games.state/inmemory-game-by-id game-id))
             expected-tick-sleep 1000]
