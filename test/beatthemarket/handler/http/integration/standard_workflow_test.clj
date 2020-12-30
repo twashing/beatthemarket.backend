@@ -31,7 +31,7 @@
 (use-fixtures :each
   test-util/component-fixture
   test-util/migration-fixture
-  (test-util/subscriptions-fixture "ws://localhost:8081/ws"))
+  (test-util/subscriptions-fixture "ws://localhost:8080/ws"))
 
 (deftest subscription-handler-test
 
