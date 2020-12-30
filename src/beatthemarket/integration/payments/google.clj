@@ -54,7 +54,6 @@
 
           (build)))))
 
-
 (defn verify-product-payment [{:keys [googleProductName googlePackageName] :as payment-config}
                               {:keys [productId token]}]
 
@@ -135,7 +134,6 @@
     (payments.core/apply-payment-conditionally-on-running-game conn email payment game)
     (payments.persistence/user-payments conn email)))
 
-
 (defn verify-subscription-payment [{:keys [googleProductName googlePackageName] :as payment-config}
                                    {:keys [productId token]}]
 
@@ -149,7 +147,6 @@
         publisher (.. (AndroidPublisher$Builder. httpTransport jsonFactory credential)
                       (setApplicationName googleProductName)
                       (build))]
-
 
     ;; NOTE response codes
     ;; https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.subscriptions
@@ -188,7 +185,6 @@
      "priceCurrencyCode" "UAH",
      "purchaseType" 0}
 
-
     (def example-result
       {"acknowledgementState" 1
        "consumptionState" 1
@@ -200,6 +196,34 @@
        "purchaseType" 0
        "regionCode" "UA"})
 
+    (def example-result-cancelled
+      {"acknowledgementState" 1
+       "autoRenewing" false
+       "cancelReason" 1
+       "countryCode" "US"
+       "developerPayload" ""
+       "startTimeMillis" 1609181824530
+       "expiryTimeMillis" 1609184038970
+       "kind" "androidpublisher#subscriptionPurchase"
+       "orderId" "GPA.3398-5035-0810-51359..5"
+       "priceAmountMicros" 11990000
+       "priceCurrencyCode" "USD"
+       "purchaseType" 0})
+
+    (def example-result-valid
+      {"acknowledgementState" 1
+       "paymentState" 1
+       "autoRenewing" true
+       "countryCode" "US"
+       "developerPayload" ""
+       "expiryTimeMillis" 1609351693323
+       "kind" "androidpublisher#subscriptionPurchase"
+       "orderId" "GPA.3306-6089-3958-66241"
+       "priceAmountMicros" 11990000
+       "priceCurrencyCode" "USD"
+       "purchaseType" 0
+       "startTimeMillis" 1609351215603})
+
     (.. publisher
         (purchases)
         (subscriptions)
@@ -208,16 +232,21 @@
 
 (defn check-subscription-acknowledgement-valid [acknowledgement]
 
-  (let [acknowledgement-status (select-keys acknowledgement ["acknowledgementState" "consumptionState" "purchaseState"])]
+  (let [acknowledgement-status (select-keys acknowledgement ["acknowledgementState"
+                                                             "paymentState"
+                                                             "cancelReason"])]
 
-    (if-not (= {"acknowledgementState" 1
-                "consumptionState" 1
-                "purchaseState" 0}
-               acknowledgement-status)
+    (if (get acknowledgement-status "cancelReason")
 
-      (throw (Exception. (format "Bad acknowledgement status: %s" acknowledgement-status)))
+      (throw (Exception. (format "Cancelled subscription status: %s" acknowledgement-status)))
 
-      acknowledgement)))
+      (if-not (= {"acknowledgementState" 1
+                  "paymentState" 1}
+                 acknowledgement-status)
+
+        (throw (Exception. (format "Bad acknowledgement status: %s" acknowledgement-status)))
+
+        acknowledgement))))
 
 (defn verify-subscription-payment-workflow [conn client-id email payment-config args]
 
@@ -226,7 +255,7 @@
   (let [{payment :payment
          game :game :as game-and-payments}
         (->> (verify-subscription-payment payment-config args)
-             ;; check-subscription-acknowledgement-valid
+             check-subscription-acknowledgement-valid
              (payments.google.persistence/acknowledgement->entity args)
              (payments.core/mark-payment-applied-conditionally-on-running-game conn email client-id))
 
