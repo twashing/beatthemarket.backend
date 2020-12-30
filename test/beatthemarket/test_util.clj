@@ -457,6 +457,3 @@
                    (games.control/step-game conn game-control now end iters)
                    (rest iters))
                  iterations)))
-
-
-

@@ -15,6 +15,7 @@
             [beatthemarket.game.games.control :as games.control]
             [beatthemarket.integration.payments.persistence :as payments.persistence]
             [beatthemarket.integration.payments.core :as integration.payments.core]
+            [beatthemarket.integration.payments.google :as integration.payments.google]
 
             [beatthemarket.handler.http.integration.util :as integration.util]
             [beatthemarket.test-util :as test-util]
@@ -26,7 +27,7 @@
 (use-fixtures :each
   test-util/component-fixture
   test-util/migration-fixture
-  (test-util/subscriptions-fixture "ws://localhost:8081/ws"))
+  (test-util/subscriptions-fixture "ws://localhost:8080/ws"))
 
 
 ;; > User, subscriptions (incl. payment provider) (GET)
@@ -39,7 +40,6 @@
 ;; store product, provider, token
 ;;
 ;; Update subscription (Webhook - POST)
-
 
 (deftest user-payments-test
 
@@ -427,42 +427,109 @@
 
         product-id "margin_trading_1month"
         provider "google"
-
-        product-id "margin_trading_1month"
-        provider "google"
         android-token (-> "android.margintrading.token.json" resource slurp)]
 
     (test-util/send-init {:client-id (str client-id)})
     (test-util/login-assertion service id-token)
 
-    (test-util/send-data {:id   987
-                          :type :start
-                          :payload
-                          {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
-                                       verifyPayment(productId: $productId, provider: $provider, token: $token) {
-                                         paymentId
-                                         productId
-                                         provider
-                                       }
-                                     }"
-                           :variables {:productId product-id
-                                       :provider provider
-                                       :token android-token}}})
+    (testing "Valid subscription verification"
 
-    (ppi (test-util/<message!! 1000))
-    (ppi (test-util/<message!! 1000))
+      (let [verify-payment-id 987]
 
-    ;; TODO complete
-    #_{:type "data",
-       :id 987,
-       :payload
-       {:data
-        {:verifyPayment
-         [{:paymentId "07c135e7-f56f-452f-9e53-2c376f2043c4",
-           :productId "additional_100k",
-           :provider "google"}]}}}
+        (with-redefs [integration.payments.google/verify-subscription-payment
+                      (constantly
+                        {"acknowledgementState" 1
+                         "paymentState" 1
+                         "autoRenewing" true
+                         "countryCode" "US"
+                         "developerPayload" ""
+                         "expiryTimeMillis" 1609351693323
+                         "kind" "androidpublisher#subscriptionPurchase"
+                         "orderId" "GPA.3306-6089-3958-66241"
+                         "priceAmountMicros" 11990000
+                         "priceCurrencyCode" "USD"
+                         "purchaseType" 0
+                         "startTimeMillis" 1609351215603})]
 
-    (Thread/sleep 2000)))
+          (test-util/send-data {:id   verify-payment-id
+                                :type :start
+                                :payload
+                                {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                           verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                             paymentId
+                                             productId
+                                             provider
+                                           }
+                                         }"
+                                 :variables {:productId product-id
+                                             :provider provider
+                                             :token android-token}}})
+
+          (let [expected-payment-response {:type "data"
+                                           :id 987
+                                           :payload
+                                           {:data
+                                            {:verifyPayment
+                                             [{:productId "margin_trading_1month"
+                                               :provider "google"}]}}}
+
+                verify-payment-response (-> (test-util/consume-until verify-payment-id)
+                                            (update-in [:payload :data :verifyPayment 0] #(dissoc % :paymentId)))]
+
+            (is (= expected-payment-response verify-payment-response))))))
+
+    (testing "Expired subscription verification"
+
+      (let [verify-payment-id 988]
+
+        (with-redefs [integration.payments.google/verify-subscription-payment
+                      (constantly
+                        {"acknowledgementState" 1
+                         "autoRenewing" false
+                         "cancelReason" 1
+                         "countryCode" "US"
+                         "developerPayload" ""
+                         "startTimeMillis" 1609181824530
+                         "expiryTimeMillis" 1609184038970
+                         "kind" "androidpublisher#subscriptionPurchase"
+                         "orderId" "GPA.3398-5035-0810-51359..5"
+                         "priceAmountMicros" 11990000
+                         "priceCurrencyCode" "USD"
+                         "purchaseType" 0})]
+
+          (test-util/send-data {:id   verify-payment-id
+                                :type :start
+                                :payload
+                                {:query "mutation VerifyPayment($productId: String!, $provider: String!, $token: String!) {
+                                           verifyPayment(productId: $productId, provider: $provider, token: $token) {
+                                             paymentId
+                                             productId
+                                             provider
+                                           }
+                                         }"
+                                 :variables {:productId product-id
+                                             :provider provider
+                                             :token android-token}}})
+
+          (let [expected-payment-response
+                {:type "data"
+                 :id 988
+                 :payload
+                 {:data {:verifyPayment nil}
+                  :errors
+                  [{:message
+                    "Cancelled subscription status: {\"acknowledgementState\" 1, \"cancelReason\" 1}"
+                    :locations [{:line 2 :column 44}]
+                    :path ["verifyPayment"]
+                    :extensions
+                    {:arguments
+                     {:productId "$productId"
+                      :provider "$provider"
+                      :token "$token"}}}]}}
+
+                verify-payment-response (test-util/consume-until verify-payment-id)]
+
+            (is (= expected-payment-response verify-payment-response))))))))
 
 (deftest create-stripe-customer-test
 
@@ -1327,7 +1394,6 @@
                                                 :tickPrice   stockTickClose}}}}))))
 
 
-
 ;; TODO Fix subscription workflow - subscriptions stopped streaming in test
 #_(deftest margin-trading-allows-upto-10x-cash-test
 
@@ -1409,7 +1475,6 @@
 
         (testing "DELETEING test customer"
           (integration.util/delete-test-customer! result-id))))))
-
 
 ;; TODO
 ;; Apply additional 5 minutes
