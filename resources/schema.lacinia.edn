@@ -219,7 +219,8 @@
    :args
    {:id            {:type (non-null String)}
     :startPosition {:type Int :description "Optionally start the game at a given position in the tick time series.
-                                            Note: This will start all stocks at this position."}}}
+                                            Note: This will start all stocks at this position."}
+    :workbench     {:type Boolean}}}
 
 
   :buyStock

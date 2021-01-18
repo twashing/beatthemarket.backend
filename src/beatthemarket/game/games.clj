@@ -202,16 +202,6 @@
          (d/db conn)
          game-id)))
 
-#_(defn game-start-time [conn game-id]
-  (ffirst
-    (d/q '[:find ?start-time
-           :in $ ?game-id
-           :where
-           [?e :game/id ?game-id]
-           [?e :game/start-time ?start-time]]
-         (d/db conn)
-         game-id)))
-
 (defn game-paused? [game-id]
   (= (game-status game-id)
      :game-status/paused))

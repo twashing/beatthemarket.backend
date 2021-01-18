@@ -286,7 +286,8 @@
         (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
-(defn resolve-start-game [context {game-id :id :as args} _]
+(defn resolve-start-game [context {game-id :id
+                                   workbench :workbench :as args} _]
 
   (try
 
@@ -307,6 +308,11 @@
 
         ;; B Kickoff game loop
         (games.control/run-game! conn (assoc game-control :iterations iterations))
+
+
+        ;; TODO use
+        ;; run-game!-workbench
+        ;; step-game!-workbench
 
 
         ;; C Return historical data

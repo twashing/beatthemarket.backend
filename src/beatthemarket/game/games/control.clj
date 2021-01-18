@@ -543,6 +543,29 @@
       (when (and now end (not short-circuit-game?))
         (recur now end (next iters))))))
 
+(defn run-game!-workbench [conn {{game-id :game/id} :game :as game-control}]
+
+  ;; A
+  (let [{game-db-id :db/id
+         game-status :game/status} (ffirst (persistence.core/entity-by-domain-id conn :game/id game-id))
+        data [[:db/retract  game-db-id :game/status (:db/ident game-status)]
+              [:db/add      game-db-id :game/status :game-status/running]]]
+
+    (persistence.datomic/transact-entities! conn data)))
+
+(defn step-game!-workbench [conn
+                           {{game-id :game/id} :game
+                            level-timer :level-timer
+                            iterations :iterations :as game-control}]
+
+  ;; B
+  (let [now (t/now)
+        end (t/plus now (t/seconds @level-timer))
+        iters iterations]
+
+    (let [[now end] (step-game conn game-control now end iters)]
+      [now end (next iters)])))
+
 (defn extract-tick-and-trade [conn {price-history :game.stock/price-history :as stock}]
 
   (map #(let [trade (if (:bookkeeping.debit/_tick %)
