@@ -170,6 +170,7 @@
 
   :users
   {:type (list (non-null :User))
+   :args {:limit {:type Int}}
    :resolve :resolve-users
    :description "Lists all the users in the system"}
 

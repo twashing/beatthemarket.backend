@@ -425,9 +425,11 @@
   (try
 
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          default-users-query-limit (-> repl.state/config :game/game :users-query-limit)
           group-by-stock? true]
 
       (->> (game.calculation/collect-realized-profit-loss-all-users-allgames conn group-by-stock?)
+           (take (get args :limit default-users-query-limit))
            (r/map graphql.encoder/user->graphql)
            (into [])))
 

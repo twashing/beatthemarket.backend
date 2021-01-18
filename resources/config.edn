@@ -9,6 +9,7 @@
         :latest-tick-threshold 5
         :stream-buffer-size    2
         :stagger-wavelength?   true
+        :users-query-limit     30
         :data-generators [:datasource.sine/generate-sine-sequence
                           :datasource.sine/generate-cosine-sequence
                           :datasource.oscillating/generate-oscillating-sequence]
