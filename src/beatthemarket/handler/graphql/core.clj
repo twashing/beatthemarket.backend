@@ -8,7 +8,7 @@
             [clj-time.coerce :as c]
             [integrant.repl.state :as repl.state]
             [io.pedestal.log :as log]
-            [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
+            [com.rpl.specter :refer [select transform ALL MAP-KEYS MAP-VALS]]
             [com.walmartlabs.lacinia.resolve :refer [resolve-as]]
 
             [beatthemarket.iam.user :as iam.user]
@@ -420,14 +420,36 @@
         (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
+(defn summed-profit-loss [{profit-loss :game.user/profit-loss}]
+  (->> profit-loss (map :profit-loss) (reduce +)))
+
+(defn users->users-with-best-game [users]
+  (->> users
+       (transform [ALL :user/games] #(sort-by summed-profit-loss > %))
+       (transform [ALL :user/games] #(take 1 %))))
+
+(defn best-user-comparator [{games :user/games}]
+  (->> games
+       (map :game.user/profit-loss)
+       flatten
+       (map :profit-loss)
+       (reduce +)))
+
+(defn users-with-limit [args limit users]
+  (take (get args :limit limit) users))
+
 (defn resolve-users [context args _]
 
   (try
 
     (let [conn (-> repl.state/system :persistence/datomic :opts :conn)
+          default-users-query-limit (-> repl.state/config :game/game :users-query-limit)
           group-by-stock? true]
 
       (->> (game.calculation/collect-realized-profit-loss-all-users-allgames conn group-by-stock?)
+           users->users-with-best-game
+           (sort-by best-user-comparator >)
+           (users-with-limit args default-users-query-limit)
            (r/map graphql.encoder/user->graphql)
            (into [])))
 

@@ -4,6 +4,7 @@
             [integrant.repl.state :as state]
             [clojure.data.json :as json]
             [datomic.client.api :as d]
+            [com.rpl.specter :refer [select transform ALL]]
 
             [beatthemarket.test-util :as test-util]
             [beatthemarket.handler.authentication :as auth]
@@ -15,7 +16,6 @@
 (use-fixtures :each
   test-util/component-fixture
   test-util/migration-fixture)
-
 
 (deftest login-test
 
@@ -82,3 +82,121 @@
               expected-status status
               expected-headers headers
               expected-body-message message)))))))
+
+(deftest user-query-test
+
+  (let [service (-> state/system :server/server :io.pedestal.http/service-fn)
+        id-token (test-util/->id-token)]
+
+    (test-util/login-assertion service id-token)
+
+    (testing "Users query without limit"
+
+      (let [{status :status
+             body :body
+             headers :headers}
+            (response-for service
+                          :post "/api"
+                          :body "{\"operationName\":\"Users\",
+                                      \"query\":\"query Users {
+                                          users {
+                                            userEmail
+                                            userName
+                                            userExternalUid
+                                            subscriptions {
+                                              paymentId
+                                              productId
+                                              provider
+                                              __typename
+                                            }
+                                            games {
+                                              gameId
+                                              status
+                                              profitLoss {
+                                                profitLoss
+                                                stockId
+                                                gameId
+                                                profitLossType
+                                                __typename
+                                              }
+                                              __typename
+                                            }
+                                            __typename
+                                          }
+                                     }\" }"
+
+                          :headers {"Content-Type" "application/json"
+                                    "Authorization" (format "Bearer %s" id-token)})
+
+            {{users :users} :data :as body-parsed} (json/read-str body :key-fn keyword)
+
+            expected-user-games '({:userEmail "thelonious.monk@foo.com" :games "Infinity"}
+                                  {:userEmail "john.coltrane@foo.com" :games 7.25}
+                                  {:userEmail "charles.mingus@foo.com" :games 6.5}
+                                  {:userEmail "sun.ra@foo.com" :games 0.6899999976158142}
+                                  {:userEmail "herbie.hancock@foo.com" :games -1.25}
+                                  {:userEmail "miles.davis@foo.com" :games -5.5})
+
+            user-games (->> users
+                            (map #(select-keys % [:userEmail :games]))
+                            (transform [ALL :games ALL] #(get-in % [:profitLoss 0 :profitLoss]))
+                            (transform [ALL :games] #(reduce + %)))]
+
+        (is (= expected-user-games user-games))))
+
+    (testing "Users query with limit"
+
+      (let [expected-status 200
+
+            {status :status
+             body :body
+             headers :headers}
+            (response-for service
+                          :post "/api"
+                          :body "{\"operationName\":\"Users\",
+                                      \"variables\":{\"limit\":5},
+                                      \"query\":\"query Users($limit: Int!) {
+                                          users(limit: $limit) {
+                                            userEmail
+                                            userName
+                                            userExternalUid
+                                            subscriptions {
+                                              paymentId
+                                              productId
+                                              provider
+                                              __typename
+                                            }
+                                            games {
+                                              gameId
+                                              status
+                                              profitLoss {
+                                                profitLoss
+                                                stockId
+                                                gameId
+                                                profitLossType
+                                                __typename
+                                              }
+                                              __typename
+                                            }
+                                            __typename
+                                          }
+                                     }\" }"
+
+                          :headers {"Content-Type" "application/json"
+                                    "Authorization" (format "Bearer %s" id-token)})
+
+            {{users :users} :data :as body-parsed} (json/read-str body :key-fn keyword)
+
+            expected-user-games '({:userEmail "thelonious.monk@foo.com" :games "Infinity"}
+                                  {:userEmail "john.coltrane@foo.com" :games 7.25}
+                                  {:userEmail "charles.mingus@foo.com" :games 6.5}
+                                  {:userEmail "sun.ra@foo.com" :games 0.6899999976158142}
+                                  {:userEmail "herbie.hancock@foo.com" :games -1.25})
+
+            user-games (->> users
+                            (map #(select-keys % [:userEmail :games]))
+                            (transform [ALL :games ALL] #(get-in % [:profitLoss 0 :profitLoss]))
+                            (transform [ALL :games] #(reduce + %)))]
+
+
+        (is (= expected-user-games user-games))))))
