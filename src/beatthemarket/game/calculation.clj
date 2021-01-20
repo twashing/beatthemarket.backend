@@ -139,6 +139,13 @@
 
     (->user email name external-uid game-statuses)))
 
+;; TODO
+;; Rewrite query to incorporate these optimizations
+;;
+;; Only return user games, if it has a score, greater than 0
+;; For User games, select the Best User Score
+;; build in a :limit clause, into the DB query
+
 (defn collect-realized-profit-loss-all-users-allgames
 
   ([conn]
@@ -165,6 +172,9 @@
                                  :where
                                  [?g :game/id]
                                  [?g :game/users ?gu]
+                                 [?gu :game.user/profit-loss ?pl]
+                                 [?pl :game.user.profit-loss/amount ?pla]
+                                 [(> ?pla 0)]
                                  [?gu :game.user/user ?guu]
                                  [?guu :user/external-uid]]
                                (d/db conn))]

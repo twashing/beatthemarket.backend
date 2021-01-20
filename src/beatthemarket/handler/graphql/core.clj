@@ -8,7 +8,7 @@
             [clj-time.coerce :as c]
             [integrant.repl.state :as repl.state]
             [io.pedestal.log :as log]
-            [com.rpl.specter :refer [transform ALL MAP-KEYS MAP-VALS]]
+            [com.rpl.specter :refer [select transform ALL MAP-KEYS MAP-VALS]]
             [com.walmartlabs.lacinia.resolve :refer [resolve-as]]
 
             [beatthemarket.iam.user :as iam.user]
@@ -420,6 +420,24 @@
         (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
 
+(defn summed-profit-loss [{profit-loss :game.user/profit-loss}]
+  (->> profit-loss (map :profit-loss) (reduce +)))
+
+(defn users->users-with-best-game [users]
+  (->> users
+       (transform [ALL :user/games] #(sort-by summed-profit-loss > %))
+       (transform [ALL :user/games] #(take 1 %))))
+
+(defn best-user-comparator [{games :user/games}]
+  (->> games
+       (map :game.user/profit-loss)
+       flatten
+       (map :profit-loss)
+       (reduce +)))
+
+(defn users-with-limit [args limit users]
+  (take (get args :limit limit) users))
+
 (defn resolve-users [context args _]
 
   (try
@@ -429,7 +447,9 @@
           group-by-stock? true]
 
       (->> (game.calculation/collect-realized-profit-loss-all-users-allgames conn group-by-stock?)
-           (take (get args :limit default-users-query-limit))
+           users->users-with-best-game
+           (sort-by best-user-comparator >)
+           (users-with-limit args default-users-query-limit)
            (r/map graphql.encoder/user->graphql)
            (into [])))
 
@@ -437,6 +457,98 @@
       (do
         (log/info :resolver-error (with-out-str (ppi (bean e))))
         (->> e bean :localizedMessage (hash-map :message) (resolve-as nil))))))
+
+(comment
+
+  (users->users-with-best-game two)
+
+  (ppi (select [ALL :user/games ALL ;; :game.user/profit-loss ;; ALL
+                ] two))
+
+  (->> two
+       (transform [ALL :user/games] #(sort-by summed-profit-loss > %))
+       (transform [ALL :user/games] #(take 1 %))
+       ppi)
+
+  (ppi (users->users-with-best-game two))
+
+  )
+
+(def two
+  [#:user{:email "bilgegencer@gmail.com",
+          :name "Bilge Gençer",
+          :external-uid "Hr4404Cdasdxoa9UpooanqBICv83",
+          :games
+          '({:game/id #uuid "89de01b5-e91e-48df-8013-19544170115b",
+             :game/status :game-status/exited,
+             :game.user/profit-loss
+             [{:user-id 277076930791872,
+                :tick-id #uuid "1fca9883-0a0a-497b-8db7-1cb539c41df9",
+                :game-id #uuid "89de01b5-e91e-48df-8013-19544170115b",
+                :stock-id #uuid "c3103b0a-28eb-42c3-a05b-bde4b21642ae",
+                :profit-loss-type :realized-profit-loss,
+                :profit-loss 244.99893188476562}
+               {:user-id 277076930791872,
+                :tick-id #uuid "fab4e233-9cce-4d39-b013-92f220ed7998",
+                :game-id #uuid "89de01b5-e91e-48df-8013-19544170115b",
+                :stock-id #uuid "c3103b0a-28eb-42c3-a05b-bde4b21642ae",
+                :profit-loss-type :realized-profit-loss,
+                :profit-loss -215.00015258789062}]}
+            {:game/id #uuid "99de01b5-f91e-48df-8013-19544170115b",
+             :game/status :game-status/exited,
+             :game.user/profit-loss
+             [{:user-id 277076930791872,
+                :tick-id #uuid "1fca9883-0a0a-497b-8db7-1cb539c41df9",
+                :game-id #uuid "89de01b5-e91e-48df-8013-19544170115b",
+                :stock-id #uuid "c3103b0a-28eb-42c3-a05b-bde4b21642ae",
+                :profit-loss-type :realized-profit-loss,
+                :profit-loss 244.99893188476562}]})}
+   #:user{:email "cray101293@icloud.com",
+          :name nil,
+          :external-uid "GTHvQjnBFkSFHGJenbwblv3jmji2",
+          :games
+          '({:game/id #uuid "9212e13d-7d06-5eda-8bf1-2e4cb063882c",
+             :game/status :game-status/lost,
+             :game.user/profit-loss
+             [{:user-id 259484744732464,
+                :tick-id #uuid "5a0e54e5-23c6-42de-9a26-d4475e535018",
+                :game-id #uuid "8212e13d-6d06-4eda-8bf1-2e4cb063882c",
+                :stock-id #uuid "f2cdd011-cd99-4bc0-b3f8-cffcb663d991",
+                :profit-loss-type :realized-profit-loss,
+                :profit-loss 1645.00048828125}]}
+            {:game/id #uuid "8212e13d-6d06-4eda-8bf1-2e4cb063882c",
+             :game/status :game-status/lost,
+             :game.user/profit-loss
+             [{:user-id 259484744732464,
+                :tick-id #uuid "5a0e54e5-23c6-42de-9a26-d4475e535018",
+                :game-id #uuid "8212e13d-6d06-4eda-8bf1-2e4cb063882c",
+                :stock-id #uuid "f2cdd011-cd99-4bc0-b3f8-cffcb663d991",
+                :profit-loss-type :realized-profit-loss,
+                :profit-loss 1645.00048828125}
+               {:user-id 259484744732464,
+                :tick-id #uuid "cb302961-5a56-411b-8253-c16f009aebb5",
+                :game-id #uuid "8212e13d-6d06-4eda-8bf1-2e4cb063882c",
+                :stock-id #uuid "f2cdd011-cd99-4bc0-b3f8-cffcb663d991",
+                :profit-loss-type :realized-profit-loss,
+                :profit-loss 0.0}
+               {:user-id 259484744732464,
+                :tick-id #uuid "c660020d-f521-417d-a9e3-745cbd168299",
+                :game-id #uuid "8212e13d-6d06-4eda-8bf1-2e4cb063882c",
+                :stock-id #uuid "f2cdd011-cd99-4bc0-b3f8-cffcb663d991",
+                :profit-loss-type :realized-profit-loss,
+                :profit-loss 439.9986267089844}
+               {:user-id 259484744732464,
+                :tick-id #uuid "cebc4a0a-ae68-4512-95cc-e651e76bbeaf",
+                :game-id #uuid "8212e13d-6d06-4eda-8bf1-2e4cb063882c",
+                :stock-id #uuid "f2cdd011-cd99-4bc0-b3f8-cffcb663d991",
+                :profit-loss-type :realized-profit-loss,
+                :profit-loss 449.9969482421875}]})}])
+
+(comment
+
+  (resolve-users nil {:limit 5} nil)
+
+  )
 
 (defn resolve-user-personal-profit-loss [context {:keys [email gameId groupByStock] :as args} _]
 
